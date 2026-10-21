@@ -1,0 +1,435 @@
+{
+  "about": {
+    "seoTitle": "About us",
+    "seoDescription": "EDUWAY was founded in Baghdad in 2021 to give every 6th Scientific student in Iraq access to the country's best teachers, ministerial-aligned content and smart study tools.",
+    "hero": {
+      "eyebrow": "Our story",
+      "titleStart": "Built in Baghdad for the students who will",
+      "titleHighlight": "shape",
+      "titleEnd": "Iraq's future",
+      "subtitle": "We believe a student's ministerial result should depend on their effort — not on their postcode or their family's budget for private tutors. EDUWAY brings Iraq's finest teachers to every student, in every governorate.",
+      "ctaPrimary": "Start learning",
+      "ctaSecondary": "Meet our teachers"
+    },
+    "story": {
+      "eyebrow": "Who we are",
+      "title": "From one classroom to every governorate",
+      "p1": "EDUWAY began in 2021 as a small recording studio in Al-Mansour, where a mathematics teacher and two engineers filmed lessons for the students who couldn't make it to his evening classes.",
+      "p2": "Today we are a team of more than sixty teachers, editors, engineers and student mentors. Every lesson is mapped to the Ministry of Education curriculum, every question is reviewed twice, and every feature is tested with real 6th Scientific students before it ships.",
+      "since": "Teaching Iraqi students since",
+      "mission": {
+        "title": "Our mission",
+        "body": "Give every 6th Scientific student the teaching, practice and confidence they need to reach the college they dream of."
+      },
+      "vision": {
+        "title": "Our vision",
+        "body": "An Iraq where world-class preparation is available to every student, from Duhok to Basra, at a fair price."
+      },
+      "imageAlts": {
+        "classroom": "Students attentive in a bright classroom",
+        "library": "Shelves of books in a university library",
+        "laptop": "A student following an online lesson on a laptop"
+      }
+    },
+    "values": {
+      "eyebrow": "What we stand for",
+      "title": "Four values behind every lesson",
+      "subtitle": "They guide how we hire teachers, write questions and design every screen you use.",
+      "items": [
+        {
+          "title": "Excellence",
+          "body": "Lessons are scripted, filmed and edited to the standard of the best private institutes — then reviewed again against the ministerial syllabus."
+        },
+        {
+          "title": "Care",
+          "body": "Behind every account is a student under pressure. Our mentors answer in hours, not days, and we design for calm, focused study."
+        },
+        {
+          "title": "Integrity",
+          "body": "No leaked papers, no shortcuts. We prepare students to genuinely understand the material and to sit the exam with honesty."
+        },
+        {
+          "title": "Innovation",
+          "body": "From the mistakes notebook to the AI tutor, we build tools that turn practice into progress and save students hours every week."
+        }
+      ]
+    },
+    "impact": {
+      "eyebrow": "Our impact",
+      "title": "Five years of results we are proud of",
+      "students": "Students enrolled",
+      "lessons": "Video lessons",
+      "questions": "Practice questions",
+      "governorates": "Governorates reached",
+      "passRate": "Ministerial pass rate"
+    },
+    "teachers": {
+      "eyebrow": "Our teachers",
+      "title": "Learn from Iraq's most trusted teachers",
+      "subtitle": "Every EDUWAY teacher has years of experience preparing students for the ministerial exams — and a track record of top scorers to show for it.",
+      "experience": "Experience",
+      "taught": "Students taught",
+      "years_one": "{{count}} year",
+      "years_other": "{{count}} years",
+      "bios": {
+        "math": "PhD in applied mathematics from the University of Baghdad. Known for turning calculus and complex numbers into clear, step-by-step routines students can rely on under exam pressure.",
+        "physics": "Former head of physics at a leading Baghdad preparatory school. His lessons connect every law to a real experiment, so students remember the why, not just the formula.",
+        "chemistry": "PhD in organic chemistry and author of a widely used revision guide. She is famous for her reaction maps that make the organic chapters feel logical.",
+        "biology": "Medical doctor turned educator. She teaches genetics and human physiology with clinical examples that help future medical students see where the syllabus leads.",
+        "english": "CELTA-certified teacher with a decade of exam preparation. Her grammar drills and writing templates have helped thousands of students secure full marks in English."
+      }
+    },
+    "timeline": {
+      "eyebrow": "Milestones",
+      "title": "Our journey so far",
+      "subtitle": "Five years of building, listening to students and raising the bar for online learning in Iraq.",
+      "items": [
+        {
+          "year": "2021",
+          "title": "Founded in Baghdad",
+          "body": "A small studio in Al-Mansour records its first 40 mathematics lessons. 1,200 students sign up in the first term."
+        },
+        {
+          "year": "2022",
+          "title": "All five subjects",
+          "body": "Physics, chemistry, biology and English join the platform, taught by teachers handpicked from across Iraq."
+        },
+        {
+          "year": "2023",
+          "title": "The exam simulator",
+          "body": "We launch timed mock exams that mirror the ministerial paper, plus the first version of the mistakes notebook."
+        },
+        {
+          "year": "2024",
+          "title": "Every governorate",
+          "body": "Students in every Iraqi governorate now learn with EDUWAY, and our mobile apps pass 100,000 downloads."
+        },
+        {
+          "year": "2025",
+          "title": "AI tutor",
+          "body": "Our bilingual AI tutor answers questions around the clock, trained on our own lessons and reviewed by our teachers."
+        },
+        {
+          "year": "2026",
+          "title": "48,000 students and counting",
+          "body": "A redesigned platform, a question bank of more than 25,000 questions and partnerships with schools across Iraq."
+        }
+      ]
+    },
+    "cta": {
+      "title": "Your best year starts with one lesson",
+      "subtitle": "Create a free account in under a minute and watch your first lessons today.",
+      "primary": "Create free account",
+      "secondary": "Talk to our team"
+    }
+  },
+  "contact": {
+    "seoTitle": "Contact us",
+    "seoDescription": "Get in touch with the EDUWAY team in Baghdad by phone, WhatsApp or email. Support for students, parents and schools across Iraq.",
+    "hero": {
+      "eyebrow": "We're here to help",
+      "titleStart": "Let's talk about your",
+      "titleHighlight": "success",
+      "subtitle": "Questions about lessons, payments or partnerships? Our Baghdad-based team replies to students, parents and schools every day.",
+      "response": "Average reply in under 2 hours",
+      "languages": "Support in Arabic & English"
+    },
+    "form": {
+      "title": "Send us a message",
+      "subtitle": "Fill in the form and a member of our team will get back to you shortly.",
+      "name": "Full name",
+      "namePlaceholder": "Your name",
+      "contact": "Mobile or email",
+      "contactPlaceholder": "0770 123 4567 or you@example.com",
+      "contactInvalid": "Enter a valid Iraqi mobile number or email address",
+      "subject": "Subject",
+      "subjects": {
+        "general": "General enquiry",
+        "support": "Technical support",
+        "billing": "Billing & subscriptions",
+        "partnerships": "Partnerships",
+        "schools": "Schools & institutes"
+      },
+      "message": "Message",
+      "messagePlaceholder": "Tell us how we can help…",
+      "messageHint": "At least 20 characters. Please don't include payment card details.",
+      "privacy": "We'll only use your details to respond to this message.",
+      "submit": "Send message",
+      "sending": "Sending…",
+      "successToast": "Message sent",
+      "successTitle": "Thank you — message received",
+      "successBody": "Our support team will reply within working hours. Keep your ticket number for any follow-up.",
+      "ticket": "Ticket",
+      "ticketLabel": "Your ticket number is {{id}}",
+      "another": "Send another message"
+    },
+    "channels": {
+      "phone": { "label": "Call us", "note": "Saturday – Thursday, 9 AM – 9 PM" },
+      "whatsapp": { "label": "WhatsApp", "note": "Fastest way to reach support" },
+      "email": { "label": "Email", "note": "We reply within one working day" },
+      "office": { "label": "Office", "value": "Al-Mansour, Baghdad", "note": "14th Ramadan Street, Building 22, 3rd floor" }
+    },
+    "map": {
+      "label": "Map showing the EDUWAY office in Al-Mansour, Baghdad",
+      "title": "EDUWAY headquarters",
+      "address": "14th Ramadan Street, Al-Mansour, Baghdad",
+      "hq": "HQ"
+    },
+    "hours": {
+      "title": "Working hours",
+      "weekdays": { "day": "Saturday – Thursday", "time": "9:00 – 21:00" },
+      "friday": { "day": "Friday", "time": "14:00 – 20:00" },
+      "whatsapp": { "day": "WhatsApp during exams", "time": "24 / 7" }
+    },
+    "faq": {
+      "title": "Looking for a quick answer?",
+      "body": "Browse the most common questions about subscriptions, lessons and exams."
+    }
+  },
+  "legal": {
+    "updated": "Last updated:",
+    "print": "Print",
+    "toc": "On this page",
+    "questions": "Still have questions?",
+    "questionsBody": "Our team is happy to explain any part of this document.",
+    "contact": "Contact us",
+    "read": {
+      "terms": "Read the Terms of Service",
+      "privacy": "Read the Privacy Policy"
+    }
+  },
+  "terms": {
+    "seoTitle": "Terms of Service",
+    "seoDescription": "The terms that govern your use of EDUWAY — accounts, subscriptions, refunds, acceptable use, content ownership and the AI tutor.",
+    "eyebrow": "Legal",
+    "title": "Terms of Service",
+    "intro": "These terms explain the agreement between you and EDUWAY when you use our website and apps. We've written them in plain language — please read them carefully, and if you are under 18, read them together with a parent or guardian.",
+    "sections": [
+      {
+        "id": "acceptance",
+        "title": "Acceptance of these terms",
+        "paragraphs": [
+          "EDUWAY is operated by EDUWAY Educational Technology LLC, registered in Baghdad, Republic of Iraq. By creating an account, subscribing to a plan or using any part of the platform, you agree to these Terms of Service and to our Privacy Policy.",
+          "If you do not agree with these terms, please do not use EDUWAY. If you are using EDUWAY on behalf of a school or institute, you confirm that you are authorised to accept these terms on its behalf."
+        ]
+      },
+      {
+        "id": "accounts",
+        "title": "Accounts and OTP sign-in",
+        "paragraphs": [
+          "You sign in to EDUWAY with your Iraqi mobile number and a one-time password (OTP) sent by SMS. There is no password to remember, which means your phone is the key to your account.",
+          "Each account is personal and intended for a single student. Sharing an account, reselling access or allowing others to watch lessons through your account is not permitted."
+        ],
+        "bullets": [
+          "Keep your SIM card and phone secure, and never share your OTP code with anyone — EDUWAY staff will never ask for it.",
+          "An account can be active on up to two devices at the same time. You can review and sign out of devices from your profile settings.",
+          "Please make sure the details you provide (name, governorate and school) are accurate, as they are used for certificates and rankings.",
+          "We may suspend an account that shows signs of sharing or unauthorised access, and we will contact you before taking permanent action."
+        ]
+      },
+      {
+        "id": "subscriptions",
+        "title": "Subscriptions and payments",
+        "paragraphs": [
+          "Some content is free; full access to lessons, the question bank, the exam simulator and the AI tutor requires a paid subscription. Prices are shown in Iraqi Dinar (IQD) and include any applicable fees.",
+          "Subscriptions are offered monthly or for the full academic year. Payment can be made through ZainCash, AsiaHawala, FastPay, Qi Card or through an authorised EDUWAY reseller. Your plan starts as soon as the payment is confirmed."
+        ],
+        "bullets": [
+          "Monthly plans renew automatically unless you cancel before the renewal date. You can cancel at any time from the Subscription page.",
+          "Yearly plans end on 31 August of the academic year in which they were purchased and do not renew automatically.",
+          "If we change the price of a plan, the new price will apply only from your next renewal, and we will notify you at least 14 days in advance.",
+          "Promotional and referral discounts cannot be combined unless the offer clearly says so."
+        ]
+      },
+      {
+        "id": "refunds",
+        "title": "Refund policy",
+        "paragraphs": [
+          "We want you to be confident in your purchase. If EDUWAY isn't right for you, you can request a full refund within 7 days of your first payment, provided you have watched no more than 5 paid lessons.",
+          "After this period, payments are non-refundable, except where a technical problem on our side prevented you from using the service for more than 72 consecutive hours. In that case we will extend your subscription or refund the affected period.",
+          "To request a refund, contact support with your registered mobile number and the payment reference. Approved refunds are returned to the original payment method within 10 working days."
+        ]
+      },
+      {
+        "id": "acceptable-use",
+        "title": "Acceptable use",
+        "paragraphs": [
+          "EDUWAY is a place for focused, respectful learning. When using the platform you agree not to:"
+        ],
+        "bullets": [
+          "Record, download, screenshot or redistribute lessons, notes or questions, including on Telegram channels or social media.",
+          "Use bots, scripts or automated tools to access the platform, scrape content or manipulate exam results and rankings.",
+          "Post or send content that is abusive, sectarian, discriminatory, misleading or that violates the privacy of others.",
+          "Attempt to bypass security measures, device limits or payment checks.",
+          "Impersonate another student, teacher or EDUWAY staff member."
+        ]
+      },
+      {
+        "id": "content",
+        "title": "Content and intellectual property",
+        "paragraphs": [
+          "All lessons, videos, notes, questions, explanations, designs and software on EDUWAY are owned by EDUWAY or licensed to us by our teachers, and are protected by Iraqi and international copyright law.",
+          "Your subscription gives you a personal, non-transferable licence to use this content for your own studies during your subscription period. It does not give you any ownership rights, and it does not allow commercial use.",
+          "If you believe that content on EDUWAY infringes your rights, please contact us and we will review the matter promptly."
+        ]
+      },
+      {
+        "id": "ai-tutor",
+        "title": "AI tutor disclaimer",
+        "paragraphs": [
+          "The EDUWAY AI tutor is designed to help you understand concepts and practise problems. Its answers are generated automatically and, although they are based on our curriculum materials and regularly reviewed by our teachers, they can occasionally be incomplete or incorrect.",
+          "Always check important answers against your lessons and the official ministerial curriculum, and ask a teacher when in doubt. The AI tutor must not be used during real examinations, and usage is limited by the monthly quota included in your plan."
+        ]
+      },
+      {
+        "id": "exams",
+        "title": "Mock exams and results",
+        "paragraphs": [
+          "Mock exams and predicted scores are practice tools. They are designed to resemble the ministerial exams, but they are not official exams and do not guarantee any particular result or college admission.",
+          "EDUWAY is not affiliated with the Iraqi Ministry of Education. References to the ministerial curriculum describe the syllabus our content follows."
+        ]
+      },
+      {
+        "id": "termination",
+        "title": "Suspension and termination",
+        "paragraphs": [
+          "You may stop using EDUWAY and request deletion of your account at any time. We may suspend or close accounts that breach these terms, after giving notice where reasonably possible.",
+          "If we close your account because of a serious breach, such as redistributing paid content, you will not be entitled to a refund of the remaining subscription period."
+        ]
+      },
+      {
+        "id": "liability",
+        "title": "Limitation of liability",
+        "paragraphs": [
+          "We work hard to keep EDUWAY available and accurate, but the service is provided \"as is\". Short interruptions may happen during maintenance or because of internet outages outside our control.",
+          "To the extent permitted by Iraqi law, EDUWAY's total liability for any claim related to the service is limited to the amount you paid us in the three months before the claim arose."
+        ]
+      },
+      {
+        "id": "changes",
+        "title": "Changes and governing law",
+        "paragraphs": [
+          "We may update these terms from time to time. When we make significant changes we will notify you by SMS or in the app at least 14 days before they take effect.",
+          "These terms are governed by the laws of the Republic of Iraq, and any dispute will be handled by the competent courts of Baghdad."
+        ]
+      },
+      {
+        "id": "contact",
+        "title": "Contact",
+        "paragraphs": [
+          "If you have any questions about these terms, contact us at support@eduway.iq, call +964 770 555 0142, or visit our office on 14th Ramadan Street, Al-Mansour, Baghdad."
+        ]
+      }
+    ]
+  },
+  "privacy": {
+    "seoTitle": "Privacy Policy",
+    "seoDescription": "How EDUWAY collects, uses, protects and retains your personal data — including data from students under 18, cookies and the AI tutor.",
+    "eyebrow": "Legal",
+    "title": "Privacy Policy",
+    "intro": "Your privacy matters to us — and to the parents who trust us with their children's education. This policy explains what data EDUWAY collects, why we collect it, how long we keep it and the choices you have.",
+    "sections": [
+      {
+        "id": "who-we-are",
+        "title": "Who we are",
+        "paragraphs": [
+          "EDUWAY Educational Technology LLC, based in Al-Mansour, Baghdad, is responsible for the personal data processed through the EDUWAY website and apps. We act as the data controller for student accounts, and as a processor on behalf of schools that enrol their students through a partnership."
+        ]
+      },
+      {
+        "id": "data-collected",
+        "title": "Data we collect",
+        "paragraphs": [
+          "We collect only the data we need to run the platform and support your learning:"
+        ],
+        "bullets": [
+          "Account data: your name, mobile number, governorate, school and optional referral code.",
+          "Learning data: lessons watched and video positions, quiz and exam answers, scores, mistakes, bookmarks and study streaks.",
+          "AI tutor data: the questions you ask the AI tutor and the answers it gives.",
+          "Payment data: plan, amount, date and the reference number from the payment provider. We never receive or store your full card or wallet credentials.",
+          "Device data: device type, operating system, app version, approximate location from your IP address and sign-in history, used for security and device limits.",
+          "Support data: messages you send us through the contact form, WhatsApp or email."
+        ]
+      },
+      {
+        "id": "how-used",
+        "title": "How we use your data",
+        "paragraphs": [
+          "We use your data to provide and improve EDUWAY, and never to sell it. Specifically, we use it to:"
+        ],
+        "bullets": [
+          "Create your account, verify your mobile number by OTP and keep your account secure.",
+          "Track your progress, personalise recommendations and build your mistakes notebook and progress reports.",
+          "Process payments, manage renewals and send receipts.",
+          "Send important service messages, such as exam reminders and subscription notices. Marketing messages are optional and you can switch them off at any time.",
+          "Improve our lessons and questions using aggregated, anonymised statistics — for example, which questions most students get wrong.",
+          "Review AI tutor conversations, in anonymised form, to improve answer quality and safety."
+        ]
+      },
+      {
+        "id": "sharing",
+        "title": "Sharing your data",
+        "paragraphs": [
+          "We share data only when necessary, and only with trusted parties bound by confidentiality: SMS providers to deliver OTP codes, payment providers to process transactions, and secure cloud hosting providers that store our data.",
+          "If you joined through a partner school, the school can see your progress and exam results. We may also disclose data where required by Iraqi law or a valid order from a competent authority."
+        ]
+      },
+      {
+        "id": "retention",
+        "title": "Data retention",
+        "paragraphs": [
+          "We keep your account and learning data for as long as your account is active, so that your progress is never lost between academic years.",
+          "If you delete your account, we delete or anonymise your personal data within 30 days. Payment records are kept for 5 years to meet accounting obligations, and security logs are kept for 12 months."
+        ]
+      },
+      {
+        "id": "minors",
+        "title": "Children, minors and parental consent",
+        "paragraphs": [
+          "Most EDUWAY students are between 16 and 18 years old. If you are under 18, you must have permission from a parent or legal guardian before creating an account and purchasing a subscription.",
+          "Parents and guardians may contact us at any time to review the data held about their child, request corrections or ask for the account to be deleted. We never show targeted third-party advertising to students, and we do not create marketing profiles of minors."
+        ]
+      },
+      {
+        "id": "cookies",
+        "title": "Cookies and local storage",
+        "paragraphs": [
+          "EDUWAY uses a small number of cookies and similar browser storage technologies. You can clear them at any time from your browser settings, although some features may then stop working until you sign in again."
+        ],
+        "bullets": [
+          "Essential: keep you signed in, remember your language and protect your account. These cannot be switched off.",
+          "Preferences: remember settings such as video playback speed and sidebar layout.",
+          "Analytics: privacy-friendly, aggregated statistics on how pages are used, which help us fix problems. We do not use advertising cookies."
+        ]
+      },
+      {
+        "id": "security",
+        "title": "How we protect your data",
+        "paragraphs": [
+          "All data is encrypted in transit using TLS and encrypted at rest on our servers. Access by EDUWAY staff is limited to those who need it for their role and is logged and reviewed regularly.",
+          "No system is completely secure, so if we ever discover a breach that affects your data, we will inform you and the relevant authorities without undue delay."
+        ]
+      },
+      {
+        "id": "rights",
+        "title": "Your rights",
+        "paragraphs": [
+          "You have the right to access the data we hold about you, correct it, download a copy, object to optional processing such as marketing, and ask us to delete your account. Most of these options are available in your profile settings; for anything else, contact our support team and we will respond within 14 days."
+        ]
+      },
+      {
+        "id": "contact",
+        "title": "Contact our privacy team",
+        "paragraphs": [
+          "For any privacy question or request, email privacy@eduway.iq or write to EDUWAY Educational Technology LLC, 14th Ramadan Street, Building 22, Al-Mansour, Baghdad, Iraq."
+        ]
+      }
+    ]
+  },
+  "notFound": {
+    "seoTitle": "Page not found",
+    "eyebrow": "Error 404",
+    "requested": "You tried to open",
+    "helpful": "Helpful links"
+  }
+}

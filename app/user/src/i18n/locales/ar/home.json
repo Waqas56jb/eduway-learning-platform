@@ -1,0 +1,102 @@
+{
+  "greeting": {
+    "morning": "صباح الخير، {{name}}",
+    "afternoon": "نهارك سعيد، {{name}}",
+    "evening": "مساء الخير، {{name}}"
+  },
+  "header": {
+    "openProfile": "افتح ملفك الشخصي",
+    "notifications": "الإشعارات",
+    "notificationsUnread": "الإشعارات، {{count}} غير مقروءة",
+    "streakLabel": "سلسلة دراسة متواصلة لمدة {{count}} يوم",
+    "streak_zero": "ابدأ اليوم",
+    "streak_one": "يوم واحد",
+    "streak_two": "يومان",
+    "streak_few": "{{count}} أيام",
+    "streak_many": "{{count}} يوماً",
+    "streak_other": "{{count}} يوم"
+  },
+  "subscription": {
+    "overline": "باقتك",
+    "active": "فعّالة",
+    "daysLeftLabel": "يوماً متبقياً",
+    "endsOn": "تتجدد في {{date}}",
+    "periodUsed": "استهلكت {{value}}% من مدة اشتراكك",
+    "renew": "جدّد",
+    "noPlan": "لا توجد باقة فعّالة",
+    "noPlanBody": "افتح جميع الدروس وبنك الأسئلة والمدرس الذكي.",
+    "viewPlans": "عرض الباقات",
+    "a11y": "باقة {{name}}، متبقٍ {{days}} يوماً"
+  },
+  "continue": {
+    "title": "تابع التعلّم",
+    "resumeAt": "تابع من {{time}}",
+    "startLesson": "ابدأ الدرس",
+    "percentDone": "شاهدت {{value}}%",
+    "play": "تشغيل الدرس",
+    "a11y": "تابع درس {{title}}، شاهدت {{value}}%"
+  },
+  "subjects": {
+    "title": "موادك الدراسية",
+    "subtitle": "أنجزت {{value}}% من المنهج",
+    "lessons": "{{count}} درساً",
+    "a11y": "{{name}}، أنجزت {{value}}%"
+  },
+  "stats": {
+    "title": "نظرة سريعة",
+    "lessonsDone": "دروس مكتملة",
+    "lessonsSub": "من {{total}}",
+    "quizAvg": "معدل الاختبارات",
+    "quizSub": "آخر 30 يوماً",
+    "mistakes": "أخطاء للمراجعة",
+    "mistakesSub": "اضغط للمراجعة",
+    "mistakesClear": "لا أخطاء معلّقة",
+    "ai": "أسئلة المدرس الذكي",
+    "aiSub": "المتبقي لهذه المدة"
+  },
+  "plan": {
+    "title": "خطة اليوم",
+    "progress": "أنجزت {{done}} من {{total}}",
+    "allDone": "أتممت خطة اليوم — أحسنت!",
+    "minutes": "{{count}} د",
+    "markDone": "تحديد \"{{title}}\" كمنجز",
+    "markUndone": "إلغاء إنجاز \"{{title}}\"",
+    "open": "فتح {{title}}"
+  },
+  "exam": {
+    "overline": "امتحان قادم",
+    "in_zero": "اليوم",
+    "in_one": "غداً",
+    "in_two": "بعد يومين",
+    "in_few": "بعد {{count}} أيام",
+    "in_many": "بعد {{count}} يوماً",
+    "in_other": "بعد {{count}} يوم",
+    "prepare": "استعد الآن",
+    "a11y": "{{title}}، {{when}}"
+  },
+  "weekly": {
+    "title": "هذا الأسبوع",
+    "totalLabel": "إجمالي وقت الدراسة",
+    "hours": "{{value}} ساعة",
+    "dailyAvg": "المعدل اليومي {{value}} دقيقة",
+    "vsLastWeek": "{{value}}% مقارنة بالأسبوع الماضي",
+    "minutes": "{{value}} د",
+    "seeProgress": "التقدّم"
+  },
+  "quick": {
+    "title": "اختصارات سريعة",
+    "questionBank": "بنك الأسئلة",
+    "mistakes": "أخطائي",
+    "exams": "محاكي الامتحانات",
+    "progress": "تقدّمي"
+  },
+  "days": {
+    "sat": "سبت",
+    "sun": "أحد",
+    "mon": "اثنين",
+    "tue": "ثلاثاء",
+    "wed": "أربعاء",
+    "thu": "خميس",
+    "fri": "جمعة"
+  }
+}

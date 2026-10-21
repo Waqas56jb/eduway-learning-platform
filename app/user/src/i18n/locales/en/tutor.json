@@ -1,0 +1,70 @@
+{
+  "header": {
+    "title": "EDUWAY AI Tutor",
+    "status": "Online · replies instantly",
+    "history": "Conversation history",
+    "avatar": "AI Tutor"
+  },
+  "allowance": {
+    "a11y": "{{remaining}} of {{quota}} AI questions left this month"
+  },
+  "subjectPicker": {
+    "a11y": "Ask about {{subject}}"
+  },
+  "empty": {
+    "badge": "Your personal tutor",
+    "title": "Ask anything about your subjects",
+    "subtitle": "Step-by-step explanations, formulas and worked examples — tailored to the Iraqi 6th Scientific curriculum.",
+    "tryAsking": "Try asking",
+    "featureSteps": "Step by step",
+    "featureFormulas": "Formulas",
+    "featurePhotos": "Photo questions"
+  },
+  "composer": {
+    "placeholder": "Ask your {{subject}} question…",
+    "placeholderLimit": "Monthly limit reached",
+    "attach": "Attach a photo",
+    "send": "Send message",
+    "removeImage": "Remove photo",
+    "imageAttached": "Photo attached",
+    "imageOnly": "Can you help me solve the question in this photo?"
+  },
+  "attach": {
+    "title": "Attach a photo",
+    "subtitle": "Snap a question from your book. Pick one of these sample photos to try it out.",
+    "sample": "Sample photo {{n}}"
+  },
+  "bubble": {
+    "you": "You",
+    "tutor": "AI Tutor",
+    "copy": "Copy answer",
+    "copied": "Copied to clipboard",
+    "helpful": "Helpful",
+    "notHelpful": "Not helpful",
+    "thanks": "Thanks for your feedback!",
+    "attachment": "Attached photo"
+  },
+  "typing": {
+    "label": "AI Tutor is typing"
+  },
+  "history": {
+    "title": "Your conversations",
+    "newChat": "New chat",
+    "empty": "No conversations yet",
+    "emptyMessage": "Your chats with the AI Tutor will appear here.",
+    "untitled": "New conversation",
+    "delete": "Delete conversation",
+    "deleted": "Conversation deleted",
+    "active": "Current"
+  },
+  "limit": {
+    "title": "You've used all {{quota}} AI questions this month",
+    "message": "Your allowance renews on {{date}}. Upgrade your plan to keep asking without waiting.",
+    "upgrade": "Upgrade plan",
+    "renews": "Renews {{date}}"
+  },
+  "seed": {
+    "title": "Faraday's law",
+    "question": "Explain Faraday's law of induction"
+  }
+}

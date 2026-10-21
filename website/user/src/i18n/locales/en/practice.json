@@ -1,0 +1,358 @@
+{
+  "source": {
+    "quiz": "Lesson quiz",
+    "bank": "Question bank",
+    "exam": "Exam"
+  },
+  "tags": {
+    "ministerial": "Ministerial",
+    "basics": "Basics",
+    "operations": "Operations",
+    "conjugate": "Conjugate",
+    "de-moivre": "De Moivre",
+    "polar": "Polar form",
+    "chain-rule": "Chain rule",
+    "higher-order": "Higher-order derivatives",
+    "extrema": "Extrema",
+    "mean-value": "Mean value theorem",
+    "definite": "Definite integrals",
+    "trig": "Trigonometry",
+    "volumes": "Volumes of revolution",
+    "dielectric": "Dielectrics",
+    "circuits": "Circuits",
+    "energy": "Energy",
+    "faraday": "Faraday's law",
+    "lenz": "Lenz's law",
+    "transformer": "Transformers",
+    "rms": "RMS values",
+    "resonance": "Resonance",
+    "reactance": "Reactance",
+    "le-chatelier": "Le Chatelier",
+    "kc": "Kc",
+    "reaction-quotient": "Reaction quotient",
+    "redox": "Redox",
+    "galvanic": "Galvanic cells",
+    "emf": "Cell EMF",
+    "alkanes": "Alkanes",
+    "alkenes": "Alkenes",
+    "esters": "Esters",
+    "plants": "Plant reproduction",
+    "human": "Human reproduction",
+    "mendel": "Mendelian genetics",
+    "codominance": "Codominance",
+    "sex-linked": "Sex-linked traits",
+    "dna": "DNA",
+    "protein-synthesis": "Protein synthesis",
+    "biotech": "Biotechnology",
+    "passive": "Passive voice",
+    "modals": "Modal verbs",
+    "reported": "Reported speech",
+    "conditionals": "Conditionals",
+    "relative": "Relative clauses",
+    "gerunds": "Gerunds & infinitives"
+  },
+  "bank": {
+    "seoTitle": "Question Bank",
+    "seoDescription": "Practise ministerial-style questions by subject, unit, topic and difficulty with instant feedback.",
+    "title": "Question Bank",
+    "subtitle": "{{total}} ministerial-style questions across {{subjects}} subjects · {{bookmarked}} bookmarked",
+    "allSubjects": "All subjects",
+    "searchPlaceholder": "Search questions or topics…",
+    "openFilters_one": "Open filters ({{count}} active)",
+    "openFilters_other": "Open filters ({{count}} active)",
+    "resultsCount_one": "{{count}} question matches",
+    "resultsCount_other": "{{count}} questions match",
+    "showMore_one": "Show {{count}} more question",
+    "showMore_other": "Show more ({{count}} remaining)",
+    "showResults_one": "Show {{count}} question",
+    "showResults_other": "Show {{count}} questions",
+    "tryOne": "Try it",
+    "tryOneLabel": "Practise this question: {{text}}",
+    "filters": {
+      "subject": "Subject",
+      "unit": "Unit",
+      "unitHint": "Choose a subject first to filter by unit.",
+      "anyUnit": "All units",
+      "topic": "Topic",
+      "anyTopic": "All topics",
+      "difficulty": "Difficulty",
+      "tags": "Tags",
+      "moreTags_one": "+{{count}} more tag",
+      "moreTags_other": "+{{count}} more tags",
+      "fewerTags": "Show fewer tags",
+      "bookmarkedOnly": "Bookmarked only"
+    },
+    "empty": {
+      "title": "No questions match",
+      "body": "Try removing a filter or searching for a different topic.",
+      "noBookmarks": "You haven't bookmarked any questions yet. Tap the star on any question to save it here."
+    }
+  },
+  "start": {
+    "eyebrow": "Practice mode",
+    "title": "Start a practice session",
+    "subtitle": "Questions are drawn at random from your current filters.",
+    "countLabel": "Number of questions",
+    "available_one": "{{count}} question available with these filters.",
+    "available_other": "{{count}} questions available with these filters.",
+    "capped_one": "Only {{count}} question matches — your session will include it.",
+    "capped_other": "Only {{count}} questions match — your session will include all of them.",
+    "none": "No questions match your filters yet.",
+    "cta_one": "Start {{count}} question",
+    "cta_other": "Start {{count}} questions"
+  },
+  "session": {
+    "title": "Practice session",
+    "answered": "{{done}} of {{total}} answered",
+    "elapsed": "Time elapsed",
+    "quit": "Quit",
+    "progressLabel": "Session progress",
+    "navigator": "Question navigator",
+    "goTo": "Go to question {{n}}",
+    "finish": "Finish",
+    "shortcuts": "Shortcuts: 1–4 to answer · N next · P previous",
+    "confirmTitle": "Finish this session?",
+    "confirmBody_one": "You still have {{count}} unanswered question. It will be counted as skipped.",
+    "confirmBody_other": "You still have {{count}} unanswered questions. They will be counted as skipped.",
+    "keepGoing": "Keep practising",
+    "finishNow": "Finish now"
+  },
+  "results": {
+    "eyebrow": "Session complete",
+    "score": "Score",
+    "scoreLabel": "Practice score",
+    "headline": {
+      "excellent": "Outstanding work!",
+      "good": "Solid session — keep it up",
+      "fair": "Good effort, a little more practice",
+      "low": "Let's turn these into strengths"
+    },
+    "summary": "You answered {{correct}} of {{total}} questions correctly.",
+    "summaryMistakes": "Wrong answers were added to My Mistakes for review.",
+    "stats": {
+      "correct": "Correct",
+      "incorrect": "Incorrect",
+      "skipped": "Skipped",
+      "time": "Time taken"
+    },
+    "again": "Practise again",
+    "backToBank": "Back to bank",
+    "reviewMistakes": "Review mistakes",
+    "reviewTitle": "Question review",
+    "reviewFilter": "Filter reviewed questions",
+    "nothingHere": "Nothing to show in this view."
+  },
+  "mistakes": {
+    "seoTitle": "My Mistakes",
+    "seoDescription": "Every question you got wrong, with explanations, repeat tracking and one-tap retries.",
+    "title": "My Mistakes",
+    "subtitle": "Turn every wrong answer into a mastered one. Review, retry, and track what keeps coming back.",
+    "practiceMore": "Practise more questions",
+    "stats": {
+      "unresolved": "Unresolved",
+      "reviewed": "Reviewed",
+      "mastered": "Mastered",
+      "repeated": "Repeated"
+    },
+    "tabs": {
+      "all": "All",
+      "unresolved": "Unresolved",
+      "reviewed": "Reviewed",
+      "mastered": "Mastered",
+      "repeated": "Repeated"
+    },
+    "status": {
+      "unresolved": "Unresolved",
+      "reviewed": "Reviewed",
+      "mastered": "Mastered"
+    },
+    "filterLabel": "Filter mistakes by status",
+    "subjectFilter": "Filter mistakes by subject",
+    "statusLabel": "Mistake status",
+    "groupCount_one": "{{count}} mistake",
+    "groupCount_other": "{{count}} mistakes",
+    "repeated_one": "Repeated {{count}}×",
+    "repeated_other": "Repeated {{count}}×",
+    "goToLesson": "Go to lesson",
+    "masteredToast": "Marked as mastered",
+    "retry": {
+      "cta": "Retry",
+      "again": "Try again",
+      "done": "Done",
+      "markMastered": "Mark as mastered",
+      "correctToast": "Correct — nicely done!",
+      "correctToastBody": "You can mark this question as mastered.",
+      "wrongToast": "Not quite — the repeat count went up. Read the explanation and try again."
+    },
+    "empty": {
+      "title": "Nothing here",
+      "body": "No mistakes match this filter. Try another status or subject.",
+      "noneTitle": "No mistakes yet",
+      "noneBody": "Questions you answer wrongly in quizzes, the bank or exams will appear here for review."
+    }
+  },
+  "exams": {
+    "seoTitle": "Exam Simulator",
+    "seoDescription": "Timed, ministerial-style mock exams with autosave, flagging and detailed results.",
+    "title": "Exam Simulator",
+    "subtitle": "Rehearse the real thing under real conditions — then learn from every answer.",
+    "hero": {
+      "eyebrow": "Ministerial-style exam simulation",
+      "titleStart": "Sit the exam before",
+      "titleHighlight": "exam day",
+      "body": "Full-length papers built on the ministerial blueprint, a strict timer and a calm, distraction-free exam room. Your results show exactly where to revise next.",
+      "papers": "Exam papers",
+      "questions": "Questions",
+      "passMark": "Pass mark"
+    },
+    "rules": {
+      "timed": { "title": "Timed like the real exam", "body": "The countdown keeps running even if you refresh." },
+      "autosave": { "title": "Autosave on every answer", "body": "Your answers are saved instantly as you work." },
+      "flag": { "title": "Flag questions", "body": "Mark tricky questions and come back before submitting." },
+      "autoSubmit": { "title": "Auto-submit at zero", "body": "When time runs out, your paper is submitted for you." }
+    },
+    "blueprints": "Exam papers",
+    "blueprintsSub": "Choose a paper. Each attempt counts, so start when you're ready.",
+    "card": {
+      "questions": "Questions",
+      "duration": "Duration",
+      "passMark": "Pass mark",
+      "attempts": "Attempts left",
+      "attemptsLeft": "{{left}} of {{total}}",
+      "best": "Best score",
+      "notTaken": "Not attempted",
+      "start": "Start exam",
+      "resume": "Resume exam · {{time}} left",
+      "noAttempts": "No attempts left"
+    },
+    "confirm": {
+      "body": "Once you begin, the timer starts and cannot be paused.",
+      "rulesTitle": "Before you start",
+      "r1": "Find a quiet place — the timer cannot be paused.",
+      "r2": "Your answers are autosaved; you can change them any time before submitting.",
+      "r3": "Flag questions you want to revisit and use the navigator to jump between them.",
+      "r4": "When time reaches zero your exam is submitted automatically.",
+      "r5": "Wrong answers are added to My Mistakes for later review.",
+      "ready": "I'm ready — start"
+    },
+    "recent": "Recent attempts",
+    "pastResults": "Past results",
+    "viewResult": "View result"
+  },
+  "timer": {
+    "label": "Time remaining: {{time}}",
+    "synced": "Synced with server",
+    "fiveLeft": "5 minutes remaining.",
+    "oneLeft": "1 minute remaining. Your exam will be submitted automatically."
+  },
+  "room": {
+    "seoTitle": "Exam room — {{title}}",
+    "submit": "Submit",
+    "submitExam": "Submit exam",
+    "exit": "Exit exam",
+    "answeredOf": "{{done}} of {{total}} answered",
+    "progressLabel": "Exam progress",
+    "flag": "Flag for review",
+    "unflag": "Remove flag",
+    "clearAnswer": "Clear answer",
+    "shortcuts": "Shortcuts: 1–4 choose an answer · N next · P previous · F flag",
+    "backToExams": "Back to exams",
+    "save": {
+      "saving": "Saving…",
+      "justNow": "Saved just now",
+      "minutesAgo_one": "Saved {{count}} min ago",
+      "minutesAgo_other": "Saved {{count}} min ago"
+    },
+    "nav": {
+      "title": "Questions",
+      "open": "Questions · {{done}}/{{total}}",
+      "answered": "Answered",
+      "unanswered": "Unanswered",
+      "flagged": "Flagged",
+      "current": "Current",
+      "legend": "Legend",
+      "item": "Question {{n}}: {{status}}",
+      "separator": ", "
+    },
+    "confirmSubmit": {
+      "title": "Submit your exam?",
+      "body": "After submitting you can't change your answers.",
+      "unanswered_one": "{{count}} question is still unanswered and will be marked wrong.",
+      "unanswered_other": "{{count}} questions are still unanswered and will be marked wrong.",
+      "flagged_one": "You flagged {{count}} question for review.",
+      "flagged_other": "You flagged {{count}} questions for review.",
+      "back": "Back to exam",
+      "confirm": "Submit exam"
+    },
+    "confirmExit": {
+      "title": "Leave the exam room?",
+      "body": "Your answers are saved, but the timer keeps running. If it reaches zero your exam is submitted automatically.",
+      "stay": "Stay",
+      "leave": "Leave exam room"
+    },
+    "timeUp": {
+      "title": "Time's up",
+      "body": "Your exam was submitted automatically. Taking you to your result…",
+      "cta": "View my result"
+    },
+    "notFound": {
+      "title": "Exam not found",
+      "body": "This exam paper doesn't exist or is no longer available."
+    }
+  },
+  "result": {
+    "seoTitle": "Result — {{title}}",
+    "seoDescription": "Your exam score, topic breakdown and full answer review.",
+    "backToExams": "Back to exams",
+    "demoNote": "This is a sample result based on a previous attempt. Sit an exam to see your own detailed result here.",
+    "scoreLabel": "Exam score",
+    "outOf": "{{correct}} / {{total}} correct",
+    "passed": "Passed",
+    "failed": "Not passed",
+    "autoSubmitted": "Auto-submitted",
+    "finishedOn": "Finished {{date}}",
+    "grade": {
+      "excellent": "Excellent",
+      "veryGood": "Very good",
+      "good": "Good",
+      "pass": "Pass",
+      "needsWork": "Needs work"
+    },
+    "message": {
+      "pass": "You cleared the {{mark}}% pass mark. Review the topics below to push your score even higher.",
+      "fail": "You're below the {{mark}}% pass mark this time. Focus on the weakest topics below and try again."
+    },
+    "retake_one": "Retake ({{count}} attempt left)",
+    "retake_other": "Retake ({{count}} attempts left)",
+    "reviewMistakes": "Review mistakes",
+    "stats": {
+      "correct": "Correct",
+      "incorrect": "Incorrect",
+      "unanswered": "Unanswered",
+      "time": "Time spent",
+      "timeOf": "of {{total}}",
+      "accuracy": "Accuracy",
+      "accuracyHint": "of answered questions"
+    },
+    "topics": {
+      "title": "Topic breakdown",
+      "subtitle": "Percentage of correct answers per topic",
+      "topic": "Topic",
+      "accuracy": "Correct",
+      "strong": "75% and above",
+      "fair": "50–74%",
+      "weak": "Below 50%"
+    },
+    "revision": {
+      "title": "Recommended revision",
+      "subtitle": "Start with your weakest topics",
+      "open": "Revise",
+      "none": "Perfect paper — nothing to revise. Outstanding!"
+    },
+    "review": {
+      "title": "Answer review",
+      "filter": "Filter answers",
+      "empty": "Nothing to show in this view."
+    }
+  }
+}

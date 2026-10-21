@@ -1,0 +1,482 @@
+[
+  {
+    "id": "math",
+    "name": {
+      "en": "Mathematics",
+      "ar": "الرياضيات"
+    },
+    "tagline": {
+      "en": "From complex numbers to integration",
+      "ar": "من الأعداد المركبة إلى التكامل"
+    },
+    "description": {
+      "en": "Build rock-solid problem-solving skills with step-by-step explanations of every ministerial-exam topic — complex numbers, differentiation, integration and more.",
+      "ar": "ابنِ مهارات حل مسائل متينة مع شرح خطوة بخطوة لكل مواضيع الامتحان الوزاري — الأعداد المركبة، التفاضل، التكامل والمزيد."
+    },
+    "color": "#2563EB",
+    "icon": "Sigma",
+    "hours": 64,
+    "questionsCount": 6200,
+    "image": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=1200&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "lessonsCount": 15,
+    "units": [
+      {
+        "id": "math-u1",
+        "title": {
+          "en": "Complex Numbers",
+          "ar": "الأعداد المركبة"
+        },
+        "chapters": [
+          {
+            "id": "math-u1-c1",
+            "title": {
+              "en": "Foundations",
+              "ar": "الأساسيات"
+            }
+          },
+          {
+            "id": "math-u1-c2",
+            "title": {
+              "en": "Polar Form",
+              "ar": "الصيغة القطبية"
+            }
+          }
+        ]
+      },
+      {
+        "id": "math-u2",
+        "title": {
+          "en": "Differentiation & Its Applications",
+          "ar": "التفاضل وتطبيقاته"
+        },
+        "chapters": [
+          {
+            "id": "math-u2-c1",
+            "title": {
+              "en": "Derivatives",
+              "ar": "المشتقات"
+            }
+          },
+          {
+            "id": "math-u2-c2",
+            "title": {
+              "en": "Curve Analysis",
+              "ar": "رسم المنحنيات"
+            }
+          }
+        ]
+      },
+      {
+        "id": "math-u3",
+        "title": {
+          "en": "Integration",
+          "ar": "التكامل"
+        },
+        "chapters": [
+          {
+            "id": "math-u3-c1",
+            "title": {
+              "en": "Indefinite Integrals",
+              "ar": "التكامل غير المحدد"
+            }
+          },
+          {
+            "id": "math-u3-c2",
+            "title": {
+              "en": "Definite Integrals",
+              "ar": "التكامل المحدد"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "physics",
+    "name": {
+      "en": "Physics",
+      "ar": "الفيزياء"
+    },
+    "tagline": {
+      "en": "Capacitors, induction & AC circuits",
+      "ar": "المتسعات والحث والتيار المتناوب"
+    },
+    "description": {
+      "en": "Understand the physics behind every formula with animated demonstrations, solved ministerial questions and lab-style intuition.",
+      "ar": "افهم الفيزياء وراء كل قانون مع عروض متحركة وأسئلة وزارية محلولة وحدس مختبري."
+    },
+    "color": "#7C3AED",
+    "icon": "Atom",
+    "hours": 58,
+    "questionsCount": 5400,
+    "image": "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?auto=format&fit=crop&w=1200&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "lessonsCount": 14,
+    "units": [
+      {
+        "id": "physics-u1",
+        "title": {
+          "en": "Capacitors",
+          "ar": "المتسعات"
+        },
+        "chapters": [
+          {
+            "id": "physics-u1-c1",
+            "title": {
+              "en": "Capacitance",
+              "ar": "السعة"
+            }
+          },
+          {
+            "id": "physics-u1-c2",
+            "title": {
+              "en": "Circuits",
+              "ar": "ربط المتسعات"
+            }
+          }
+        ]
+      },
+      {
+        "id": "physics-u2",
+        "title": {
+          "en": "Electromagnetic Induction",
+          "ar": "الحث الكهرومغناطيسي"
+        },
+        "chapters": [
+          {
+            "id": "physics-u2-c1",
+            "title": {
+              "en": "Faraday & Lenz",
+              "ar": "فاراداي ولنز"
+            }
+          },
+          {
+            "id": "physics-u2-c2",
+            "title": {
+              "en": "Applications",
+              "ar": "التطبيقات"
+            }
+          }
+        ]
+      },
+      {
+        "id": "physics-u3",
+        "title": {
+          "en": "Alternating Current",
+          "ar": "التيار المتناوب"
+        },
+        "chapters": [
+          {
+            "id": "physics-u3-c1",
+            "title": {
+              "en": "AC Fundamentals",
+              "ar": "أساسيات التيار المتناوب"
+            }
+          },
+          {
+            "id": "physics-u3-c2",
+            "title": {
+              "en": "Resonance",
+              "ar": "الرنين"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "chemistry",
+    "name": {
+      "en": "Chemistry",
+      "ar": "الكيمياء"
+    },
+    "tagline": {
+      "en": "Equilibrium, electrochemistry & organic",
+      "ar": "الاتزان والكهربائية والعضوية"
+    },
+    "description": {
+      "en": "Master equilibrium, electrochemistry and organic reactions with clear mechanisms, memorable summaries and exam-focused drills.",
+      "ar": "أتقن الاتزان والكيمياء الكهربائية والتفاعلات العضوية مع آليات واضحة وملخصات سهلة الحفظ وتمارين امتحانية."
+    },
+    "color": "#059669",
+    "icon": "FlaskConical",
+    "hours": 52,
+    "questionsCount": 4800,
+    "image": "https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?auto=format&fit=crop&w=1200&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "lessonsCount": 14,
+    "units": [
+      {
+        "id": "chemistry-u1",
+        "title": {
+          "en": "Chemical Equilibrium",
+          "ar": "الاتزان الكيميائي"
+        },
+        "chapters": [
+          {
+            "id": "chemistry-u1-c1",
+            "title": {
+              "en": "Equilibrium Constant",
+              "ar": "ثابت الاتزان"
+            }
+          },
+          {
+            "id": "chemistry-u1-c2",
+            "title": {
+              "en": "Shifting Equilibrium",
+              "ar": "إزاحة الاتزان"
+            }
+          }
+        ]
+      },
+      {
+        "id": "chemistry-u2",
+        "title": {
+          "en": "Electrochemistry",
+          "ar": "الكيمياء الكهربائية"
+        },
+        "chapters": [
+          {
+            "id": "chemistry-u2-c1",
+            "title": {
+              "en": "Galvanic Cells",
+              "ar": "الخلايا الكلفانية"
+            }
+          },
+          {
+            "id": "chemistry-u2-c2",
+            "title": {
+              "en": "Electrolysis",
+              "ar": "التحليل الكهربائي"
+            }
+          }
+        ]
+      },
+      {
+        "id": "chemistry-u3",
+        "title": {
+          "en": "Organic Chemistry",
+          "ar": "الكيمياء العضوية"
+        },
+        "chapters": [
+          {
+            "id": "chemistry-u3-c1",
+            "title": {
+              "en": "Hydrocarbons",
+              "ar": "الهيدروكربونات"
+            }
+          },
+          {
+            "id": "chemistry-u3-c2",
+            "title": {
+              "en": "Functional Groups",
+              "ar": "المجاميع الفعالة"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "biology",
+    "name": {
+      "en": "Biology",
+      "ar": "الأحياء"
+    },
+    "tagline": {
+      "en": "Reproduction, genetics & molecular biology",
+      "ar": "التكاثر والوراثة والأحياء الجزيئية"
+    },
+    "description": {
+      "en": "Visual, diagram-rich lessons on reproduction, genetics and DNA — with genetic-cross practice and definition drills.",
+      "ar": "دروس بصرية غنية بالمخططات عن التكاثر والوراثة والـDNA — مع تمارين التضريب الوراثي والتعاريف."
+    },
+    "color": "#DB2777",
+    "icon": "Dna",
+    "hours": 46,
+    "questionsCount": 4300,
+    "image": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=1200&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "lessonsCount": 14,
+    "units": [
+      {
+        "id": "biology-u1",
+        "title": {
+          "en": "Reproduction",
+          "ar": "التكاثر"
+        },
+        "chapters": [
+          {
+            "id": "biology-u1-c1",
+            "title": {
+              "en": "Plants",
+              "ar": "النبات"
+            }
+          },
+          {
+            "id": "biology-u1-c2",
+            "title": {
+              "en": "Humans",
+              "ar": "الإنسان"
+            }
+          }
+        ]
+      },
+      {
+        "id": "biology-u2",
+        "title": {
+          "en": "Genetics",
+          "ar": "الوراثة"
+        },
+        "chapters": [
+          {
+            "id": "biology-u2-c1",
+            "title": {
+              "en": "Mendelian Genetics",
+              "ar": "الوراثة المندلية"
+            }
+          },
+          {
+            "id": "biology-u2-c2",
+            "title": {
+              "en": "Sex Linkage",
+              "ar": "الوراثة المرتبطة بالجنس"
+            }
+          }
+        ]
+      },
+      {
+        "id": "biology-u3",
+        "title": {
+          "en": "Molecular Biology",
+          "ar": "الأحياء الجزيئية"
+        },
+        "chapters": [
+          {
+            "id": "biology-u3-c1",
+            "title": {
+              "en": "DNA",
+              "ar": "الحامض النووي"
+            }
+          },
+          {
+            "id": "biology-u3-c2",
+            "title": {
+              "en": "Biotechnology",
+              "ar": "التقانة الحيوية"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "english",
+    "name": {
+      "en": "English",
+      "ar": "اللغة الإنكليزية"
+    },
+    "tagline": {
+      "en": "Grammar, reading & writing",
+      "ar": "القواعد والقراءة والكتابة"
+    },
+    "description": {
+      "en": "Score high in English with focused grammar lessons, literature analysis and writing templates aligned with the Iraqi curriculum.",
+      "ar": "احصل على درجة عالية في الإنكليزي مع دروس قواعد مركزة وتحليل أدبي وقوالب كتابة متوافقة مع المنهج العراقي."
+    },
+    "color": "#EA580C",
+    "icon": "Languages",
+    "hours": 40,
+    "questionsCount": 4300,
+    "image": "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=1200&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "lessonsCount": 12,
+    "units": [
+      {
+        "id": "english-u1",
+        "title": {
+          "en": "Grammar Essentials",
+          "ar": "أساسيات القواعد"
+        },
+        "chapters": [
+          {
+            "id": "english-u1-c1",
+            "title": {
+              "en": "Voice",
+              "ar": "المبني للمجهول"
+            }
+          },
+          {
+            "id": "english-u1-c2",
+            "title": {
+              "en": "Reporting",
+              "ar": "الكلام المنقول"
+            }
+          }
+        ]
+      },
+      {
+        "id": "english-u2",
+        "title": {
+          "en": "Advanced Structures",
+          "ar": "تراكيب متقدمة"
+        },
+        "chapters": [
+          {
+            "id": "english-u2-c1",
+            "title": {
+              "en": "Conditionals",
+              "ar": "الجمل الشرطية"
+            }
+          },
+          {
+            "id": "english-u2-c2",
+            "title": {
+              "en": "Clauses",
+              "ar": "الجمل الوصفية"
+            }
+          }
+        ]
+      },
+      {
+        "id": "english-u3",
+        "title": {
+          "en": "Reading & Writing",
+          "ar": "القراءة والكتابة"
+        },
+        "chapters": [
+          {
+            "id": "english-u3-c1",
+            "title": {
+              "en": "Reading",
+              "ar": "القراءة"
+            }
+          },
+          {
+            "id": "english-u3-c2",
+            "title": {
+              "en": "Writing",
+              "ar": "الكتابة"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

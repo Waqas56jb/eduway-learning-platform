@@ -1,0 +1,93 @@
+{
+  "title": "My Progress",
+  "subtitle": "Every step counts toward the ministerial exam",
+  "hero": {
+    "overall": "Overall",
+    "eyebrow": "Your journey",
+    "headline": "You're {{value}}% of the way there",
+    "streak": "Day streak",
+    "activeDays": "Active days",
+    "hours": "Study hours",
+    "lessonsDone": "Lessons completed: {{value}}"
+  },
+  "subjects": {
+    "title": "Subject completion",
+    "subtitle": "Tap a subject to continue",
+    "a11y": "{{subject}}, {{value}}% complete"
+  },
+  "trend": {
+    "title": "Score trend",
+    "subtitle": "Quiz averages over the last 8 weeks",
+    "average": "Current average",
+    "delta": "+{{value}} pts since week 1",
+    "week": "W{{n}}",
+    "toggleA11y": "Show or hide {{subject}}",
+    "keepOne": "Keep at least one subject visible"
+  },
+  "weak": {
+    "title": "Topics to strengthen",
+    "subtitle": "Based on your mistakes and quiz results",
+    "accuracy": "{{value}}% accuracy",
+    "review": "Review",
+    "reviewA11y": "Review {{topic}}"
+  },
+  "calendar": {
+    "title": "Study streak",
+    "subtitle": "Your activity over the last 16 weeks",
+    "less": "Less",
+    "more": "More",
+    "hint": "Tap a day to see details",
+    "cellA11y": "{{date}}: {{level}}",
+    "levels": {
+      "l0": "No activity",
+      "l1": "Light study",
+      "l2": "Steady study",
+      "l3": "Strong study",
+      "l4": "Outstanding day"
+    },
+    "days": {
+      "sat": "Sat",
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri"
+    },
+    "months": {
+      "m1": "Jan",
+      "m2": "Feb",
+      "m3": "Mar",
+      "m4": "Apr",
+      "m5": "May",
+      "m6": "Jun",
+      "m7": "Jul",
+      "m8": "Aug",
+      "m9": "Sep",
+      "m10": "Oct",
+      "m11": "Nov",
+      "m12": "Dec"
+    }
+  },
+  "badges": {
+    "title": "Achievements",
+    "earnedCount": "{{earned}} of {{total}} earned",
+    "earned": "Earned",
+    "locked": "Locked",
+    "earnedOn": "Earned on {{date}}",
+    "progress": "{{current}} / {{target}}",
+    "howTo": "How to unlock",
+    "keepGoing": "Keep going — you're {{value}}% there!",
+    "a11yEarned": "{{title}}, earned",
+    "a11yLocked": "{{title}}, locked, {{value}}% progress"
+  },
+  "activity": {
+    "title": "Recent activity",
+    "kinds": {
+      "lesson": "Lesson",
+      "quiz": "Quiz",
+      "exam": "Exam",
+      "ai": "AI Tutor"
+    }
+  }
+}

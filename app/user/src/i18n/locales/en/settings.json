@@ -1,0 +1,169 @@
+{
+  "profile": {
+    "title": "Profile",
+    "viewProgress": "View progress",
+    "editPhoto": "Edit profile photo",
+    "noPackage": "No active plan",
+    "stats": {
+      "lessons": "Lessons",
+      "quizAvg": "Quiz avg",
+      "streak": "Day streak",
+      "aiLeft": "AI left"
+    },
+    "groups": {
+      "learning": "Learning",
+      "account": "Account",
+      "support": "Support"
+    },
+    "menu": {
+      "mistakes": "My mistakes",
+      "mistakesSub": "Review and retry what you missed",
+      "exams": "Exam simulator",
+      "examsSub": "Timed ministerial-style exams",
+      "questionBank": "Question bank",
+      "questionBankSub": "Practice by unit and difficulty",
+      "progress": "Progress & analytics",
+      "progressSub": "Your study time, scores and streaks",
+      "subscription": "Subscription",
+      "subscriptionSub": "Days remaining: {{count}}",
+      "notifications": "Notifications",
+      "notificationsSub": "Lessons, exams and payments",
+      "settings": "Settings",
+      "settingsSub": "Language, theme and alerts",
+      "editProfile": "Edit profile",
+      "editProfileSub": "Name, photo, governorate and school",
+      "support": "Contact support",
+      "supportSub": "We usually reply within a few hours",
+      "terms": "Terms of service",
+      "privacy": "Privacy policy"
+    },
+    "unread": "Unread notifications: {{count}}"
+  },
+  "logout": {
+    "row": "Log out",
+    "title": "Log out of EDUWAY?",
+    "message": "Your progress is saved to your account. You'll need your mobile number and a verification code to sign in again.",
+    "confirm": "Log out"
+  },
+  "support": {
+    "title": "Contact support",
+    "subtitle": "Our team is available Saturday to Thursday, 9 AM – 9 PM (Baghdad time).",
+    "whatsapp": "WhatsApp",
+    "whatsappSub": "Fastest — chat with an advisor",
+    "phone": "Call us",
+    "phoneSub": "Speak to the support team",
+    "email": "Email",
+    "emailSub": "For billing and account requests",
+    "phoneNumber": "+964 770 000 1234",
+    "emailAddress": "support@eduway.iq",
+    "opening": "Opening {{channel}}…"
+  },
+  "about": {
+    "version": "Version {{version}}",
+    "madeIn": "Crafted in Iraq for 6th Scientific students"
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "preferences": "Preferences",
+      "notifications": "Notifications",
+      "account": "Account",
+      "about": "About"
+    },
+    "language": "Language",
+    "theme": "Appearance",
+    "themeOptions": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "notif": {
+      "lessons": "New lessons",
+      "lessonsSub": "When teachers publish a new lesson",
+      "exams": "Exam reminders",
+      "examsSub": "Upcoming mock exams and deadlines",
+      "payments": "Payments",
+      "paymentsSub": "Receipts and renewal reminders",
+      "progress": "Progress reports",
+      "progressSub": "Weekly summary of your study"
+    },
+    "test": {
+      "button": "Send test notification",
+      "title": "EDUWAY is ready 🎓",
+      "body": "Notifications are working. We'll remind you about new lessons and upcoming exams.",
+      "scheduled": "Test notification arrives in 2 seconds",
+      "denied": "Notifications are turned off. Enable them in your device settings.",
+      "failed": "Couldn't send the test notification"
+    },
+    "editProfile": "Edit profile",
+    "sessions": "Active sessions",
+    "sessionsSub": "Signed-in devices: {{count}}",
+    "terms": "Terms of service",
+    "privacy": "Privacy policy",
+    "support": "Contact support",
+    "appVersion": "App version"
+  },
+  "editProfile": {
+    "title": "Edit profile",
+    "changePhoto": "Change photo",
+    "choosePhoto": "Choose a profile photo",
+    "photoOption": "Photo option {{n}}",
+    "name": "Full name",
+    "namePlaceholder": "e.g. Ahmed Al-Baghdadi",
+    "governorate": "Governorate",
+    "governoratePlaceholder": "Select your governorate",
+    "chooseGovernorate": "Choose governorate",
+    "school": "School",
+    "schoolPlaceholder": "Your preparatory school",
+    "mobile": "Mobile number",
+    "mobileLocked": "Contact support to change your mobile number.",
+    "save": "Save changes",
+    "saved": "Profile updated",
+    "errors": {
+      "nameRequired": "Please enter your full name",
+      "nameShort": "Name must be at least 3 characters",
+      "nameLong": "Name must be under 60 characters",
+      "governorateRequired": "Please choose your governorate",
+      "schoolLong": "School name must be under 80 characters"
+    }
+  },
+  "sessions": {
+    "title": "Active sessions",
+    "infoTitle": "One device at a time",
+    "infoBody": "For security, lessons play on one device at a time. Sign out of devices you no longer use to keep your account safe.",
+    "current": "This device",
+    "others": "Other devices",
+    "thisDevice": "This device",
+    "lastActive": "Active {{time}}",
+    "logout": "Log out",
+    "logoutA11y": "Log out {{device}}",
+    "logoutTitle": "Sign out this device?",
+    "logoutMessage": "{{device}} will be signed out and will need a verification code to sign in again.",
+    "logoutDone": "Device signed out",
+    "logoutAll": "Log out all other devices",
+    "logoutAllTitle": "Sign out all other devices?",
+    "logoutAllMessage": "Every device except this one will be signed out immediately.",
+    "logoutAllDone": "All other devices signed out",
+    "empty": "No other devices",
+    "emptyMessage": "Only this device is signed in to your account."
+  },
+  "language": {
+    "title": "Language",
+    "subtitle": "Choose the language for lessons, menus and the AI tutor.",
+    "selected": "Selected",
+    "en": {
+      "name": "English",
+      "sample": "Aa",
+      "note": "Left-to-right layout"
+    },
+    "ar": {
+      "name": "العربية",
+      "sample": "أب",
+      "note": "Right-to-left layout"
+    },
+    "restartTitle": "Restart required",
+    "restartMessage": "The app will restart to apply the new layout direction. Your progress is safe.",
+    "restartConfirm": "Restart now",
+    "changed": "Language updated"
+  }
+}

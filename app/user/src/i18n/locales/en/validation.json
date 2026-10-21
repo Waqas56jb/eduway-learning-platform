@@ -1,0 +1,31 @@
+{
+  "required": "This field is required",
+  "name": {
+    "required": "Please enter your full name",
+    "min": "Name must be at least 3 characters",
+    "max": "Name is too long (60 characters max)",
+    "letters": "Use letters only — no numbers or symbols"
+  },
+  "mobile": {
+    "required": "Please enter your mobile number",
+    "length": "Enter the 10 digits after +964",
+    "prefix": "Iraqi mobile numbers start with 7",
+    "invalid": "Enter a valid Iraqi mobile number"
+  },
+  "governorate": {
+    "required": "Please select your governorate"
+  },
+  "school": {
+    "max": "School name is too long (80 characters max)"
+  },
+  "referral": {
+    "invalid": "Referral codes are 6–10 letters or numbers"
+  },
+  "terms": {
+    "required": "Please accept the Terms of Service and Privacy Policy to continue"
+  },
+  "otp": {
+    "length": "Enter all 6 digits",
+    "invalid": "That code isn't correct"
+  }
+}

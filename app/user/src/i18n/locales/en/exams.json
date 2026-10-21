@@ -1,0 +1,153 @@
+{
+  "title": "Exam Simulator",
+  "subtitle": "Ministerial-style timed papers",
+  "intro": {
+    "overline": "Ministerial conditions",
+    "title": "Real ministerial conditions",
+    "body": "Sit full papers exactly as on exam day — then see where every mark went.",
+    "bullets": {
+      "timer": "Strict countdown — the timer can't be paused",
+      "autosave": "Every answer is saved instantly, even offline",
+      "attempts": "Limited attempts, just like the real thing",
+      "analysis": "Topic-by-topic analysis after you submit"
+    }
+  },
+  "blueprints": "Exam papers",
+  "blueprintsSub": "Pick a paper and start when you're ready",
+  "card": {
+    "questions": "{{count}} questions",
+    "duration": "{{count}} min",
+    "passMark": "Pass {{value}}%",
+    "attemptsLeft": "{{left}} of {{total}} attempts left",
+    "noAttempts": "No attempts left",
+    "bestScore": "Best score",
+    "noBest": "Not attempted yet",
+    "start": "Start exam",
+    "resume": "Resume exam",
+    "inProgress": "In progress · {{time}} left",
+    "expired": "Time is up — open to submit",
+    "a11y": "{{title}}, {{questions}} questions, {{minutes}} minutes"
+  },
+  "previous": "Previous attempts",
+  "previousSub": "Tap an attempt to see the full report",
+  "noPrevious": "No exam attempts yet",
+  "noPreviousMsg": "Your results will appear here after your first paper.",
+  "attemptMeta": "Attempt {{no}} · {{date}}",
+  "rules": {
+    "title": "Before you begin",
+    "subtitle": "{{questions}} questions · {{minutes}} minutes · pass mark {{pass}}%",
+    "timer": "The timer starts immediately and can't be paused.",
+    "autoSubmit": "When time reaches 00:00 your paper is submitted automatically.",
+    "leaving": "Leaving the exam autosaves your answers, but the clock keeps running.",
+    "attempt": "Starting uses one attempt ({{left}} remaining).",
+    "resumeNote": "You have a paper in progress — continue where you left off.",
+    "begin": "Begin exam",
+    "continue": "Continue exam",
+    "cancel": "Not now"
+  },
+  "room": {
+    "counter": "{{current}} / {{total}}",
+    "questionOf": "Question {{current}} of {{total}}",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "sync": "Server time synced",
+    "flag": "Flag for review",
+    "unflag": "Remove flag",
+    "flagged": "Flagged",
+    "prev": "Previous",
+    "next": "Next",
+    "grid": "All questions",
+    "submit": "Submit",
+    "exit": "Exit exam",
+    "answeredCount": "{{count}} of {{total}} answered"
+  },
+  "exitDialog": {
+    "title": "Leave the exam?",
+    "message": "Your progress is autosaved, but the timer keeps running while you're away.",
+    "stay": "Stay in exam",
+    "leave": "Leave"
+  },
+  "submitSheet": {
+    "title": "Submit your paper?",
+    "allAnswered": "You've answered every question. Nice work.",
+    "unanswered": "Unanswered questions: {{count}}",
+    "tapToJump": "Tap a number to jump to it",
+    "flagged": "Flagged for review: {{count}}",
+    "timeLeft": "Time left",
+    "warning": "Once submitted, answers can't be changed.",
+    "confirm": "Submit now",
+    "keep": "Keep reviewing"
+  },
+  "timeUp": {
+    "title": "Time's up",
+    "message": "Your paper has been submitted automatically with the answers you saved.",
+    "cta": "See my results"
+  },
+  "network": {
+    "lost": "Connection lost — answers saved locally, will resume",
+    "back": "Reconnected — all answers synced"
+  },
+  "navigator": {
+    "title": "Question navigator",
+    "answered": "Answered",
+    "unanswered": "Unanswered",
+    "flagged": "Flagged",
+    "current": "Current",
+    "cell": "Question {{n}}",
+    "cellAnswered": "answered",
+    "cellUnanswered": "not answered",
+    "cellFlagged": "flagged"
+  },
+  "timer": {
+    "a11y": "Time remaining {{time}}",
+    "warn5": "5 minutes left",
+    "warn1": "1 minute left"
+  },
+  "noAttemptsRoom": {
+    "title": "No attempts left",
+    "message": "You've used every attempt for this paper. Review your past results to keep improving."
+  },
+  "notFound": {
+    "title": "Exam not found",
+    "message": "This paper is no longer available.",
+    "action": "Back to exams"
+  },
+  "result": {
+    "title": "Exam result",
+    "passed": "Passed",
+    "failed": "Below pass mark",
+    "passedMsg": "You cleared the {{pass}}% pass mark. Keep the momentum!",
+    "failedMsg": "The pass mark is {{pass}}%. Focus on the topics below and try again.",
+    "timeSpent": "Time spent",
+    "correct": "Correct",
+    "incorrect": "Incorrect",
+    "unanswered": "Unanswered",
+    "breakdown": "Topic breakdown",
+    "breakdownSub": "Accuracy per topic",
+    "revision": "Recommended revision",
+    "revisionSub": "Lessons that cover the topics you missed",
+    "noRevision": "No gaps found — every topic was answered correctly.",
+    "revisionMeta": "{{topic}} · {{count}} missed",
+    "share": "Share my score",
+    "shareTitle": "Share your result",
+    "shareFailed": "Couldn't share right now. Please try again.",
+    "shareUnavailable": "Sharing isn't available on this device.",
+    "review": "Review answers",
+    "hideReview": "Hide answers",
+    "backToExams": "Back to exams",
+    "yourAnswer": "Your answer",
+    "correctAnswer": "Correct answer",
+    "notAnswered": "Not answered",
+    "questionN": "Question {{n}}",
+    "notFoundTitle": "Result not found",
+    "notFoundMsg": "We couldn't find this attempt. It may have been removed.",
+    "card": {
+      "overline": "Ministerial mock exam",
+      "student": "Student",
+      "score": "Score",
+      "status": "Result",
+      "footer": "eduway · 6th Scientific"
+    },
+    "attemptNo": "Attempt {{no}}"
+  }
+}

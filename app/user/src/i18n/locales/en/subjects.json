@@ -1,0 +1,79 @@
+{
+  "title": "Your subjects",
+  "subtitle": "Five subjects, one goal: the ministerial exam.",
+  "overline": "6th Scientific",
+  "summary": {
+    "overall": "Overall completion",
+    "lessons": "Lessons",
+    "completed": "Completed",
+    "hours": "Hours of video",
+    "keepGoing": "Keep going, you are on track"
+  },
+  "card": {
+    "complete": "{{value}}% complete",
+    "teacher": "Teacher",
+    "a11y": "{{name}}, {{progress}}% complete",
+    "a11yLocked": "{{name}}, not in your package"
+  },
+  "detail": {
+    "notFoundTitle": "Subject not found",
+    "notFoundMessage": "This subject may have been moved or is no longer available.",
+    "tabs": {
+      "lessons": "Lessons",
+      "bank": "Question Bank",
+      "exams": "Exams"
+    },
+    "stats": {
+      "lessons": "Lessons",
+      "hours": "Hours",
+      "questions": "Questions",
+      "done": "Done"
+    },
+    "bookmark": "Save subject",
+    "bookmarked": "Subject saved to your list",
+    "unbookmarked": "Subject removed from your list",
+    "share": "Share subject",
+    "shareMessage": "I'm studying {{name}} with {{teacher}} on EDUWAY. Join me!",
+    "continue": "Continue: {{title}}",
+    "start": "Start: {{title}}",
+    "review": "Review: {{title}}",
+    "upsellTitle": "Unlock {{name}}",
+    "upsellMessage": "This subject isn't included in your current package. Upgrade to watch every lesson, practice the full question bank and sit the mock exams.",
+    "upsellCta": "View plans"
+  },
+  "lessons": {
+    "unit": "Unit {{n}}",
+    "chapter": "Chapter {{n}}",
+    "progress": "{{done}}/{{total}} lessons done",
+    "expand": "Expand unit",
+    "collapse": "Collapse unit",
+    "rowA11y": "{{title}}, {{duration}}, {{status}}",
+    "remaining": "{{value}}% watched"
+  },
+  "bank": {
+    "title": "Question bank",
+    "subtitle": "{{count}} ministerial-style questions with worked explanations",
+    "byDifficulty": "By difficulty",
+    "byUnit": "By unit",
+    "unitCount": "{{count}} q",
+    "start": "Start practice",
+    "startHint": "10 mixed questions with instant feedback",
+    "browse": "Browse all",
+    "practiceUnit": "Practice this unit"
+  },
+  "exams": {
+    "title": "Mock exams",
+    "subtitle": "Timed simulations of the ministerial exam",
+    "attempts": "{{left}}/{{total}} attempts left",
+    "best": "Best {{score}}%",
+    "passMark": "Pass mark {{value}}%",
+    "start": "Start exam",
+    "noAttempts": "No attempts left",
+    "confirmTitle": "Ready to begin?",
+    "confirmMessage": "“{{title}}” has {{count}} questions and a {{minutes}}-minute timer. The timer starts as soon as you enter the exam room.",
+    "confirmPrimary": "Start now",
+    "emptyTitle": "No exams yet",
+    "emptyMessage": "Mock exams for this subject are on the way. Meanwhile, sharpen your skills in the question bank.",
+    "emptyAction": "Open question bank"
+  }
+}

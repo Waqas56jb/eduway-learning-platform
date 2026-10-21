@@ -1,0 +1,91 @@
+{
+  "appName": "EDUWAY",
+  "tagline": "Excellence for Iraq's 6th Scientific",
+  "actions": {
+    "continue": "Continue",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip",
+    "done": "Done",
+    "save": "Save",
+    "saved": "Saved",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "retry": "Retry",
+    "seeAll": "See all",
+    "start": "Start",
+    "resume": "Resume",
+    "submit": "Submit",
+    "apply": "Apply",
+    "reset": "Reset",
+    "share": "Share",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filters",
+    "open": "Open",
+    "upgrade": "Upgrade",
+    "renew": "Renew",
+    "logout": "Log out",
+    "tryAgain": "Try again",
+    "goHome": "Go home"
+  },
+  "tabs": {
+    "home": "Home",
+    "subjects": "Subjects",
+    "practice": "Practice",
+    "tutor": "AI Tutor",
+    "profile": "Profile"
+  },
+  "subjects": {
+    "math": "Mathematics",
+    "physics": "Physics",
+    "chemistry": "Chemistry",
+    "biology": "Biology",
+    "english": "English"
+  },
+  "difficulty": {
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard"
+  },
+  "status": {
+    "completed": "Completed",
+    "inProgress": "In progress",
+    "notStarted": "Not started",
+    "locked": "Locked",
+    "new": "New"
+  },
+  "units": {
+    "min": "{{count}} min",
+    "hours": "{{count}} h",
+    "lessons_one": "{{count}} lesson",
+    "lessons_other": "{{count}} lessons",
+    "questions_one": "{{count}} question",
+    "questions_other": "{{count}} questions",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "percent": "{{value}}%"
+  },
+  "states": {
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "offline": "You're offline. We'll resume when you're back.",
+    "error": "Something went wrong",
+    "pullToRefresh": "Pull to refresh",
+    "comingSoon": "Coming soon"
+  },
+  "premium": {
+    "locked": "Not in your package",
+    "unlock": "Unlock with a subscription",
+    "viewPlans": "View plans"
+  },
+  "a11y": {
+    "back": "Go back",
+    "close": "Close",
+    "openMenu": "Open menu",
+    "notifications": "Notifications",
+    "bookmark": "Bookmark question"
+  }
+}

@@ -1,0 +1,135 @@
+[
+  {
+    "id": "baghdad",
+    "name": {
+      "en": "Baghdad",
+      "ar": "بغداد"
+    }
+  },
+  {
+    "id": "basra",
+    "name": {
+      "en": "Basra",
+      "ar": "البصرة"
+    }
+  },
+  {
+    "id": "nineveh",
+    "name": {
+      "en": "Nineveh",
+      "ar": "نينوى"
+    }
+  },
+  {
+    "id": "erbil",
+    "name": {
+      "en": "Erbil",
+      "ar": "أربيل"
+    }
+  },
+  {
+    "id": "najaf",
+    "name": {
+      "en": "Najaf",
+      "ar": "النجف"
+    }
+  },
+  {
+    "id": "karbala",
+    "name": {
+      "en": "Karbala",
+      "ar": "كربلاء"
+    }
+  },
+  {
+    "id": "babylon",
+    "name": {
+      "en": "Babylon",
+      "ar": "بابل"
+    }
+  },
+  {
+    "id": "dhi-qar",
+    "name": {
+      "en": "Dhi Qar",
+      "ar": "ذي قار"
+    }
+  },
+  {
+    "id": "anbar",
+    "name": {
+      "en": "Anbar",
+      "ar": "الأنبار"
+    }
+  },
+  {
+    "id": "diyala",
+    "name": {
+      "en": "Diyala",
+      "ar": "ديالى"
+    }
+  },
+  {
+    "id": "kirkuk",
+    "name": {
+      "en": "Kirkuk",
+      "ar": "كركوك"
+    }
+  },
+  {
+    "id": "saladin",
+    "name": {
+      "en": "Saladin",
+      "ar": "صلاح الدين"
+    }
+  },
+  {
+    "id": "wasit",
+    "name": {
+      "en": "Wasit",
+      "ar": "واسط"
+    }
+  },
+  {
+    "id": "maysan",
+    "name": {
+      "en": "Maysan",
+      "ar": "ميسان"
+    }
+  },
+  {
+    "id": "muthanna",
+    "name": {
+      "en": "Muthanna",
+      "ar": "المثنى"
+    }
+  },
+  {
+    "id": "qadisiyyah",
+    "name": {
+      "en": "Al-Qadisiyyah",
+      "ar": "القادسية"
+    }
+  },
+  {
+    "id": "sulaymaniyah",
+    "name": {
+      "en": "Sulaymaniyah",
+      "ar": "السليمانية"
+    }
+  },
+  {
+    "id": "duhok",
+    "name": {
+      "en": "Duhok",
+      "ar": "دهوك"
+    }
+  },
+  {
+    "id": "halabja",
+    "name": {
+      "en": "Halabja",
+      "ar": "حلبجة"
+    }
+  }
+]

@@ -1,0 +1,102 @@
+{
+  "greeting": {
+    "morning": "Good morning, {{name}}",
+    "afternoon": "Good afternoon, {{name}}",
+    "evening": "Good evening, {{name}}"
+  },
+  "header": {
+    "openProfile": "Open your profile",
+    "notifications": "Notifications",
+    "notificationsUnread": "Notifications, {{count}} unread",
+    "streakLabel": "{{count}}-day study streak",
+    "streak_zero": "Start today",
+    "streak_one": "{{count}} day",
+    "streak_two": "{{count}} days",
+    "streak_few": "{{count}} days",
+    "streak_many": "{{count}} days",
+    "streak_other": "{{count}} days"
+  },
+  "subscription": {
+    "overline": "Your plan",
+    "active": "Active",
+    "daysLeftLabel": "days left",
+    "endsOn": "Renews on {{date}}",
+    "periodUsed": "{{value}}% of your period used",
+    "renew": "Renew",
+    "noPlan": "No active plan",
+    "noPlanBody": "Unlock every lesson, the question bank and the AI Tutor.",
+    "viewPlans": "View plans",
+    "a11y": "{{name}} plan, {{days}} days remaining"
+  },
+  "continue": {
+    "title": "Continue learning",
+    "resumeAt": "Resume at {{time}}",
+    "startLesson": "Start lesson",
+    "percentDone": "{{value}}% watched",
+    "play": "Play lesson",
+    "a11y": "Continue {{title}}, {{value}}% watched"
+  },
+  "subjects": {
+    "title": "Your subjects",
+    "subtitle": "Overall {{value}}% complete",
+    "lessons": "{{count}} lessons",
+    "a11y": "{{name}}, {{value}}% complete"
+  },
+  "stats": {
+    "title": "At a glance",
+    "lessonsDone": "Lessons completed",
+    "lessonsSub": "of {{total}}",
+    "quizAvg": "Quiz average",
+    "quizSub": "Last 30 days",
+    "mistakes": "Mistakes to review",
+    "mistakesSub": "Tap to review",
+    "mistakesClear": "All clear",
+    "ai": "AI questions left",
+    "aiSub": "This period"
+  },
+  "plan": {
+    "title": "Today's plan",
+    "progress": "{{done}} of {{total}} done",
+    "allDone": "Plan complete — brilliant work today!",
+    "minutes": "{{count}} min",
+    "markDone": "Mark “{{title}}” as done",
+    "markUndone": "Mark “{{title}}” as not done",
+    "open": "Open {{title}}"
+  },
+  "exam": {
+    "overline": "Upcoming exam",
+    "in_zero": "Today",
+    "in_one": "Tomorrow",
+    "in_two": "In {{count}} days",
+    "in_few": "In {{count}} days",
+    "in_many": "In {{count}} days",
+    "in_other": "In {{count}} days",
+    "prepare": "Prepare now",
+    "a11y": "{{title}}, {{when}}"
+  },
+  "weekly": {
+    "title": "This week",
+    "totalLabel": "Total study time",
+    "hours": "{{value}} h",
+    "dailyAvg": "Daily average {{value}} min",
+    "vsLastWeek": "{{value}}% vs last week",
+    "minutes": "{{value}} min",
+    "seeProgress": "Progress"
+  },
+  "quick": {
+    "title": "Quick actions",
+    "questionBank": "Question Bank",
+    "mistakes": "My Mistakes",
+    "exams": "Exam Simulator",
+    "progress": "Progress"
+  },
+  "days": {
+    "sat": "Sat",
+    "sun": "Sun",
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri"
+  }
+}

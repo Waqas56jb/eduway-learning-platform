@@ -1,0 +1,99 @@
+{
+  "notFound": {
+    "title": "الدرس غير موجود",
+    "message": "ربما نُقل هذا الدرس أو لم يعد متاحاً.",
+    "action": "تصفّح المواد"
+  },
+  "guard": {
+    "playingOn": "يُعرض على هذا الجهاز · {{device}}",
+    "hint": "اشتراكك يتيح المشاهدة على جهاز واحد في نفس الوقت.",
+    "dismiss": "إخفاء تنبيه الجهاز",
+    "deviceIos": "آيفون",
+    "deviceAndroid": "هاتف أندرويد",
+    "deviceOther": "هذا المتصفح"
+  },
+  "meta": {
+    "lessonNumber": "الدرس {{n}}",
+    "duration": "{{count}} دقيقة",
+    "by": "مع {{teacher}}"
+  },
+  "sections": {
+    "about": "عن هذا الدرس",
+    "teacher": "أستاذك",
+    "resources": "ملفات الدرس",
+    "notes": "ملاحظاتي",
+    "continue": "تابع التعلّم"
+  },
+  "teacher": {
+    "subjectTeacher": "أستاذ {{subject}}",
+    "rating": "تقييم {{rating}}",
+    "students": "{{count}} طالب",
+    "verified": "أستاذ موثّق"
+  },
+  "resources": {
+    "pages": "{{count}} صفحة",
+    "pdf": "PDF",
+    "openA11y": "فتح {{title}}",
+    "openingTitle": "جارٍ الفتح…",
+    "openingMessage": "نجهّز «{{title}}» للقراءة دون إنترنت.",
+    "downloaded": "تم التنزيل — متاح دون إنترنت",
+    "empty": "لا توجد ملفات لهذا الدرس بعد."
+  },
+  "notes": {
+    "placeholder": "اكتب الأفكار المهمة أو القوانين أو الأسئلة لمراجعتها لاحقاً…",
+    "saving": "جارٍ الحفظ…",
+    "saved": "تم الحفظ",
+    "hint": "ملاحظاتك خاصة ومحفوظة على هذا الجهاز.",
+    "chars": "{{count}} حرف"
+  },
+  "actions": {
+    "markComplete": "تحديد كمكتمل",
+    "completed": "مكتمل",
+    "takeQuiz": "ابدأ الاختبار",
+    "prev": "السابق",
+    "next": "التالي",
+    "prevLesson": "الدرس السابق",
+    "nextLesson": "الدرس التالي",
+    "firstLesson": "هذا أول درس في المادة",
+    "lastLesson": "آخر درس في المادة"
+  },
+  "toast": {
+    "completed": "تم تحديد الدرس كمكتمل",
+    "alreadyCompleted": "لقد أكملت هذا الدرس مسبقاً"
+  },
+  "end": {
+    "title": "أحسنت!",
+    "message": "أنهيت هذا الدرس. ثبّت ما تعلّمته باختبار قصير.",
+    "quizTitle": "اختبار الدرس",
+    "quizInfo": "{{count}} أسئلة · حوالي {{min}} د",
+    "quizHint": "شرح فوري لكل إجابة",
+    "takeQuiz": "ابدأ الاختبار",
+    "later": "لاحقاً"
+  },
+  "player": {
+    "resumeFrom": "متابعة من {{time}}",
+    "play": "تشغيل",
+    "pause": "إيقاف مؤقت",
+    "replay": "إعادة التشغيل",
+    "rewind": "رجوع 10 ثوانٍ",
+    "forward": "تقديم 10 ثوانٍ",
+    "seconds": "{{count}} ث",
+    "settings": "إعدادات التشغيل",
+    "speed": "السرعة",
+    "quality": "الجودة",
+    "qualityAuto": "تلقائي",
+    "normal": "عادية",
+    "captions": "الترجمة",
+    "captionsOn": "تم تفعيل الترجمة",
+    "captionsOff": "تم إيقاف الترجمة",
+    "fullscreen": "ملء الشاشة",
+    "exitFullscreen": "الخروج من ملء الشاشة",
+    "seek": "شريط التقدّم",
+    "back": "رجوع",
+    "buffering": "جارٍ التحميل",
+    "error": "تعذّر تحميل الفيديو. تحقّق من اتصالك وحاول مجدداً.",
+    "retry": "إعادة المحاولة",
+    "qualityChanged": "تم ضبط الجودة على {{quality}}",
+    "speedChanged": "سرعة التشغيل {{speed}}"
+  }
+}

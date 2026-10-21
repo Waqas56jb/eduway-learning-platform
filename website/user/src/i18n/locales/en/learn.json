@@ -1,0 +1,213 @@
+{
+  "card": {
+    "percent": "{{pct}}% complete",
+    "lessonsDone": "{{done}}/{{total}} lessons",
+    "locked": "Not in your plan",
+    "upgradeHint": "Upgrade to unlock every lesson",
+    "preview": "Preview curriculum",
+    "continue": "Continue learning",
+    "start": "Start learning"
+  },
+  "dashboard": {
+    "seoTitle": "Dashboard",
+    "seoDescription": "Your EDUWAY learning hub — continue lessons, track progress and prepare for upcoming exams.",
+    "greeting": {
+      "morning": "Good morning, {{name}} 👋",
+      "afternoon": "Good afternoon, {{name}} 👋",
+      "evening": "Good evening, {{name}} 👋"
+    },
+    "subtitle": "Small steps every day add up to a top ministerial score. Here's where you left off.",
+    "streak_one": "day streak",
+    "streak_other": "day streak",
+    "continue": {
+      "title": "Continue learning",
+      "progress": "{{pct}}% watched"
+    },
+    "stats": {
+      "title": "Your stats at a glance",
+      "lessons": "Lessons completed",
+      "lessonsSub": "of {{total}} lessons · {{pct}}%",
+      "quiz": "Quiz average",
+      "quizSub": "Across all subjects this week",
+      "mistakes": "Mistakes to review",
+      "mistakesSub": "Turn them into strengths",
+      "ai": "AI questions left",
+      "aiSub": "{{used}} of {{quota}} used this month"
+    },
+    "subjects": {
+      "title": "Subject progress",
+      "subtitle": "Completed lessons in each subject"
+    },
+    "weekly": {
+      "title": "Study time this week",
+      "subtitle": "Minutes of focused learning per day",
+      "total": "{{hours}}h {{minutes}}m",
+      "avg": "Daily average · {{count}} min"
+    },
+    "activity": {
+      "title": "Recent activity",
+      "subtitle": "Your latest lessons, quizzes and questions"
+    },
+    "exams": {
+      "title": "Upcoming exams",
+      "subtitle": "Scheduled mock exams"
+    },
+    "goal": {
+      "title": "Today's goal",
+      "subtitle": "Focused study time today",
+      "of_one": "of a {{count}}-minute goal",
+      "of_other": "of a {{count}}-minute goal",
+      "left_one": "{{count}} minute to go — you are almost there!",
+      "left_other": "{{count}} minutes to go — you are almost there!",
+      "done": "Goal reached — brilliant work today!",
+      "shortcuts": "Quick practice"
+    }
+  },
+  "subjects": {
+    "seoTitle": "My Subjects",
+    "seoDescription": "Browse every 6th Scientific Grade subject, track your progress and pick up where you left off.",
+    "title": "My Subjects",
+    "subtitle": "Every subject of the 6th Scientific Grade, taught by Iraq's top teachers.",
+    "overall": "Overall progress",
+    "filters": {
+      "all": "All subjects",
+      "progress": "In progress",
+      "completed": "Completed"
+    },
+    "emptyTitle": "Nothing here yet",
+    "emptyBody": "No subjects match this filter. Keep going — your first completed subject is closer than you think."
+  },
+  "subject": {
+    "back": "All subjects",
+    "notFoundTitle": "Subject not found",
+    "notFoundBody": "This subject doesn't exist or has been moved. Browse all subjects to continue learning.",
+    "included": "Included in your plan",
+    "teacher": "Your teacher",
+    "completion": "Complete",
+    "startNext": "Start next lesson",
+    "upgrade": "Upgrade plan",
+    "lockedTitle": "This subject isn't included in your plan",
+    "lockedBody": "Upgrade your subscription to unlock every lesson, quiz and exam in this subject.",
+    "stats": {
+      "lessons": "Video lessons",
+      "hours": "Hours of content",
+      "questions": "Practice questions"
+    },
+    "tabs": {
+      "lessons": "Lessons",
+      "bank": "Question Bank",
+      "exams": "Exams"
+    },
+    "bank": {
+      "title": "Question bank overview",
+      "subtitle": "{{total}} ministerial-style questions with worked explanations",
+      "byUnit": "Questions by unit",
+      "samples": "Sample questions",
+      "options_one": "{{count}} option",
+      "options_other": "{{count}} options",
+      "practice": "Practice {{subject}} questions"
+    },
+    "exams": {
+      "best": "Best {{score}}%",
+      "attempts": "{{left}}/{{total}} attempts",
+      "passMark": "Pass mark {{pct}}%",
+      "start": "Go to exam",
+      "open": "Open exam simulator",
+      "emptyTitle": "No exams scheduled yet",
+      "emptyBody": "New {{subject}} mock exams are on the way. Meanwhile, try a full simulation in the exam simulator."
+    }
+  },
+  "list": {
+    "unit": "Unit {{n}}",
+    "unitDone": "{{done}}/{{total}} completed",
+    "inProgressPct": "{{pct}}% watched",
+    "nowPlaying": "Now playing",
+    "lockedTip": "Upgrade your plan to unlock this lesson"
+  },
+  "lesson": {
+    "breadcrumb": "Breadcrumb",
+    "notFoundTitle": "Lesson not found",
+    "notFoundBody": "We couldn't find this lesson. It may have been moved to another unit.",
+    "bestScore": "Best quiz score {{pct}}%",
+    "markComplete": "Mark as complete",
+    "completedState": "Lesson completed",
+    "markedToast": "Lesson marked as complete",
+    "takeQuiz": "Take the quiz",
+    "prev": "Previous",
+    "next": "Next lesson",
+    "upNext": "Up next in this unit",
+    "aboutTitle": "About this lesson",
+    "point1": "Clear explanation from first principles",
+    "point2": "Worked ministerial-exam examples",
+    "point3": "Common pitfalls and memory tricks",
+    "tabs": {
+      "overview": "Overview",
+      "resources": "Resources",
+      "notes": "My notes"
+    },
+    "resources": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "download": "Download",
+      "downloadFile": "Download {{file}}",
+      "started": "Download started",
+      "empty": "No resources for this lesson yet"
+    },
+    "notes": {
+      "label": "Your notes",
+      "placeholder": "Write key formulas, ideas or questions to ask your teacher…",
+      "hint": "Notes are saved automatically on this device."
+    },
+    "finished": {
+      "title": "Lesson finished! 🎉",
+      "body": "Lock in what you just learned with a quick 5-question quiz.",
+      "later": "Maybe later",
+      "cta": "Take the quiz"
+    }
+  },
+  "player": {
+    "region": "Video player: {{title}}",
+    "play": "Play (K)",
+    "pause": "Pause (K)",
+    "mute": "Mute (M)",
+    "unmute": "Unmute (M)",
+    "volume": "Volume",
+    "seek": "Seek",
+    "speed": "Playback speed",
+    "normal": "Normal",
+    "quality": "Quality",
+    "auto": "Auto",
+    "switching": "Switching to {{quality}}…",
+    "fullscreen": "Full screen (F)",
+    "exitFullscreen": "Exit full screen (F)",
+    "resumeFrom": "Resume from",
+    "startOver": "Start over",
+    "error": "This video couldn't be loaded. Check your connection and try again."
+  },
+  "quiz": {
+    "title": "Lesson quiz",
+    "progress": "Quiz progress",
+    "correctSoFar_one": "{{count}} correct",
+    "correctSoFar_other": "{{count}} correct",
+    "keyboardHint": "Tip: press 1–4 to answer and Enter to continue.",
+    "finish": "See my score",
+    "empty": "No questions are available for this lesson yet.",
+    "score": "Your score",
+    "outOf": "{{correct}} / {{total}} correct",
+    "passTitle": "Excellent work!",
+    "passBody": "You've mastered this lesson. Keep the momentum going with the next one.",
+    "failTitle": "Almost there — keep going!",
+    "failBody": "You need {{pass}}% to pass. Review your mistakes and give it another try — every attempt makes you stronger.",
+    "addedToMistakes_one": "{{count}} question added to My Mistakes",
+    "addedToMistakes_other": "{{count}} questions added to My Mistakes",
+    "reviewMistakes": "Review mistakes",
+    "retry": "Retry quiz",
+    "nextLesson": "Next lesson"
+  },
+  "tabs": {
+    "dashboard": "Home",
+    "subjects": "Subjects",
+    "aiTutor": "AI Tutor",
+    "exams": "Exams"
+  }
+}

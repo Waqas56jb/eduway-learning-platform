@@ -1,0 +1,62 @@
+[
+  {
+    "q": {
+      "en": "Is EDUWAY aligned with the Iraqi ministerial curriculum?",
+      "ar": "هل EDUWAY متوافقة مع المنهج الوزاري العراقي؟"
+    },
+    "a": {
+      "en": "Yes. Every lesson, question and exam blueprint follows the latest 6th Scientific curriculum published by the Iraqi Ministry of Education.",
+      "ar": "نعم. كل درس وسؤال ونموذج امتحاني يتبع أحدث منهج للسادس العلمي الصادر عن وزارة التربية العراقية."
+    }
+  },
+  {
+    "q": {
+      "en": "How do I sign up?",
+      "ar": "كيف أسجل؟"
+    },
+    "a": {
+      "en": "Register with your mobile number, confirm the one-time code we send by SMS, choose a package and start learning in under two minutes.",
+      "ar": "سجّل برقم هاتفك، أكّد الرمز الذي نرسله برسالة نصية، اختر باقتك وابدأ التعلم في أقل من دقيقتين."
+    }
+  },
+  {
+    "q": {
+      "en": "Can I watch lessons on my phone?",
+      "ar": "هل يمكنني مشاهدة الدروس على هاتفي؟"
+    },
+    "a": {
+      "en": "Absolutely. EDUWAY works on any phone, tablet or computer, and adapts video quality to your connection.",
+      "ar": "بالتأكيد. تعمل EDUWAY على أي هاتف أو جهاز لوحي أو حاسوب، وتتكيف جودة الفيديو مع سرعة اتصالك."
+    }
+  },
+  {
+    "q": {
+      "en": "What payment methods are supported?",
+      "ar": "ما طرق الدفع المتاحة؟"
+    },
+    "a": {
+      "en": "You can pay with Zain Cash, FastPay, AsiaHawala, Mastercard/Visa, or prepaid EDUWAY cards from partner bookstores.",
+      "ar": "يمكنك الدفع عبر زين كاش، فاست باي، آسيا حوالة، ماستركارد/فيزا، أو بطاقات EDUWAY المسبقة الدفع من المكتبات الشريكة."
+    }
+  },
+  {
+    "q": {
+      "en": "How does the AI Tutor work?",
+      "ar": "كيف يعمل المدرس الذكي؟"
+    },
+    "a": {
+      "en": "Ask any question about your subjects in Arabic or English. The tutor replies with step-by-step explanations and formulas. Each package includes a monthly question allowance.",
+      "ar": "اسأل أي سؤال عن موادك بالعربية أو الإنكليزية. يجيب المدرس بشرح خطوة بخطوة ومعادلات. كل باقة تتضمن عدداً شهرياً من الأسئلة."
+    }
+  },
+  {
+    "q": {
+      "en": "Can I upgrade or cancel my package?",
+      "ar": "هل يمكنني ترقية باقتي أو إلغاؤها؟"
+    },
+    "a": {
+      "en": "Yes — upgrade anytime and pay only the difference. Subscriptions do not auto-renew without your confirmation.",
+      "ar": "نعم — يمكنك الترقية في أي وقت ودفع الفرق فقط. الاشتراكات لا تتجدد تلقائياً دون تأكيدك."
+    }
+  }
+]

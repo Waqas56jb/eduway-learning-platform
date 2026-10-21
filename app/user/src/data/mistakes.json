@@ -1,0 +1,92 @@
+[
+  {
+    "id": "m1",
+    "questionId": "q7",
+    "chosenIndex": 0,
+    "status": "unresolved",
+    "repeatCount": 2,
+    "date": "2026-10-20T18:20:00Z",
+    "source": "quiz"
+  },
+  {
+    "id": "m2",
+    "questionId": "q9",
+    "chosenIndex": 0,
+    "status": "unresolved",
+    "repeatCount": 3,
+    "date": "2026-10-19T20:05:00Z",
+    "source": "exam"
+  },
+  {
+    "id": "m3",
+    "questionId": "q18",
+    "chosenIndex": 2,
+    "status": "reviewed",
+    "repeatCount": 1,
+    "date": "2026-10-18T16:40:00Z",
+    "source": "quiz"
+  },
+  {
+    "id": "m4",
+    "questionId": "q22",
+    "chosenIndex": 2,
+    "status": "unresolved",
+    "repeatCount": 1,
+    "date": "2026-10-17T19:10:00Z",
+    "source": "bank"
+  },
+  {
+    "id": "m5",
+    "questionId": "q28",
+    "chosenIndex": 2,
+    "status": "mastered",
+    "repeatCount": 2,
+    "date": "2026-10-14T15:30:00Z",
+    "source": "quiz"
+  },
+  {
+    "id": "m6",
+    "questionId": "q31",
+    "chosenIndex": 1,
+    "status": "reviewed",
+    "repeatCount": 1,
+    "date": "2026-10-16T21:00:00Z",
+    "source": "bank"
+  },
+  {
+    "id": "m7",
+    "questionId": "q37",
+    "chosenIndex": 1,
+    "status": "unresolved",
+    "repeatCount": 4,
+    "date": "2026-10-21T17:45:00Z",
+    "source": "exam"
+  },
+  {
+    "id": "m8",
+    "questionId": "q38",
+    "chosenIndex": 1,
+    "status": "reviewed",
+    "repeatCount": 2,
+    "date": "2026-10-12T14:15:00Z",
+    "source": "quiz"
+  },
+  {
+    "id": "m9",
+    "questionId": "q44",
+    "chosenIndex": 1,
+    "status": "unresolved",
+    "repeatCount": 1,
+    "date": "2026-10-21T20:30:00Z",
+    "source": "quiz"
+  },
+  {
+    "id": "m10",
+    "questionId": "q15",
+    "chosenIndex": 2,
+    "status": "mastered",
+    "repeatCount": 1,
+    "date": "2026-10-10T13:00:00Z",
+    "source": "bank"
+  }
+]

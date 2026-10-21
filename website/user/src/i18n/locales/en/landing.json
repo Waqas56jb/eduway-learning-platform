@@ -1,0 +1,190 @@
+{
+  "seo": {
+    "title": "Master 6th Scientific Grade",
+    "description": "EDUWAY is Iraq's premium learning platform for 6th Scientific Grade: HD video lessons, smart quizzes, a ministerial question bank, an exam simulator and a 24/7 AI tutor."
+  },
+  "hero": {
+    "eyebrow": "Iraq's #1 Platform for 6th Scientific Grade",
+    "titleStart": "Master Every Subject.",
+    "titleHighlight": "Ace",
+    "titleEnd": "Your Final Year.",
+    "subtitle": "Expert teachers, ministerial-aligned lessons and smart practice tools — everything you need for a top score in the 6th Scientific exams, in one beautifully simple place.",
+    "ctaPrimary": "Start Learning",
+    "ctaDemo": "Watch Demo",
+    "demoTitle": "See EDUWAY in action",
+    "demoDescription": "A quick look at how a lesson plays on EDUWAY — on any phone, tablet or laptop.",
+    "videoUnsupported": "Your browser does not support embedded video.",
+    "students": "{{n}}+ students",
+    "studentsSub": "already learning with EDUWAY",
+    "rating": "Rated 5 out of 5 by students",
+    "avatarAlt": "EDUWAY student",
+    "bgAlt": "Students studying together at a table",
+    "scroll": "Scroll to explore",
+    "mock": {
+      "label": "Preview of the EDUWAY student app",
+      "nowPlaying": "Now playing",
+      "play": "Play lesson",
+      "subject": "Physics · Unit 2",
+      "time": "09:40 / 15:05",
+      "overall": "Overall progress",
+      "overallSub": "6 of 9 units done",
+      "goalTitle": "Today's goal",
+      "goalMeta": "2 / 3",
+      "goals": {
+        "lesson": "Watch 1 physics lesson",
+        "quiz": "Score 80%+ on the quiz",
+        "review": "Review 5 mistakes"
+      },
+      "streak": "12-day streak"
+    }
+  },
+  "trust": {
+    "title": "Trusted by students and schools across Iraq",
+    "cities": ["Baghdad", "Basra", "Erbil", "Najaf", "Mosul", "Karbala", "Sulaymaniyah", "Kirkuk", "Hilla", "Nasiriyah", "Diwaniyah", "Ramadi", "Kut", "Duhok"]
+  },
+  "subjects": {
+    "eyebrow": "Subjects",
+    "title": "Five subjects. One clear path to the top.",
+    "subtitle": "Every lesson follows the official ministerial curriculum, taught by Iraq's most respected teachers.",
+    "explore": "Explore {{subject}}",
+    "exploreShort": "Explore",
+    "questions": "{{n}} questions",
+    "featured": "Most studied"
+  },
+  "features": {
+    "eyebrow": "Why EDUWAY",
+    "title": "Every tool a top student needs",
+    "subtitle": "Learn, practise, fix your mistakes and rehearse the real exam — all in one connected experience.",
+    "items": {
+      "video": {
+        "title": "HD Video Lessons",
+        "desc": "Short, focused lessons with on-screen notes that remember exactly where you stopped."
+      },
+      "quizzes": {
+        "title": "Smart Quizzes",
+        "desc": "Instant feedback after every lesson, with clear explanations for each answer."
+      },
+      "bank": {
+        "title": "Question Bank",
+        "desc": "Thousands of ministerial-style questions filtered by unit, topic and difficulty."
+      },
+      "mistakes": {
+        "title": "My Mistakes Notebook",
+        "desc": "Every wrong answer is saved automatically so you can revisit it until it's mastered."
+      },
+      "simulator": {
+        "title": "Exam Simulator",
+        "desc": "Timed mock exams that feel exactly like the real ministerial paper — no surprises in June."
+      },
+      "tutor": {
+        "title": "AI Tutor",
+        "desc": "Ask anything in Arabic or English and get step-by-step answers with formulas, day or night."
+      }
+    }
+  },
+  "how": {
+    "eyebrow": "How it works",
+    "title": "From sign-up to exam-ready in four steps",
+    "subtitle": "No paperwork, no waiting. Start your first lesson in under two minutes.",
+    "step": "Step {{n}}",
+    "steps": {
+      "register": {
+        "title": "Register with OTP",
+        "desc": "Sign up with your mobile number and confirm the code we text you."
+      },
+      "package": {
+        "title": "Choose a package",
+        "desc": "Pick one subject, the science bundle or full access — upgrade anytime."
+      },
+      "practice": {
+        "title": "Watch & practise",
+        "desc": "Follow the lessons, take the quizzes and build your mistakes notebook."
+      },
+      "simulate": {
+        "title": "Simulate the exam",
+        "desc": "Sit full timed mock exams and walk into the hall with confidence."
+      }
+    }
+  },
+  "stats": {
+    "label": "EDUWAY in numbers",
+    "items": {
+      "lessons": "Video lessons",
+      "students": "Active students",
+      "questions": "Practice questions",
+      "satisfaction": "Student satisfaction"
+    }
+  },
+  "ai": {
+    "eyebrow": "AI Tutor",
+    "titleStart": "A personal tutor that",
+    "titleHighlight": "never sleeps",
+    "subtitle": "Stuck on a problem at midnight? Ask EDUWAY's AI Tutor and get a clear, curriculum-aligned explanation in seconds.",
+    "bullets": {
+      "steps": "Step-by-step solutions with properly written formulas",
+      "bilingual": "Ask in Arabic or English — it answers in your language",
+      "curriculum": "Trained on the Iraqi 6th Scientific curriculum",
+      "always": "Available 24/7, right inside every lesson"
+    },
+    "cta": "Try the AI Tutor",
+    "chat": {
+      "label": "Example conversation with the EDUWAY AI Tutor",
+      "time": "9:41",
+      "name": "EDUWAY AI Tutor",
+      "online": "Online",
+      "question": "Can you explain Faraday's law of induction?",
+      "typing": "AI Tutor is typing",
+      "answerIntro": "Of course! The induced emf equals the rate of change of magnetic flux through the coil:",
+      "answerOutro": "N is the number of turns, and the minus sign is Lenz's law — the induced current opposes the change.",
+      "thanks": "That makes sense now, thank you!",
+      "input": "Ask anything…",
+      "send": "Send"
+    }
+  },
+  "testimonials": {
+    "eyebrow": "Student stories",
+    "title": "Results that speak for themselves",
+    "subtitle": "Thousands of students across Iraq have raised their averages with EDUWAY.",
+    "label": "Student testimonials",
+    "prev": "Previous testimonial",
+    "next": "Next testimonial",
+    "goTo": "Go to testimonial {{n}}",
+    "slide": "{{current}} of {{total}}",
+    "quote": "“{{text}}”"
+  },
+  "pricing": {
+    "eyebrow": "Pricing",
+    "title": "Simple plans, serious results",
+    "subtitle": "Choose the package that fits your goals. Upgrade anytime and pay only the difference.",
+    "srTitle": "Packages",
+    "billing": "Billing period",
+    "save": "Save {{pct}}%",
+    "saveUpTo": "Save up to {{pct}}%",
+    "popular": "Popular",
+    "mostPopular": "Most popular",
+    "cta": "Choose plan",
+    "ctaPopular": "Get started now",
+    "perMonthYearly": "≈ {{amount}} {{currency}} per month",
+    "billedMonthly": "Billed monthly, cancel anytime",
+    "includes": "Subjects included",
+    "note": "Prices in Iraqi Dinar. No hidden fees. Subscriptions never renew without your confirmation."
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Questions, answered",
+    "subtitle": "Everything you need to know before you start.",
+    "sideTitle": "Still have questions?",
+    "sideBody": "Our student success team is here to help — by chat, phone or WhatsApp, seven days a week.",
+    "sideCta": "Contact us",
+    "response": "Average reply time: under 10 minutes"
+  },
+  "cta": {
+    "eyebrow": "Your year starts now",
+    "titleStart": "Start your journey",
+    "titleHighlight": "today",
+    "subtitle": "Join 12,000+ students preparing smarter for the 6th Scientific exams. Your first lesson is two minutes away.",
+    "button": "Create my free account",
+    "secondary": "See pricing",
+    "bgAlt": "Graduates celebrating at a ceremony"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "title": "My Mistakes",
+  "subtitle": "Turn every slip into a strength",
+  "hero": {
+    "overline": "Mistake journal",
+    "unresolved": "To fix",
+    "reviewed": "Reviewed",
+    "mastered": "Mastered",
+    "masteryLabel": "Mastery",
+    "total": "Mistakes logged: {{count}}"
+  },
+  "filters": {
+    "unresolved": "Unresolved",
+    "reviewed": "Reviewed",
+    "mastered": "Mastered",
+    "repeated": "Repeated"
+  },
+  "status": {
+    "unresolved": "Unresolved",
+    "reviewed": "Reviewed",
+    "mastered": "Mastered"
+  },
+  "source": {
+    "quiz": "Quiz",
+    "bank": "Bank",
+    "exam": "Exam"
+  },
+  "section": {
+    "count": "{{count}}"
+  },
+  "card": {
+    "yourAnswer": "Your answer",
+    "correct": "Correct",
+    "retry": "Retry",
+    "markReviewed": "Mark reviewed",
+    "goToLesson": "Go to lesson",
+    "repeated": "×{{count}}",
+    "repeatedA11y": "Missed {{count}} times",
+    "a11y": "Mistake in {{topic}}, {{status}}. Tap to retry."
+  },
+  "toast": {
+    "reviewed": "Marked as reviewed"
+  },
+  "empty": {
+    "none": {
+      "title": "No mistakes yet",
+      "message": "Wrong answers from quizzes, the question bank and exams will appear here so you can master them."
+    },
+    "unresolved": {
+      "title": "All caught up!",
+      "message": "You've dealt with every mistake. Brilliant work — keep the momentum going."
+    },
+    "reviewed": {
+      "title": "Nothing reviewed yet",
+      "message": "Mark a mistake as reviewed once you've studied the explanation."
+    },
+    "mastered": {
+      "title": "No mastered mistakes yet",
+      "message": "Retry a mistake and answer it correctly to master it."
+    },
+    "repeated": {
+      "title": "No repeated mistakes",
+      "message": "You haven't made the same mistake twice. Great focus!"
+    },
+    "practiceCta": "Go practice"
+  },
+  "retry": {
+    "title": "Retry mistake",
+    "subtitle": "Answer it right to master it",
+    "check": "Check answer",
+    "pickFirst": "Choose an answer first",
+    "mastered": "Mastered!",
+    "masteredMessage": "Great job — this mistake is now in your mastered list.",
+    "wrong": "Not quite",
+    "wrongMessage": "Read the explanation, then give it another go.",
+    "tryAgain": "Try again",
+    "nextMistake": "Next mistake",
+    "goToLesson": "Go to lesson",
+    "backToList": "Back to list",
+    "missedOn": "Missed {{date}}",
+    "historyTitle": "Retry history",
+    "historyEmpty": "No retries yet — this is your first attempt.",
+    "firstMissed": "First logged · {{source}}",
+    "attemptCorrect": "Answered correctly",
+    "attemptWrong": "Answered incorrectly",
+    "notFoundTitle": "Mistake not found",
+    "notFoundMessage": "This mistake may have been removed or the link is out of date.",
+    "allDone": "No more unresolved mistakes",
+    "repeatCount": "Times missed: {{count}}"
+  }
+}

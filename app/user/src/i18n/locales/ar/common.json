@@ -1,0 +1,103 @@
+{
+  "appName": "إيدوواي",
+  "tagline": "التميّز لطلاب السادس العلمي في العراق",
+  "actions": {
+    "continue": "متابعة",
+    "next": "التالي",
+    "back": "رجوع",
+    "skip": "تخطي",
+    "done": "تم",
+    "save": "حفظ",
+    "saved": "تم الحفظ",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "close": "إغلاق",
+    "retry": "إعادة المحاولة",
+    "seeAll": "عرض الكل",
+    "start": "ابدأ",
+    "resume": "استئناف",
+    "submit": "تسليم",
+    "apply": "تطبيق",
+    "reset": "إعادة ضبط",
+    "share": "مشاركة",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "search": "بحث",
+    "filter": "الفلاتر",
+    "open": "فتح",
+    "upgrade": "ترقية",
+    "renew": "تجديد",
+    "logout": "تسجيل الخروج",
+    "tryAgain": "حاول مجدداً",
+    "goHome": "الرئيسية"
+  },
+  "tabs": {
+    "home": "الرئيسية",
+    "subjects": "المواد",
+    "practice": "التدريب",
+    "tutor": "المدرس الذكي",
+    "profile": "حسابي"
+  },
+  "subjects": {
+    "math": "الرياضيات",
+    "physics": "الفيزياء",
+    "chemistry": "الكيمياء",
+    "biology": "الأحياء",
+    "english": "اللغة الإنكليزية"
+  },
+  "difficulty": {
+    "easy": "سهل",
+    "medium": "متوسط",
+    "hard": "صعب"
+  },
+  "status": {
+    "completed": "مكتمل",
+    "inProgress": "قيد التقدم",
+    "notStarted": "لم يبدأ",
+    "locked": "مقفل",
+    "new": "جديد"
+  },
+  "units": {
+    "min": "{{count}} د",
+    "hours": "{{count}} س",
+    "lessons_zero": "{{count}} درس",
+    "lessons_one": "درس واحد",
+    "lessons_two": "درسان",
+    "lessons_few": "{{count}} دروس",
+    "lessons_many": "{{count}} درساً",
+    "lessons_other": "{{count}} درس",
+    "questions_zero": "{{count}} سؤال",
+    "questions_one": "سؤال واحد",
+    "questions_two": "سؤالان",
+    "questions_few": "{{count}} أسئلة",
+    "questions_many": "{{count}} سؤالاً",
+    "questions_other": "{{count}} سؤال",
+    "days_zero": "{{count}} يوم",
+    "days_one": "يوم واحد",
+    "days_two": "يومان",
+    "days_few": "{{count}} أيام",
+    "days_many": "{{count}} يوماً",
+    "days_other": "{{count}} يوم",
+    "percent": "{{value}}٪"
+  },
+  "states": {
+    "loading": "جارِ التحميل…",
+    "empty": "لا يوجد شيء هنا بعد",
+    "offline": "أنت غير متصل. سنكمل عند عودة الاتصال.",
+    "error": "حدث خطأ ما",
+    "pullToRefresh": "اسحب للتحديث",
+    "comingSoon": "قريباً"
+  },
+  "premium": {
+    "locked": "غير مشمول في باقتك",
+    "unlock": "افتح المحتوى بالاشتراك",
+    "viewPlans": "عرض الباقات"
+  },
+  "a11y": {
+    "back": "رجوع",
+    "close": "إغلاق",
+    "openMenu": "فتح القائمة",
+    "notifications": "الإشعارات",
+    "bookmark": "حفظ السؤال"
+  }
+}

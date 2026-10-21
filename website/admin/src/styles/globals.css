@@ -1,0 +1,88 @@
+@import './fonts.css';
+@import 'katex/dist/katex.min.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --c-primary: 11 31 58;
+  --c-primary-light: 21 50 92;
+  --c-accent: 201 162 74;
+  --c-accent-light: 230 199 122;
+  --c-app: 245 243 238;
+  --c-surface: 255 255 255;
+  --c-surface-2: 250 248 244;
+  --c-sidebar: 11 31 58;
+  --c-ink: 17 24 39;
+  --c-muted: 107 114 128;
+  --c-border: 229 225 216;
+  --c-success: 22 163 74;
+  --c-warning: 245 158 11;
+  --c-danger: 220 38 38;
+  --c-info: 37 99 235;
+  --c-btn: 11 31 58;
+  --c-btn-ink: 255 255 255;
+  --chart-grid: #ece8df;
+  --chart-axis: #8b8f98;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --c-primary: 201 214 235;
+  --c-primary-light: 160 180 210;
+  --c-app: 10 16 28;
+  --c-surface: 17 26 43;
+  --c-surface-2: 22 33 54;
+  --c-sidebar: 7 13 25;
+  --c-ink: 229 233 240;
+  --c-muted: 148 158 176;
+  --c-border: 36 49 72;
+  --c-btn: 201 162 74;
+  --c-btn-ink: 11 31 58;
+  --chart-grid: #1f2c44;
+  --chart-axis: #7d8aa3;
+  color-scheme: dark;
+}
+
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; }
+  body {
+    @apply bg-app font-sans text-sm text-ink antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 { letter-spacing: -0.01em; }
+  [dir='rtl'] h1, [dir='rtl'] h2, [dir='rtl'] h3, [dir='rtl'] h4 { letter-spacing: 0; }
+  :focus-visible { @apply outline-none ring-2 ring-accent ring-offset-1 ring-offset-surface; }
+  ::selection { background: rgb(var(--c-accent) / 0.3); }
+  input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; }
+  table, .num, input[type='number'] { font-variant-numeric: tabular-nums; }
+  /* Grid/flex items default to min-width:auto, which lets measured charts and wide content
+     prop columns open on small screens. Let them shrink; scroll containers handle overflow. */
+  .grid > * { min-width: 0; }
+}
+
+@layer components {
+  .card { @apply min-w-0 rounded-xl border border-line bg-surface shadow-card; }
+  .field {
+    @apply h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink transition-colors duration-200 placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .field-invalid { @apply border-danger focus:border-danger focus:ring-danger/15; }
+  .label { @apply mb-1.5 block text-xs font-semibold text-ink/80; }
+  .page-title { @apply font-display text-2xl font-bold text-primary md:text-[1.75rem]; }
+  .section-title { @apply text-sm font-semibold text-ink; }
+  .num { font-variant-numeric: tabular-nums; }
+  .kpi-num { @apply font-display font-bold; font-variant-numeric: tabular-nums lining-nums; }
+  .flip-rtl { @apply rtl:-scale-x-100; }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgb(var(--c-border)) transparent; }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+}
+
+.katex { font-size: 1.05em; }
+[dir='rtl'] .katex { direction: ltr; unicode-bidi: isolate; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+}

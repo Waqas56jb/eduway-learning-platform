@@ -1,0 +1,60 @@
+{
+  "seo": {
+    "title": "Pricing & Packages",
+    "description": "Compare EDUWAY packages for 6th Scientific Grade — Single Subject, Science Bundle and Full Access. Pay monthly or save with a yearly plan using Zain Cash, FastPay, AsiaHawala or card."
+  },
+  "hero": {
+    "eyebrow": "Plans & pricing",
+    "titleStart": "Invest in the year that",
+    "titleHighlight": "defines",
+    "titleEnd": "your future",
+    "subtitle": "Transparent prices in Iraqi Dinar, flexible monthly or yearly billing, and every tool you need to reach the college you dream of.",
+    "chips": {
+      "renew": "No automatic renewals",
+      "upgrade": "Upgrade anytime",
+      "secure": "Secure local payments"
+    }
+  },
+  "compare": {
+    "eyebrow": "Compare packages",
+    "title": "Every detail, side by side",
+    "subtitle": "See exactly what each package includes before you decide.",
+    "caption": "Feature comparison between EDUWAY packages",
+    "feature": "Feature",
+    "included": "Included",
+    "notIncluded": "Not included",
+    "scrollHint": "Swipe to compare all packages",
+    "rows": {
+      "subjects": "Subjects included",
+      "lessons": "HD video lessons",
+      "quizzes": "Post-lesson quizzes",
+      "bank": "Question bank",
+      "mistakes": "My Mistakes notebook",
+      "simulator": "Exam simulator",
+      "ai": "AI Tutor questions / month",
+      "pdf": "Downloadable PDF summaries",
+      "analytics": "Progress analytics & weak-topic plan",
+      "devices": "Watch on phone, tablet & laptop",
+      "support": "Priority support"
+    },
+    "values": {
+      "subjectBank": "Subject only",
+      "fullBank": "Full access",
+      "unlimited": "Unlimited"
+    }
+  },
+  "payments": {
+    "eyebrow": "Payment methods",
+    "title": "Pay the way you already do",
+    "subtitle": "Activate your package instantly with Iraq's most popular payment options.",
+    "methods": {
+      "zain": "Zain Cash",
+      "fastpay": "FastPay",
+      "asia": "AsiaHawala",
+      "card": "Visa / Mastercard",
+      "prepaid": "EDUWAY prepaid cards"
+    },
+    "methodsLabel": "Supported payment methods",
+    "secure": "All payments are encrypted and processed securely. Prepaid cards are available at partner bookstores."
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "title": "Dashboard",
+  "subtitle": "Platform health, revenue and learning activity at a glance.",
+  "greeting": "Good morning, {{name}}",
+  "kpi": {
+    "totalStudents": "Total students",
+    "activeSubs": "Active subscriptions",
+    "revenueMonth": "Revenue (this month)",
+    "newRegs": "New registrations (7d)",
+    "videosPublished": "Videos published",
+    "quizAttempts": "Quiz attempts (7d)",
+    "aiQuestions": "AI questions (this month)",
+    "openIssues": "Open support issues",
+    "ofTotal": "{{pct}} of all students",
+    "vsLastMonth": "vs last month",
+    "vsPrev7": "vs previous 7 days",
+    "lessonsTotal": "of {{total}} lessons",
+    "pendingTickets": "{{count}} pending reply"
+  },
+  "charts": {
+    "revenue": "Revenue & subscriptions",
+    "revenueSub": "Paid transactions, last 12 months",
+    "revenueSeries": "Revenue",
+    "subsSeries": "New subscriptions",
+    "byGov": "Registrations by governorate",
+    "byGovSub": "Top governorates by registered students",
+    "registrations": "Registrations",
+    "packages": "Package distribution",
+    "packagesSub": "Students by current package",
+    "noPackage": "No package",
+    "students": "students",
+    "dau": "Daily active students",
+    "dauSub": "Unique students active per day in the selected range",
+    "dauSeries": "Active students",
+    "weak": "Top weak topics",
+    "weakSub": "Lowest answer accuracy across quizzes",
+    "accuracy": "Accuracy"
+  },
+  "panels": {
+    "pending": "Content pending review",
+    "pendingSub": "Lessons submitted by teachers",
+    "pendingEmpty": "No lessons waiting for review",
+    "approveConfirm": "Approve “{{title}}”?",
+    "approveBody": "The lesson moves to Approved and can then be scheduled or published.",
+    "approved": "Lesson approved",
+    "recentPayments": "Recent payments",
+    "topSchools": "Top schools",
+    "topSchoolsSub": "By verified paid students",
+    "topMarketers": "Top marketers",
+    "topMarketersSub": "By attributed paid students",
+    "paidStudents": "{{count}} paid",
+    "tier": "{{tier}} tier",
+    "pendingReward": "Pending reward"
+  },
+  "health": {
+    "operational": "Operational",
+    "degraded": "Degraded",
+    "services": "Services"
+  }
+}

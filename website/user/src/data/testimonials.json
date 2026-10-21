@@ -1,0 +1,128 @@
+[
+  {
+    "id": "t1",
+    "name": {
+      "en": "Zahraa Kadhim",
+      "ar": "زهراء كاظم"
+    },
+    "city": {
+      "en": "Baghdad",
+      "ar": "بغداد"
+    },
+    "role": {
+      "en": "Scored 99.2% — Medical College",
+      "ar": "معدل 99.2% — كلية الطب"
+    },
+    "quote": {
+      "en": "The exam simulator felt exactly like the ministerial exam. By June I wasn’t nervous anymore — I had already “sat” the exam twenty times.",
+      "ar": "محاكي الامتحانات كان مثل الامتحان الوزاري تماماً. بحلول حزيران لم أعد متوترة — كنت قد \"أدّيت\" الامتحان عشرين مرة."
+    },
+    "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80",
+    "rating": 5
+  },
+  {
+    "id": "t2",
+    "name": {
+      "en": "Ali Hussein",
+      "ar": "علي حسين"
+    },
+    "city": {
+      "en": "Basra",
+      "ar": "البصرة"
+    },
+    "role": {
+      "en": "6th Scientific student",
+      "ar": "طالب سادس علمي"
+    },
+    "quote": {
+      "en": "My Mistakes notebook changed how I study. I stopped repeating the same errors in physics within a month.",
+      "ar": "دفتر أخطائي غيّر طريقة دراستي. توقفت عن تكرار نفس الأخطاء في الفيزياء خلال شهر."
+    },
+    "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
+    "rating": 5
+  },
+  {
+    "id": "t3",
+    "name": {
+      "en": "Maryam Abdullah",
+      "ar": "مريم عبدالله"
+    },
+    "city": {
+      "en": "Erbil",
+      "ar": "أربيل"
+    },
+    "role": {
+      "en": "Scored 98.6% — Dentistry",
+      "ar": "معدل 98.6% — طب الأسنان"
+    },
+    "quote": {
+      "en": "The AI Tutor explained organic chemistry mechanisms at 2 AM when no teacher was available. It felt like a private tutor.",
+      "ar": "المدرس الذكي شرح لي آليات الكيمياء العضوية الساعة 2 فجراً حين لم يكن أي مدرس متاحاً. كأنه مدرس خصوصي."
+    },
+    "avatar": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=200&q=80",
+    "rating": 5
+  },
+  {
+    "id": "t4",
+    "name": {
+      "en": "Hassan Jaber",
+      "ar": "حسن جابر"
+    },
+    "city": {
+      "en": "Najaf",
+      "ar": "النجف"
+    },
+    "role": {
+      "en": "Scored 97.8% — Engineering",
+      "ar": "معدل 97.8% — الهندسة"
+    },
+    "quote": {
+      "en": "Math lessons are short, clear and straight to the point. I watched the derivatives unit twice and finally understood it.",
+      "ar": "دروس الرياضيات قصيرة وواضحة ومباشرة. شاهدت فصل المشتقات مرتين وأخيراً فهمته."
+    },
+    "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+    "rating": 5
+  },
+  {
+    "id": "t5",
+    "name": {
+      "en": "Fatima Al-Mosawi",
+      "ar": "فاطمة الموسوي"
+    },
+    "city": {
+      "en": "Mosul",
+      "ar": "الموصل"
+    },
+    "role": {
+      "en": "Parent",
+      "ar": "ولية أمر"
+    },
+    "quote": {
+      "en": "I can see my daughter’s progress every week. The platform gave her structure and confidence.",
+      "ar": "أستطيع رؤية تقدم ابنتي كل أسبوع. المنصة منحتها التنظيم والثقة."
+    },
+    "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",
+    "rating": 5
+  },
+  {
+    "id": "t6",
+    "name": {
+      "en": "Yousif Kareem",
+      "ar": "يوسف كريم"
+    },
+    "city": {
+      "en": "Karbala",
+      "ar": "كربلاء"
+    },
+    "role": {
+      "en": "6th Scientific student",
+      "ar": "طالب سادس علمي"
+    },
+    "quote": {
+      "en": "English used to be my weakest subject. The grammar lessons and quizzes pushed me from 70 to 94.",
+      "ar": "الإنكليزي كان أضعف مادة لدي. دروس القواعد والاختبارات رفعتني من 70 إلى 94."
+    },
+    "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80",
+    "rating": 4
+  }
+]

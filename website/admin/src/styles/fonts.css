@@ -1,0 +1,10 @@
+/* Fonts load from Google Fonts in index.html (Inter, Playfair Display, Tajawal).
+   Family selection switches automatically with the document direction. */
+:root {
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+[dir='rtl'] {
+  --font-display: 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
+  --font-body: 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
+}

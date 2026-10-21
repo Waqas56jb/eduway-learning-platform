@@ -1,0 +1,99 @@
+{
+  "notFound": {
+    "title": "Lesson not found",
+    "message": "This lesson may have been moved or is no longer available.",
+    "action": "Browse subjects"
+  },
+  "guard": {
+    "playingOn": "Playing on this device · {{device}}",
+    "hint": "Your subscription streams on one device at a time.",
+    "dismiss": "Dismiss device notice",
+    "deviceIos": "iPhone",
+    "deviceAndroid": "Android phone",
+    "deviceOther": "this browser"
+  },
+  "meta": {
+    "lessonNumber": "Lesson {{n}}",
+    "duration": "{{count}} min",
+    "by": "with {{teacher}}"
+  },
+  "sections": {
+    "about": "About this lesson",
+    "teacher": "Your teacher",
+    "resources": "Lesson resources",
+    "notes": "My notes",
+    "continue": "Keep going"
+  },
+  "teacher": {
+    "subjectTeacher": "{{subject}} teacher",
+    "rating": "{{rating}} rating",
+    "students": "{{count}} students",
+    "verified": "Verified teacher"
+  },
+  "resources": {
+    "pages": "{{count}} pages",
+    "pdf": "PDF",
+    "openA11y": "Open {{title}}",
+    "openingTitle": "Opening…",
+    "openingMessage": "Preparing “{{title}}” for offline reading.",
+    "downloaded": "Downloaded — available offline",
+    "empty": "No resources for this lesson yet."
+  },
+  "notes": {
+    "placeholder": "Write key ideas, formulas or questions to review later…",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "hint": "Notes are private and saved on this device.",
+    "chars": "{{count}} characters"
+  },
+  "actions": {
+    "markComplete": "Mark as complete",
+    "completed": "Completed",
+    "takeQuiz": "Take the quiz",
+    "prev": "Previous",
+    "next": "Next",
+    "prevLesson": "Previous lesson",
+    "nextLesson": "Next lesson",
+    "firstLesson": "This is the first lesson",
+    "lastLesson": "Last lesson of the subject"
+  },
+  "toast": {
+    "completed": "Lesson marked as complete",
+    "alreadyCompleted": "You already completed this lesson"
+  },
+  "end": {
+    "title": "Great work!",
+    "message": "You finished this lesson. Lock in what you learned with a short quiz.",
+    "quizTitle": "Lesson quiz",
+    "quizInfo": "{{count}} questions · about {{min}} min",
+    "quizHint": "Instant explanations for every answer",
+    "takeQuiz": "Take the quiz",
+    "later": "Later"
+  },
+  "player": {
+    "resumeFrom": "Resume from {{time}}",
+    "play": "Play",
+    "pause": "Pause",
+    "replay": "Replay",
+    "rewind": "Rewind 10 seconds",
+    "forward": "Forward 10 seconds",
+    "seconds": "{{count}} sec",
+    "settings": "Playback settings",
+    "speed": "Speed",
+    "quality": "Quality",
+    "qualityAuto": "Auto",
+    "normal": "Normal",
+    "captions": "Captions",
+    "captionsOn": "Captions on",
+    "captionsOff": "Captions off",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen",
+    "seek": "Seek bar",
+    "back": "Go back",
+    "buffering": "Buffering",
+    "error": "We couldn't load this video. Check your connection and try again.",
+    "retry": "Retry",
+    "qualityChanged": "Quality set to {{quality}}",
+    "speedChanged": "Playback speed {{speed}}"
+  }
+}

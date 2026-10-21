@@ -1,0 +1,70 @@
+{
+  "title": "Lesson quiz",
+  "progress": "Question {{current}} of {{total}}",
+  "option": {
+    "a11y": "Option {{letter}}: {{label}}",
+    "correct": "Correct answer",
+    "incorrect": "Your answer, incorrect",
+    "selected": "Selected"
+  },
+  "question": {
+    "explanation": "Explanation",
+    "difficulty": "Difficulty",
+    "correctFeedback": "Correct! Nicely done.",
+    "incorrectFeedback": "Not quite — see the explanation."
+  },
+  "header": {
+    "close": "Close quiz",
+    "showTimer": "Show timer",
+    "hideTimer": "Hide timer",
+    "elapsed": "Elapsed time {{time}}"
+  },
+  "leave": {
+    "title": "Leave quiz?",
+    "message": "Your answers in this attempt won't be saved.",
+    "confirm": "Leave",
+    "stay": "Keep going"
+  },
+  "actions": {
+    "next": "Next question",
+    "finish": "See results",
+    "reviewMistakes": "Review mistakes",
+    "nextLesson": "Next lesson",
+    "retake": "Retake quiz",
+    "backToLesson": "Back to lesson"
+  },
+  "result": {
+    "title": "Quiz complete",
+    "attempt": "Attempt #{{n}}",
+    "passMark": "Pass mark {{value}}%",
+    "passed": "Passed",
+    "notPassed": "Not passed yet",
+    "correct": "Correct",
+    "incorrect": "Incorrect",
+    "time": "Time",
+    "scoreA11y": "Score {{score}} percent, {{correct}} of {{total}} correct",
+    "excellent": {
+      "title": "Outstanding!",
+      "message": "You've mastered this lesson. Keep this momentum going."
+    },
+    "good": {
+      "title": "Well done!",
+      "message": "Solid work. Review the few you missed to lock it in."
+    },
+    "keepGoing": {
+      "title": "Keep going!",
+      "message": "Every mistake is a step forward. Rewatch the lesson and try again."
+    },
+    "review": "Review your answers",
+    "yourAnswer": "Your answer",
+    "correctAnswer": "Correct answer",
+    "unanswered": "Not answered",
+    "allCorrect": "Perfect score — no mistakes to review.",
+    "lastLesson": "You've reached the last lesson in this subject.",
+    "mistakesAdded": "Wrong answers added to your mistakes notebook: {{count}}"
+  },
+  "empty": {
+    "title": "No quiz yet",
+    "message": "Questions for this lesson are on their way. Check back soon."
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "expo": {
+    "name": "EDUWAY",
+    "slug": "eduway",
+    "scheme": "eduway",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.eduway.student",
+      "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.eduway.student",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1F3A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "extra": {
+      "supportsRTL": true,
+      "forcesRTL": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B1F3A",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "dark": {
+            "backgroundColor": "#071426",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-video",
+        {
+          "supportsPictureInPicture": true,
+          "supportsBackgroundPlayback": false
+        }
+      ],
+      "expo-image",
+      "expo-font",
+      "expo-localization",
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
+      "expo-notifications",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

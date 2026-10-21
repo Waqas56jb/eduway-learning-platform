@@ -1,0 +1,71 @@
+{
+  "title": "My profile",
+  "subtitle": "Your account details, password, two-factor authentication and preferences.",
+  "details": "Profile details",
+  "detailsSub": "Shown to other admins in audit logs and assignments.",
+  "nameEn": "Full name (English)",
+  "nameAr": "Full name (Arabic)",
+  "email": "Work email",
+  "mobile": "Mobile",
+  "role": "Role",
+  "memberSince": "Member since {{date}}",
+  "lastLogin": "Last login {{time}}",
+  "saved": "Profile updated",
+  "nameMin": "Name must be at least 3 characters",
+  "mobileInvalid": "Enter a valid Iraqi mobile (+964 7XX XXX XXXX)",
+  "password": {
+    "title": "Change password",
+    "sub": "Use at least 10 characters with upper and lower case letters, a number and a symbol.",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "currentWrong": "Current password is incorrect",
+    "weak": "Password doesn't meet the requirements",
+    "mismatch": "Passwords don't match",
+    "same": "New password must differ from the current one",
+    "update": "Update password",
+    "updated": "Password updated — other sessions were signed out",
+    "strength": "Strength",
+    "levels": {
+      "0": "Too weak",
+      "1": "Weak",
+      "2": "Fair",
+      "3": "Good",
+      "4": "Strong"
+    },
+    "rules": {
+      "length": "At least 10 characters",
+      "case": "Upper and lower case letters",
+      "number": "At least one number",
+      "symbol": "At least one symbol"
+    }
+  },
+  "mfa": {
+    "title": "Two-factor authentication",
+    "sub": "Protect your account with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password).",
+    "enabled": "Enabled",
+    "disabled": "Not enabled",
+    "enable": "Enable 2FA",
+    "disable": "Disable 2FA",
+    "setup": "Set up authenticator",
+    "step1": "Scan this QR code with your authenticator app",
+    "step2": "Or enter this key manually",
+    "step3": "Enter the 6-digit code from the app",
+    "verify": "Verify & enable",
+    "invalid": "Invalid code. In this demo, use 123456.",
+    "enabledToast": "Two-factor authentication enabled",
+    "disableTitle": "Disable two-factor authentication?",
+    "disableBody": "Your account will only be protected by a password. Super Admin policy recommends keeping 2FA on.",
+    "disabledToast": "Two-factor authentication disabled",
+    "activeNote": "Sign-ins require a code from your authenticator app."
+  },
+  "prefs": {
+    "title": "Preferences",
+    "language": "Interface language",
+    "languageSub": "Also switches layout direction and fonts.",
+    "theme": "Appearance",
+    "themeSub": "Your choice is remembered on this device.",
+    "light": "Light",
+    "dark": "Dark"
+  }
+}
