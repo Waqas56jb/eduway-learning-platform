@@ -1,8 +1,8 @@
 import { Check, Star } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Localized } from '@/api/types';
 import { Select, Switch } from '@/components/ui';
-import { getSubject } from '@/data';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 import type { Difficulty, SubjectId } from '@/types';
@@ -49,17 +49,20 @@ const diffColor: Record<Difficulty, string> = {
 interface BankFiltersProps {
   value: BankFilterState;
   onChange: (patch: Partial<BankFilterState>) => void;
+  /** Units of the selected subject (BNK-02 facets). */
+  units: { id: string; title: Localized; count?: number }[];
+  /** Topics (key = topic id) for the selected subject / unit. */
   topics: { key: string; label: string }[];
-  tags: string[];
+  tags: { slug: string; label: Localized | null }[];
   bookmarkCount: number;
 }
 
 /** Unit / topic / difficulty / tags / bookmarked filters for the question bank. */
-export function BankFilters({ value, onChange, topics, tags, bookmarkCount }: BankFiltersProps) {
+export function BankFilters({ value, onChange, units, topics, tags, bookmarkCount }: BankFiltersProps) {
   const { t } = useTranslation();
   const { l } = useLang();
   const [allTags, setAllTags] = useState(false);
-  const subject = value.subject === 'all' ? undefined : getSubject(value.subject);
+  const hasSubject = value.subject !== 'all';
   const visibleTags = allTags ? tags : tags.slice(0, 12);
 
   return (
@@ -67,12 +70,12 @@ export function BankFilters({ value, onChange, topics, tags, bookmarkCount }: Ba
       <Select
         label={t('practice.bank.filters.unit')}
         value={value.unit}
-        disabled={!subject}
-        hint={!subject ? t('practice.bank.filters.unitHint') : undefined}
+        disabled={!hasSubject}
+        hint={!hasSubject ? t('practice.bank.filters.unitHint') : undefined}
         onChange={(e) => onChange({ unit: e.target.value, topic: '' })}
       >
         <option value="">{t('practice.bank.filters.anyUnit')}</option>
-        {subject?.units.map((u) => (
+        {units.map((u) => (
           <option key={u.id} value={u.id}>
             {l(u.title)}
           </option>
@@ -118,7 +121,7 @@ export function BankFilters({ value, onChange, topics, tags, bookmarkCount }: Ba
       <fieldset>
         <legend className="mb-2 text-sm font-semibold text-primary">{t('practice.bank.filters.tags')}</legend>
         <div className="flex flex-wrap gap-1.5">
-          {visibleTags.map((tag) => {
+          {visibleTags.map(({ slug: tag, label }) => {
             const on = value.tags.includes(tag);
             return (
               <button
@@ -134,7 +137,7 @@ export function BankFilters({ value, onChange, topics, tags, bookmarkCount }: Ba
                 )}
               >
                 {on && <Check className="h-3 w-3" aria-hidden />}
-                {tagLabel(t, tag)}
+                {label ? l(label) : tagLabel(t, tag)}
               </button>
             );
           })}

@@ -4,8 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Calculator, Plus, Trash2 } from 'lucide-react';
-import type { IncentiveRule, IncentiveTier } from '@/types';
-import { calcIncentive } from '@/data/incentives';
+import { useQuery } from '@tanstack/react-query';
+import type { IncentiveTier } from '@/types';
+import { qk } from '@/api/keys';
+import { calcIncentiveLocal, incentiveApi, type IncentiveRuleVM } from '@/api/partners';
+import { useDebounce } from '@/hooks/useMisc';
 import { fmtMoney, fmtNumber } from '@/utils/format';
 import { uid } from '@/utils/id';
 import { cn } from '@/utils/cn';
@@ -44,10 +47,24 @@ export function useTierValidator() {
 }
 
 /** Live "N students → reward" preview for a rule. */
-export function IncentiveCalculator({ rule, className }: { rule: Pick<IncentiveRule, 'qualificationThreshold' | 'tiers'>; className?: string }) {
+export function IncentiveCalculator({ rule, className }: { rule: Pick<IncentiveRuleVM, 'qualificationThreshold' | 'tiers'>; className?: string }) {
   const { t } = useTranslation();
   const [n, setN] = useState(12);
-  const res = calcIncentive(rule, n);
+  const local = calcIncentiveLocal(rule, n);
+  // Server calculator (ADM-INC-07) is authoritative; the local mirror renders instantly while it loads.
+  const params = useDebounce({ qualificationThreshold: rule.qualificationThreshold, tiers: rule.tiers.map(({ id: _id, ...x }) => x), students: n }, 400);
+  const server = useQuery({
+    queryKey: qk.incentiveRules.sub('preview', params),
+    queryFn: () => incentiveApi.preview(params),
+    enabled: params.tiers.length > 0,
+    staleTime: 60_000,
+    meta: { silentError: true },
+    retry: false,
+  });
+  const sv = server.data;
+  const res = sv
+    ? { qualified: sv.qualified, amount: sv.amount, tier: sv.tier ? (rule.tiers.find((x) => x.from === sv.tier!.from && x.to === sv.tier!.to) ?? { ...sv.tier }) : null }
+    : local;
   return (
     <Card className={className}>
       <CardHeader icon={<Calculator className="h-4 w-4" />} title={t('schools.rules.calculator')} subtitle={t('schools.rules.calculatorSub')} />
@@ -108,9 +125,10 @@ export function IncentiveCalculator({ rule, className }: { rule: Pick<IncentiveR
 }
 
 interface IncentiveRuleFormProps {
-  rule: IncentiveRule;
+  rule: IncentiveRuleVM;
   readOnly?: boolean;
-  onSave: (patch: Partial<IncentiveRule>) => void;
+  /** Persist the draft; resolve `false` when saving failed (form stays dirty). */
+  onSave: (patch: Partial<IncentiveRuleVM>) => Promise<boolean | void>;
   /** Extra footer actions (activate / delete draft). */
   actions?: React.ReactNode;
 }
@@ -177,8 +195,7 @@ export function IncentiveRuleForm({ rule, readOnly, onSave, actions }: Incentive
     setShowTierErrors(true);
     const tiers = toTiers(v.tiers);
     if (validateTiers(tiers, v.qualificationThreshold).length) return;
-    await new Promise((r) => setTimeout(r, 250));
-    onSave({
+    const ok = await onSave({
       name_en: v.name_en,
       name_ar: v.name_ar,
       partnerType: v.partnerType,
@@ -188,8 +205,9 @@ export function IncentiveRuleForm({ rule, readOnly, onSave, actions }: Incentive
       effectiveTo: v.effectiveTo ? new Date(v.effectiveTo).toISOString() : null,
       tiers,
     });
-    reset(v);
+    if (ok !== false) reset(v);
   };
+
 
   const lastTo = liveTiers.length ? liveTiers[liveTiers.length - 1].to : null;
 

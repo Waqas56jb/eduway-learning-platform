@@ -2,18 +2,22 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Check, Crown } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, SectionHeading, Skeleton, SubjectIcon, fadeUp, stagger, useMockLoading } from '@/components/ui';
-import { getSubject, packages } from '@/data';
+import { useSubjectLookup } from '@/api/catalog';
+import { usePackages } from '@/api/packages';
+import { Button, ErrorState, SectionHeading, Skeleton, SubjectIcon, fadeUp, stagger } from '@/components/ui';
+import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 import type { Package } from '@/types';
 
 export type Billing = 'monthly' | 'yearly';
 
-/** Percentage saved by paying yearly instead of 12 × monthly. */
-export const yearlySavingPct = (p: Package) => Math.round((1 - p.priceYearly / (p.priceMonthly * 12)) * 100);
+/** Percentage saved by paying yearly instead of 12 × monthly (server-computed; 0 when yearly isn't offered). */
+export const yearlySavingPct = (p: Package) =>
+  p.yearlySavingPct ?? (p.priceYearly ? Math.round((1 - p.priceYearly / (p.priceMonthly * 12)) * 100) : 0);
 
-const maxSaving = Math.max(...packages.map(yearlySavingPct));
+/** Price for a billing cycle; packages without a yearly plan fall back to the base plan. */
+export const priceFor = (p: Package, billing: Billing) => (billing === 'yearly' && p.priceYearly ? p.priceYearly : p.priceMonthly);
 
 interface PricingSectionProps {
   /** Show the eyebrow/title/subtitle block (hide it when the page already has a hero). */
@@ -24,8 +28,10 @@ interface PricingSectionProps {
 /** Reusable package grid with an animated monthly / yearly toggle. Used on the landing and pricing pages. */
 export function PricingSection({ heading = true, className }: PricingSectionProps) {
   const { t } = useTranslation();
-  const ready = useMockLoading(450);
+  const { data: packages = [], isLoading, isError, refetch } = usePackages();
   const [billing, setBilling] = useState<Billing>('monthly');
+  const hasYearly = packages.some((p) => !!p.priceYearly);
+  const maxSaving = packages.length ? Math.max(0, ...packages.map(yearlySavingPct)) : 0;
 
   return (
     <section id="pricing" className={cn('section relative scroll-mt-20 overflow-hidden bg-cream', className)}>
@@ -42,13 +48,17 @@ export function PricingSection({ heading = true, className }: PricingSectionProp
         )}
 
         <div className="mt-10 flex flex-col items-center gap-3">
-          <BillingToggle value={billing} onChange={setBilling} />
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-bold text-success">
-            {t('landing.pricing.saveUpTo', { pct: maxSaving })}
-          </span>
+          {(hasYearly || isLoading) && <BillingToggle value={billing} onChange={setBilling} />}
+          {maxSaving > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-bold text-success">
+              {t('landing.pricing.saveUpTo', { pct: maxSaving })}
+            </span>
+          )}
         </div>
 
-        {ready ? (
+        {isError ? (
+          <ErrorState className="mx-auto mt-14 max-w-xl" onRetry={() => void refetch()} />
+        ) : !isLoading ? (
           <motion.ul
             className="mx-auto mt-14 grid max-w-md gap-6 lg:max-w-none lg:grid-cols-3 lg:items-center lg:gap-7"
             variants={stagger(0.12)}
@@ -64,8 +74,8 @@ export function PricingSection({ heading = true, className }: PricingSectionProp
           </motion.ul>
         ) : (
           <div className="mx-auto mt-14 grid max-w-md gap-6 lg:max-w-none lg:grid-cols-3 lg:items-center lg:gap-7" aria-hidden>
-            {packages.map((p) => (
-              <Skeleton key={p.id} className={cn('rounded-3xl', p.popular ? 'h-[600px]' : 'h-[540px]')} />
+            {[false, true, false].map((popular, i) => (
+              <Skeleton key={i} className={cn('rounded-3xl', popular ? 'h-[600px]' : 'h-[540px]')} />
             ))}
           </div>
         )}
@@ -118,10 +128,13 @@ function BillingToggle({ value, onChange }: { value: Billing; onChange: (b: Bill
 function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
+  const { isAuthenticated } = useAuth();
+  const subjectOf = useSubjectLookup();
   const popular = !!pkg.popular;
-  const yearly = billing === 'yearly';
-  const price = yearly ? pkg.priceYearly : pkg.priceMonthly;
+  const yearly = billing === 'yearly' && !!pkg.priceYearly;
+  const price = priceFor(pkg, billing);
   const saving = yearlySavingPct(pkg);
+  const cta = isAuthenticated ? `/student/subscription?package=${pkg.id}&cycle=${yearly ? 'yearly' : 'monthly'}` : '/register';
 
   return (
     <article
@@ -174,7 +187,7 @@ function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
               <>
                 <span className={popular ? 'text-white/70' : 'text-muted'}>
                   {t('landing.pricing.perMonthYearly', {
-                    amount: fmtNumber(Math.round(pkg.priceYearly / 12 / 100) * 100),
+                    amount: fmtNumber(Math.round((pkg.priceYearly ?? 0) / 12 / 100) * 100),
                     currency: t('common.currency'),
                   })}
                 </span>
@@ -196,7 +209,7 @@ function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
           </p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {pkg.subjects.map((sid) => {
-              const s = getSubject(sid);
+              const s = subjectOf(sid);
               if (!s) return null;
               return (
                 <li
@@ -206,7 +219,7 @@ function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
                     popular ? 'bg-white/10 text-white' : 'bg-primary/[0.04] text-primary',
                   )}
                 >
-                  <SubjectIcon id={sid} className="h-3.5 w-3.5" style={{ color: s.color }} />
+                  <SubjectIcon id={s.slug} icon={s.icon} className="h-3.5 w-3.5" style={{ color: s.color }} />
                   {l(s.name)}
                 </li>
               );
@@ -216,8 +229,8 @@ function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
       </div>
 
       <ul className="relative mt-6 flex-1 space-y-3">
-        {pkg.features.map((f) => (
-          <li key={f.en} className="flex items-start gap-3 text-sm">
+        {pkg.features.map((f, i) => (
+          <li key={`${i}-${f.en}`} className="flex items-start gap-3 text-sm">
             <span
               className={cn(
                 'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
@@ -232,7 +245,7 @@ function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
       </ul>
 
       <Button
-        to="/register"
+        to={cta}
         variant={popular ? 'gold' : 'outline'}
         size="lg"
         fullWidth

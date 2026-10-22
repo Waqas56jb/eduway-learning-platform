@@ -7,10 +7,11 @@
     "reviewed": "Reviewed",
     "mastered": "Mastered",
     "masteryLabel": "Mastery",
-    "total": "Mistakes logged: {{count}}"
+    "total": "Mistakes logged: {{count}}",
+    "totalLabel": "Mistakes logged so far"
   },
   "filters": {
-    "unresolved": "Unresolved",
+    "unresolved": "To fix",
     "reviewed": "Reviewed",
     "mastered": "Mastered",
     "repeated": "Repeated"

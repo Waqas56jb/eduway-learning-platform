@@ -8,7 +8,6 @@ import {
   Clock,
   Crosshair,
   Flag,
-  Info,
   RotateCcw,
   Sparkles,
   Timer,
@@ -18,15 +17,11 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
-import {
-  DEMO_PREFIX,
-  attemptsLeftFor,
-  buildDemoAttempt,
-  gradeFor,
-  scoreAttempt,
-} from '@/components/student/exam/examUtils';
+import { useSubjectLookup } from '@/api/catalog';
+import { useExamResult } from '@/api/exams';
 import { TopicBreakdown, barColor, type TopicStat } from '@/components/student/exam/TopicBreakdown';
 import { QuizCard } from '@/components/student/QuizCard';
+import { MathText } from '@/components/ui/MathText';
 import {
   AccordionItem,
   AnimatedCounter,
@@ -34,6 +29,7 @@ import {
   Button,
   Card,
   CardHeader,
+  ErrorState,
   ProgressRing,
   Reveal,
   Seo,
@@ -41,13 +37,9 @@ import {
   SkeletonList,
   SubjectBadgeIcon,
   Tabs,
-  useMockLoading,
 } from '@/components/ui';
-import { exams, getExam, getLesson, getQuestion, getSubject } from '@/data';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { cn, formatClock } from '@/lib/utils';
-import type { Question } from '@/types';
 
 type ReviewFilter = 'all' | 'incorrect' | 'unanswered';
 
@@ -55,82 +47,79 @@ export default function ExamResult() {
   const { attemptId = '' } = useParams();
   const { t } = useTranslation();
   const { l, fmtDate } = useLang();
-  const { getAttempt, attempts } = useStudent();
   const reduceMotion = useReducedMotion();
-  const ready = useMockLoading(500);
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [open, setOpen] = useState<string | null>(null);
+  const subjectOf = useSubjectLookup();
 
-  // Real attempt, or a deterministic demo so the page is never broken.
-  const { attempt, isDemo } = useMemo(() => {
-    const found = getAttempt(attemptId);
-    if (found && getExam(found.examId)) return { attempt: found, isDemo: false };
-    const demoExam = attemptId.startsWith(DEMO_PREFIX) ? getExam(attemptId.slice(DEMO_PREFIX.length)) : undefined;
-    return { attempt: buildDemoAttempt(demoExam ?? exams[0]), isDemo: true };
-  }, [attemptId, getAttempt]);
+  // EXM-08: server-scored result (score, grade, topic breakdown, recommendations, full review).
+  const resultQ = useExamResult(attemptId);
+  const result = resultQ.data;
+  const ready = !!result;
 
-  const exam = getExam(attempt.examId) ?? exams[0];
-  const subject = getSubject(exam.subjectId);
-  const score = scoreAttempt(attempt);
-  const pass = score.pct >= exam.passMark;
-  const grade = gradeFor(score.pct, exam.passMark);
+  const exam = result?.exam ?? { id: '', title: { en: '', ar: '' }, passMark: 0, durationMin: 0, subjectId: '', subjectSlug: '', scoring: '' };
+  const subject = subjectOf(exam.subjectSlug);
+  const score = result?.score ?? { total: 0, correct: 0, incorrect: 0, unanswered: 0, pct: 0, rawScore: 0, maxScore: 0 };
+  const pass = !!result?.passed;
+  const grade = result?.grade ?? 'needsWork';
   const answered = score.correct + score.incorrect;
-  const accuracy = answered ? Math.round((score.correct / answered) * 100) : 0;
-  const attemptsLeft = attemptsLeftFor(exam, attempts);
+  const accuracy = Math.round(result?.accuracy ?? 0);
+  const attemptsLeft = result?.attemptsLeft ?? 0;
+  const attempt = {
+    id: result?.attemptId ?? attemptId,
+    timeSpentSec: result?.timeSpentSec ?? 0,
+    autoSubmitted: !!result?.autoSubmitted,
+    finishedAt: result?.finishedAt ?? new Date().toISOString(),
+    flagged: (result?.answers ?? []).filter((a) => a.flagged).map((a) => a.questionId),
+  };
 
   const items = useMemo(
     () =>
-      attempt.questionIds
-        .map((id) => getQuestion(id))
-        .filter((q): q is Question => !!q)
-        .map((q) => {
-          const ans = attempt.answers[q.id] ?? null;
-          const state = ans === null ? 'unanswered' : ans === q.correctIndex ? 'correct' : 'incorrect';
-          return { q, ans, state: state as 'correct' | 'incorrect' | 'unanswered' };
-        }),
-    [attempt],
+      (result?.answers ?? []).map((a) => {
+        const ans = a.chosenIndex >= 0 ? a.chosenIndex : null;
+        const state = ans === null && !a.textAnswer ? 'unanswered' : a.correct ? 'correct' : 'incorrect';
+        return { q: a.question, ans, state: state as 'correct' | 'incorrect' | 'unanswered' };
+      }),
+    [result],
   );
 
-  const topics = useMemo<TopicStat[]>(() => {
-    const map = new Map<string, TopicStat & { lessonIds: string[] }>();
-    for (const it of items) {
-      const key = it.q.topic.en;
-      const row = map.get(key) ?? { key, topic: l(it.q.topic), correct: 0, total: 0, pct: 0, lessonIds: [] };
-      row.total++;
-      if (it.state === 'correct') row.correct++;
-      if (it.q.lessonId && !row.lessonIds.includes(it.q.lessonId)) row.lessonIds.push(it.q.lessonId);
-      map.set(key, row);
-    }
-    return [...map.values()].map((r) => ({ ...r, pct: Math.round((r.correct / r.total) * 100) }));
-  }, [items, l]);
+  const topics = useMemo<TopicStat[]>(
+    () => (result?.topicBreakdown ?? []).map((tp) => ({ key: tp.key, topic: l(tp.topic), correct: tp.correct, total: tp.total, pct: Math.round(tp.pct) })),
+    [result, l],
+  );
 
-  // Weakest topics → lessons to revisit (wrong / skipped questions first).
-  const revision = useMemo(() => {
-    const missed = items.filter((it) => it.state !== 'correct' && it.q.lessonId);
-    const byLesson = new Map<string, { lessonId: string; topicKey: string; topic: string; misses: number }>();
-    for (const it of missed) {
-      const id = it.q.lessonId as string;
-      const row = byLesson.get(id) ?? { lessonId: id, topicKey: it.q.topic.en, topic: l(it.q.topic), misses: 0 };
-      row.misses++;
-      byLesson.set(id, row);
-    }
-    const topicPct = new Map(topics.map((tp) => [tp.key, tp.pct]));
-    return [...byLesson.values()]
-      .map((r) => ({ ...r, pct: topicPct.get(r.topicKey) ?? 0 }))
-      .sort((a, b) => a.pct - b.pct || b.misses - a.misses)
-      .slice(0, 4);
-  }, [items, topics, l]);
+  // Weakest topics → lessons to revisit (server recommendations, worst topics first).
+  const revision = useMemo(
+    () =>
+      (result?.recommendations ?? []).map((r) => ({
+        lessonId: r.lessonId,
+        title: r.title,
+        topic: l(r.topic),
+        misses: r.missed,
+        pct: Math.round(r.topicPct),
+      })),
+    [result, l],
+  );
 
   useEffect(() => {
-    // Celebrate the student's own passing attempt (not the sample result).
-    if (!pass || isDemo || reduceMotion || !ready) return;
+    // Celebrate a passing attempt.
+    if (!pass || reduceMotion || !ready) return;
     const id = window.setTimeout(() => {
       const opts = { particleCount: 90, spread: 70, startVelocity: 42, ticks: 220, colors: ['#C9A24A', '#E6C77A', '#0B1F3A', '#FFFFFF'] };
       void confetti({ ...opts, origin: { x: 0.25, y: 0.35 }, angle: 60 });
       void confetti({ ...opts, origin: { x: 0.75, y: 0.35 }, angle: 120 });
     }, 500);
     return () => window.clearTimeout(id);
-  }, [pass, isDemo, reduceMotion, ready, attempt.id]);
+  }, [pass, reduceMotion, ready, attempt.id]);
+
+  if (resultQ.isError) {
+    return (
+      <>
+        <Seo title={t('practice.result.seoDescription')} />
+        <ErrorState className="mt-10" onRetry={() => void resultQ.refetch()} />
+      </>
+    );
+  }
 
   const list = items.filter((it) => filter === 'all' || it.state === filter);
   const counts = {
@@ -162,13 +151,6 @@ export default function ExamResult() {
         <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" aria-hidden />
         {t('practice.result.backToExams')}
       </Link>
-
-      {isDemo && (
-        <p className="mb-5 flex items-start gap-2 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-[#7A5C17]" role="note">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          {t('practice.result.demoNote')}
-        </p>
-      )}
 
       {/* Hero */}
       <motion.section
@@ -288,18 +270,16 @@ export default function ExamResult() {
           ) : (
             <ul className="space-y-3">
               {revision.map((r) => {
-                const lesson = getLesson(r.lessonId);
-                if (!lesson) return null;
-                const ls = getSubject(lesson.subjectId);
+                const ls = subject;
                 return (
                   <li key={r.lessonId}>
                     <Link
-                      to={`/student/lesson/${lesson.id}`}
+                      to={`/student/lesson/${r.lessonId}`}
                       className="group flex items-center gap-3 rounded-2xl border border-primary/5 p-3 transition hover:border-accent/40 hover:bg-accent/5"
                     >
-                      {ls && <SubjectBadgeIcon id={ls.id} color={ls.color} size={40} />}
+                      {ls && <SubjectBadgeIcon id={ls.slug} color={ls.color} size={40} />}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-primary">{l(lesson.title)}</span>
+                        <span className="block truncate text-sm font-semibold text-primary">{l(r.title)}</span>
                         <span className="text-xs text-muted">{r.topic}</span>
                       </span>
                       <span className="text-end">
@@ -362,7 +342,9 @@ export default function ExamResult() {
                         >
                           {n}
                         </span>
-                        <span dir="auto" className="line-clamp-2 font-medium text-ink sm:line-clamp-1">{l(it.q.text)}</span>
+                        <span dir="auto" className="line-clamp-2 font-medium text-ink sm:line-clamp-1">
+                          <MathText text={l(it.q.text)} />
+                        </span>
                       </span>
                     }
                     meta={

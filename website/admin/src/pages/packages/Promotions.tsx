@@ -1,21 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { Copy, Gauge, Pencil, Plus, Sparkles, Tag, Ticket, Trash2, Wand2 } from 'lucide-react';
-import type { Promotion, PromoType } from '@/types';
+import { Copy, Gauge, History, Pencil, Plus, Sparkles, Tag, Ticket, Trash2, Wand2 } from 'lucide-react';
+import type { PromoType } from '@/types';
 import { cn } from '@/utils/cn';
-import { uid } from '@/utils/id';
-import { MOCK_NOW } from '@/utils/random';
-import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
-import { usePackages, useSchools } from '@/store/core';
-import { usePromotions } from '@/store/commerce';
+import { fmtDate, fmtDateTime, fmtMoney, fmtNumber } from '@/utils/format';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { qk } from '@/api/keys';
+import { errorMessage, isApiError, type Query } from '@/api/client';
+import { exportRequest, useApiMutation, useExport, usePagedList } from '@/api/hooks';
+import { flatRef } from '@/api/adapters';
+import type { Paged } from '@/api/types';
+import { useLookups } from '@/api/lookups';
+import { promotionsApi, toPromotionVM, usePromotionStats, type PromoPhase, type PromotionDto, type PromotionVM, type PromotionWriteDto, type RedemptionDto } from '@/api/packages';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
   Badge,
@@ -26,6 +29,7 @@ import {
   Field,
   FilterSelect,
   Input,
+  Modal,
   ProgressBar,
   Select,
   Segmented,
@@ -37,53 +41,58 @@ import {
 
 const TYPE_TONE: Record<PromoType, Tone> = { promo: 'accent', school: 'info', referral: 'purple', campaign: 'navy' };
 
-type Phase = 'live' | 'upcoming' | 'expired' | 'exhausted' | 'disabled';
-
-function phaseOf(p: Promotion): Phase {
-  const now = MOCK_NOW.toISOString();
-  if (!p.enabled) return 'disabled';
-  if (p.validTo < now) return 'expired';
-  if (p.validFrom > now) return 'upcoming';
-  if (p.used >= p.usageLimit) return 'exhausted';
-  return 'live';
-}
+type Phase = PromoPhase;
 
 const PHASE_TONE: Record<Phase, Tone> = { live: 'success', upcoming: 'info', expired: 'slate', exhausted: 'warning', disabled: 'neutral' };
 
-function randomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return `EDU-${Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`;
-}
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Promotions() {
   const { t } = useTranslation();
   const L = useLocalize();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const promos = usePromotions((s) => s.items);
-  const update = usePromotions((s) => s.update);
-  const remove = usePromotions((s) => s.remove);
-  const packages = usePackages((s) => s.items);
-  const schools = useSchools((s) => s.items);
+  const qc = useQueryClient();
   const [type, setType] = useState('');
   const [state, setState] = useState('');
-  const [editing, setEditing] = useState<Promotion | null>(null);
+  const [editing, setEditing] = useState<PromotionVM | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const [history, setHistory] = useState<PromotionVM | null>(null);
 
-  const rows = useMemo(
-    () => promos.filter((p) => (!type || p.type === type) && (!state || phaseOf(p) === state)),
-    [promos, type, state],
-  );
+  const list = usePagedList({
+    key: qk.promotions.list,
+    fetcher: (p) => promotionsApi.list(p),
+    filters: { type, phase: state },
+    initialSort: '-validFrom',
+  });
+  const rows = useMemo(() => list.items.map(toPromotionVM), [list.items]);
+  const stats = usePromotionStats();
+  const loading = stats.isLoading;
+  const live = stats.data?.live ?? 0;
+  const redemptions = stats.data?.redemptions ?? 0;
+  const nearLimit = stats.data?.nearLimit ?? 0;
+  const exp = useExport('/admin/promotions/export', 'promotions');
 
-  const live = promos.filter((p) => phaseOf(p) === 'live').length;
-  const redemptions = promos.reduce((s, p) => s + p.used, 0);
-  const nearLimit = promos.filter((p) => p.enabled && p.used / p.usageLimit >= 0.8).length;
+  // Optimistic enable switch: flip the row in every cached list page, roll back on error.
+  const toggleM = useApiMutation((v: { id: string; enabled: boolean; code: string }) => promotionsApi.update(v.id, { enabled: v.enabled }), {
+    invalidate: [qk.promotions.all],
+    success: (_d, v) => t(v.enabled ? 'packages.promo.toggledOn' : 'packages.promo.toggledOff', { code: v.code }),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: qk.promotions.all });
+      const prev = qc.getQueriesData<Paged<PromotionDto>>({ queryKey: qk.promotions.all });
+      qc.setQueriesData<Paged<PromotionDto>>({ queryKey: [...qk.promotions.all, 'list'] }, (old) =>
+        old ? { ...old, items: old.items.map((x) => (x.id === v.id ? { ...x, enabled: v.enabled, phase: v.enabled ? x.phase : 'disabled' } : x)) } : old,
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev.forEach(([key, data]) => qc.setQueryData(key, data)),
+  });
+  const removeM = useApiMutation((id: string) => promotionsApi.remove(id), {
+    invalidate: [qk.promotions.all],
+    success: () => t('toast.deleted', { entity: t('packages.promo.entity') }),
+  });
 
-  const toggle = (p: Promotion, on: boolean) => {
-    update(p.id, { enabled: on }, { action: on ? 'promotion.enable' : 'promotion.disable', summary: `${on ? 'Enabled' : 'Disabled'} promo code ${p.code}` });
-    toast.success(t(on ? 'packages.promo.toggledOn' : 'packages.promo.toggledOff', { code: p.code }));
-  };
+  const toggle = (p: PromotionVM, on: boolean) => toggleM.mutate({ id: p.id, enabled: on, code: p.code });
 
   const copy = async (code: string) => {
     try {
@@ -94,16 +103,15 @@ export default function Promotions() {
     }
   };
 
-  const del = async (p: Promotion) => {
+  const del = async (p: PromotionVM) => {
     const ok = await confirm({ title: t('packages.promo.deleteTitle', { code: p.code }), body: t('packages.promo.deleteBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    remove(p.id);
-    toast.success(t('toast.deleted', { entity: t('packages.promo.entity') }));
+    removeM.mutate(p.id);
   };
 
-  const discountLabel = (p: Promotion) => (p.discountType === 'percent' ? `${p.discountValue}%` : fmtMoney(p.discountValue, 'IQD'));
+  const discountLabel = (p: PromotionVM) => (p.discountType === 'percent' ? `${p.discountValue}%` : fmtMoney(p.discountValue, 'IQD'));
 
-  const columns = useMemo<ColumnDef<Promotion>[]>(
+  const columns = useMemo<ColumnDef<PromotionVM>[]>(
     () => [
       {
         id: 'code',
@@ -124,12 +132,18 @@ export default function Promotions() {
       {
         id: 'type',
         accessorKey: 'type',
+        enableSorting: false,
         header: t('packages.promo.type'),
         meta: { label: t('packages.promo.type') },
-        cell: ({ row }) => <Badge tone={TYPE_TONE[row.original.type]}>{t(`packages.promo.types.${row.original.type}`)}</Badge>,
+        cell: ({ row }) => (
+          <div>
+            <Badge tone={TYPE_TONE[row.original.type]}>{t(`packages.promo.types.${row.original.type}`)}</Badge>
+            {row.original.ownerId && <div className="mt-0.5 max-w-[10rem] truncate text-[11px] text-muted">{L(row.original, 'ownerName')}</div>}
+          </div>
+        ),
       },
       {
-        id: 'discount',
+        id: 'discountValue',
         accessorFn: (p) => discountLabel(p),
         header: t('packages.promo.discount'),
         meta: { label: t('packages.promo.discount'), align: 'end' },
@@ -138,6 +152,7 @@ export default function Promotions() {
       {
         id: 'eligibility',
         accessorFn: (p) => t(`packages.promo.eligibilities.${p.eligibility}`),
+        enableSorting: false,
         header: t('packages.promo.eligibility'),
         meta: { label: t('packages.promo.eligibility') },
         cell: ({ row }) => (
@@ -146,13 +161,13 @@ export default function Promotions() {
             <div className="text-[11px] text-muted">
               {row.original.packageIds.length === 0
                 ? t('packages.promo.allPackages')
-                : row.original.packageIds.map((id) => L(packages.find((p) => p.id === id), 'name')).join(' · ')}
+                : row.original.packages.map((p) => L(p, 'name')).join(' · ')}
             </div>
           </div>
         ),
       },
       {
-        id: 'usage',
+        id: 'used',
         accessorFn: (p) => p.used / p.usageLimit,
         header: t('packages.promo.usage'),
         meta: { label: t('packages.promo.usage'), exportValue: (p) => `${p.used}/${p.usageLimit}` },
@@ -171,7 +186,7 @@ export default function Promotions() {
         },
       },
       {
-        id: 'validity',
+        id: 'validTo',
         accessorKey: 'validTo',
         header: t('packages.promo.validity'),
         meta: { label: t('packages.promo.validity'), exportValue: (p) => `${p.validFrom.slice(0, 10)} → ${p.validTo.slice(0, 10)}` },
@@ -183,11 +198,12 @@ export default function Promotions() {
       },
       {
         id: 'phase',
-        accessorFn: (p) => phaseOf(p),
+        accessorFn: (p) => p.phase,
+        enableSorting: false,
         header: t('common.status'),
         meta: { label: t('common.status') },
         cell: ({ row }) => {
-          const ph = phaseOf(row.original);
+          const ph = row.original.phase;
           return (
             <Badge tone={PHASE_TONE[ph]} dot>
               {ph === 'disabled' ? t('status.disabled') : t(`packages.promo.${ph}`)}
@@ -198,6 +214,7 @@ export default function Promotions() {
       {
         id: 'enabled',
         accessorKey: 'enabled',
+        enableSorting: false,
         header: t('packages.promo.enabled'),
         meta: { label: t('packages.promo.enabled'), align: 'center' },
         cell: ({ row }) => (
@@ -218,6 +235,9 @@ export default function Promotions() {
         meta: { noExport: true, align: 'end' },
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
+            <Button variant="ghost" size="icon-sm" aria-label={t('packages.promo.redemptions')} title={t('packages.promo.redemptions')} onClick={() => setHistory(row.original)}>
+              <History className="h-4 w-4" />
+            </Button>
             {can('packages', 'edit') && (
               <Button
                 variant="ghost"
@@ -241,7 +261,7 @@ export default function Promotions() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, L, packages, can],
+    [t, L, can],
   );
 
   return (
@@ -265,7 +285,7 @@ export default function Promotions() {
       />
 
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
-        <StatCard loading={loading} label={t('packages.promo.kpiActive')} value={fmtNumber(live)} icon={<Sparkles />} color="#16A34A" hint={`${fmtNumber(promos.length)} ${t('common.total').toLowerCase()}`} />
+        <StatCard loading={loading} label={t('packages.promo.kpiActive')} value={fmtNumber(live)} icon={<Sparkles />} color="#16A34A" hint={`${fmtNumber(stats.data?.total ?? 0)} ${t('common.total').toLowerCase()}`} />
         <StatCard loading={loading} label={t('packages.promo.kpiRedemptions')} value={fmtNumber(redemptions)} icon={<Ticket />} color="#C9A24A" hint={' '} />
         <StatCard loading={loading} label={t('packages.promo.kpiNearLimit')} value={fmtNumber(nearLimit)} icon={<Gauge />} color="#F59E0B" hint="≥ 80%" />
       </div>
@@ -273,9 +293,12 @@ export default function Promotions() {
       <DataTable
         data={rows}
         columns={columns}
-        loading={loading}
-        exportName={can('packages', 'export') ? 'promotions' : undefined}
-        searchText={(p) => `${p.code} ${p.type} ${schools.find((s) => s.id === p.ownerId)?.name_en ?? ''}`}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={list.refetch}
+        server={list.server}
+        onExport={can('packages', 'export') ? () => exp.mutate(exportRequest('csv', list.exportFilters)) : undefined}
+        exporting={exp.isPending}
         toolbar={
           <>
             <FilterSelect
@@ -298,17 +321,19 @@ export default function Promotions() {
       />
 
       <PromotionDrawer open={drawer} onClose={() => setDrawer(false)} promo={editing} />
+      {history && <RedemptionsModal promo={history} onClose={() => setHistory(null)} />}
     </div>
   );
 }
 
 /* ─── Create / edit drawer ───────────────────────────────────────────────── */
 
-function PromotionDrawer({ open, onClose, promo }: { open: boolean; onClose: () => void; promo: Promotion | null }) {
+function PromotionDrawer({ open, onClose, promo }: { open: boolean; onClose: () => void; promo: PromotionVM | null }) {
   const { t } = useTranslation();
   const can = useCan();
   const allowed = can('packages', promo ? 'edit' : 'create');
   const formId = 'promo-form';
+  const [saving, setSaving] = useState(false);
   return (
     <Drawer
       open={open}
@@ -320,25 +345,23 @@ function PromotionDrawer({ open, onClose, promo }: { open: boolean; onClose: () 
           <Button variant="secondary" onClick={onClose}>
             {t('actions.cancel')}
           </Button>
-          <Button type="submit" form={formId} disabled={!allowed}>
+          <Button type="submit" form={formId} disabled={!allowed} loading={saving}>
             {promo ? t('actions.saveChanges') : t('packages.promo.create')}
           </Button>
         </>
       }
     >
-      {open && <PromotionForm key={promo?.id ?? 'new'} formId={formId} promo={promo} allowed={allowed} onDone={onClose} />}
+      {open && <PromotionForm key={promo?.id ?? 'new'} formId={formId} promo={promo} allowed={allowed} onDone={onClose} onSaving={setSaving} />}
     </Drawer>
   );
 }
 
-function PromotionForm({ formId, promo, allowed, onDone }: { formId: string; promo: Promotion | null; allowed: boolean; onDone: () => void }) {
+function PromotionForm({ formId, promo, allowed, onDone, onSaving }: { formId: string; promo: PromotionVM | null; allowed: boolean; onDone: () => void; onSaving: (v: boolean) => void }) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const promos = usePromotions((s) => s.items);
-  const add = usePromotions((s) => s.add);
-  const update = usePromotions((s) => s.update);
-  const packages = usePackages((s) => s.items);
-  const schools = useSchools((s) => s.items);
+  const qc = useQueryClient();
+  const { packages, schools } = useLookups();
+  const [generating, setGenerating] = useState(false);
 
   const schema = z
     .object({
@@ -349,6 +372,7 @@ function PromotionForm({ formId, promo, allowed, onDone }: { formId: string; pro
       eligibility: z.enum(['all', 'new_users', 'renewals', 'school_students']),
       packageIds: z.array(z.string()),
       usageLimit: z.number({ invalid_type_error: t('packages.promo.errors.limit') }).int().min(1, t('packages.promo.errors.limit')),
+      perUserLimit: z.number({ invalid_type_error: t('packages.promo.errors.limit') }).int().min(1, t('packages.promo.errors.limit')),
       validFrom: z.string().min(1, t('errors.required')),
       validTo: z.string().min(1, t('errors.required')),
       enabled: z.boolean(),
@@ -357,22 +381,35 @@ function PromotionForm({ formId, promo, allowed, onDone }: { formId: string; pro
     .superRefine((v, ctx) => {
       if (v.discountType === 'percent' && v.discountValue > 100) ctx.addIssue({ code: 'custom', path: ['discountValue'], message: t('packages.promo.errors.percent') });
       if (v.validFrom && v.validTo && v.validTo < v.validFrom) ctx.addIssue({ code: 'custom', path: ['validTo'], message: t('packages.promo.errors.dates') });
-      if (promos.some((p) => p.code === v.code && p.id !== promo?.id)) ctx.addIssue({ code: 'custom', path: ['code'], message: t('packages.promo.codeTaken') });
     });
   type Form = z.infer<typeof schema>;
 
   const defaults: Form = promo
-    ? { ...promo, validFrom: promo.validFrom.slice(0, 10), validTo: promo.validTo.slice(0, 10), ownerId: promo.ownerId ?? '' }
+    ? {
+        code: promo.code,
+        type: promo.type,
+        discountType: promo.discountType,
+        discountValue: promo.discountValue,
+        eligibility: promo.eligibility,
+        packageIds: promo.packageIds,
+        usageLimit: promo.usageLimit,
+        perUserLimit: promo.perUserLimit,
+        validFrom: promo.validFrom.slice(0, 10),
+        validTo: promo.validTo.slice(0, 10),
+        enabled: promo.enabled,
+        ownerId: promo.ownerId ?? '',
+      }
     : {
-        code: randomCode(),
+        code: '',
         type: 'promo',
         discountType: 'percent',
         discountValue: 10,
         eligibility: 'all',
         packageIds: [],
         usageLimit: 100,
-        validFrom: MOCK_NOW.toISOString().slice(0, 10),
-        validTo: new Date(MOCK_NOW.getTime() + 30 * 86_400_000).toISOString().slice(0, 10),
+        perUserLimit: 1,
+        validFrom: today(),
+        validTo: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
         enabled: true,
         ownerId: '',
       };
@@ -383,27 +420,67 @@ function PromotionForm({ formId, promo, allowed, onDone }: { formId: string; pro
     control,
     watch,
     setValue,
+    setError,
     formState: { errors },
   } = useForm<Form>({ resolver: zodResolver(schema), defaultValues: defaults });
+
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      const { code } = await promotionsApi.generateCode();
+      setValue('code', code, { shouldValidate: true });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Pre-fill a server-generated code for new promotions.
+  useEffect(() => {
+    if (!promo) void generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const discountType = watch('discountType');
   const promoType = watch('type');
 
-  const submit = (v: Form) => {
-    const data = {
-      ...v,
+  const submit = async (v: Form) => {
+    const ownerType = v.type === 'school' && v.ownerId ? 'school' : null;
+    const data: PromotionWriteDto = {
+      code: v.code,
+      type: v.type,
+      discountType: v.discountType,
+      discountValue: v.discountValue,
+      packageIds: v.packageIds,
+      eligibility: v.eligibility,
+      usageLimit: v.usageLimit,
+      perUserLimit: v.perUserLimit,
       validFrom: new Date(`${v.validFrom}T00:00:00+03:00`).toISOString(),
       validTo: new Date(`${v.validTo}T23:59:59+03:00`).toISOString(),
-      ownerId: v.type === 'school' && v.ownerId ? v.ownerId : null,
+      enabled: v.enabled,
+      ownerType,
+      ownerId: ownerType ? v.ownerId : null,
     };
-    if (promo) {
-      update(promo.id, data);
-      toast.success(t('toast.updated', { entity: t('packages.promo.entity') }));
-    } else {
-      add({ ...data, id: uid('promo'), used: 0 });
-      toast.success(t('toast.created', { entity: t('packages.promo.entity') }));
+    onSaving(true);
+    try {
+      const { available } = await promotionsApi.checkCode(v.code, promo?.id);
+      if (!available) {
+        setError('code', { message: t('packages.promo.codeTaken') });
+        return;
+      }
+      if (promo) await promotionsApi.update(promo.id, data);
+      else await promotionsApi.create(data);
+      await qc.invalidateQueries({ queryKey: qk.promotions.all });
+      toast.success(t(promo ? 'toast.updated' : 'toast.created', { entity: t('packages.promo.entity') }));
+      onDone();
+    } catch (e) {
+      if (isApiError(e) && e.code === 'CONFLICT') setError('code', { message: t('packages.promo.codeTaken') });
+      else if (isApiError(e) && Object.keys(e.fields).length) Object.entries(e.fields).forEach(([k, msg]) => setError(k as keyof Form, { message: msg }));
+      else toast.error(errorMessage(e));
+    } finally {
+      onSaving(false);
     }
-    onDone();
   };
 
   return (
@@ -412,7 +489,7 @@ function PromotionForm({ formId, promo, allowed, onDone }: { formId: string; pro
           <Field label={t('packages.promo.code')} required error={errors.code?.message} hint={t('packages.promo.codeHint')} htmlFor="pr-code">
             <div className="flex gap-2">
               <Input id="pr-code" dir="ltr" icon={<Tag />} className="flex-1 font-mono uppercase" invalid={!!errors.code} {...register('code')} />
-              <Button variant="secondary" icon={<Wand2 className="h-4 w-4" />} onClick={() => setValue('code', randomCode(), { shouldValidate: true })}>
+              <Button variant="secondary" icon={<Wand2 className="h-4 w-4" />} loading={generating} onClick={generate}>
                 {t('packages.promo.generate')}
               </Button>
             </div>
@@ -488,9 +565,14 @@ function PromotionForm({ formId, promo, allowed, onDone }: { formId: string; pro
             />
           </Field>
 
-          <Field label={t('packages.promo.usageLimit')} required error={errors.usageLimit?.message} htmlFor="pr-lim">
-            <Input id="pr-lim" type="number" min={1} invalid={!!errors.usageLimit} {...register('usageLimit', { valueAsNumber: true })} />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t('packages.promo.usageLimit')} required error={errors.usageLimit?.message} htmlFor="pr-lim">
+              <Input id="pr-lim" type="number" min={1} invalid={!!errors.usageLimit} {...register('usageLimit', { valueAsNumber: true })} />
+            </Field>
+            <Field label={t('packages.promo.perUserLimit')} required error={errors.perUserLimit?.message} htmlFor="pr-ulim">
+              <Input id="pr-ulim" type="number" min={1} invalid={!!errors.perUserLimit} {...register('perUserLimit', { valueAsNumber: true })} />
+            </Field>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t('packages.promo.validFrom')} required error={errors.validFrom?.message} htmlFor="pr-from">
@@ -508,5 +590,73 @@ function PromotionForm({ formId, promo, allowed, onDone }: { formId: string; pro
           />
         </fieldset>
       </form>
+  );
+}
+
+/* ─── Redemption history (ADM-PRM-08) ────────────────────────────────────── */
+
+type RedemptionRow = RedemptionDto & { studentName_en: string; studentName_ar: string };
+
+function RedemptionsModal({ promo, onClose }: { promo: PromotionVM; onClose: () => void }) {
+  const { t } = useTranslation();
+  const L = useLocalize();
+  const list = usePagedList({
+    key: (p: Query) => qk.promotions.sub('redemptions', promo.id, p),
+    fetcher: (p) => promotionsApi.redemptions(promo.id, p),
+    pageSize: 10,
+  });
+  const rows = useMemo<RedemptionRow[]>(
+    () => list.items.map((r) => ({ ...r, studentName_en: flatRef(r.student).name_en, studentName_ar: flatRef(r.student).name_ar })),
+    [list.items],
+  );
+  const columns = useMemo<ColumnDef<RedemptionRow>[]>(
+    () => [
+      {
+        id: 'student',
+        enableSorting: false,
+        accessorFn: (r) => r.studentName_en,
+        header: t('common.student'),
+        cell: ({ row }) => (
+          <div>
+            <div className="font-medium text-ink">{L(row.original, 'studentName')}</div>
+            <div className="text-[11px] text-muted num" dir="ltr">
+              {row.original.student.mobile}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'ref',
+        enableSorting: false,
+        accessorKey: 'ref',
+        header: t('payments.ref'),
+        cell: ({ row }) => (
+          <a href={`/payments/transactions/${row.original.paymentId}`} className="font-mono text-xs font-semibold text-primary hover:text-accent hover:underline" dir="ltr">
+            {row.original.ref}
+          </a>
+        ),
+      },
+      { id: 'discount', enableSorting: false, accessorKey: 'discount', header: t('packages.promo.discount'), meta: { align: 'end' }, cell: ({ row }) => fmtMoney(row.original.discount) },
+      { id: 'at', enableSorting: false, accessorKey: 'at', header: t('common.date'), cell: ({ row }) => <span className="whitespace-nowrap text-xs text-muted num">{fmtDateTime(row.original.at)}</span> },
+    ],
+    [t, L],
+  );
+  return (
+    <Modal open onClose={onClose} size="lg" title={t('packages.promo.redemptionsTitle', { code: promo.code })} description={t('packages.promo.redemptionsSub', { used: promo.used, limit: promo.usageLimit })}>
+      <DataTable
+        bare
+        hideSearch
+        data={rows}
+        columns={columns}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={list.refetch}
+        server={list.server}
+        pageSize={10}
+        maxHeight="50vh"
+        emptyTitle={t('packages.promo.noRedemptions')}
+        emptyHint={t('packages.promo.noRedemptionsHint')}
+      />
+    </Modal>
   );
 }

@@ -5,6 +5,22 @@ import { Checkbox } from '@/components/ui/Switch';
 
 export const TOTAL_PERMISSIONS = MODULES.length * ACTIONS.length;
 
+/** Build a permission matrix from a compact spec: module → allowed actions ('*' = all). */
+export function matrix(spec: Partial<Record<ModuleKey, PermAction[] | '*'>>): PermissionMatrix {
+  return Object.fromEntries(
+    MODULES.map((m) => {
+      const allowed = spec[m];
+      return [m, Object.fromEntries(ACTIONS.map((a) => [a, allowed === '*' || (allowed?.includes(a) ?? false)]))];
+    }),
+  ) as PermissionMatrix;
+}
+
+export const emptyMatrix = () => matrix({});
+
+/** Fill missing modules/actions (server matrices may omit keys) so the grid never reads undefined. */
+export const normalizeMatrix = (m: Partial<PermissionMatrix> | null | undefined): PermissionMatrix =>
+  Object.fromEntries(MODULES.map((mod) => [mod, Object.fromEntries(ACTIONS.map((a) => [a, !!m?.[mod]?.[a]]))])) as PermissionMatrix;
+
 export const countGranted = (m: PermissionMatrix) =>
   MODULES.reduce((s, mod) => s + ACTIONS.filter((a) => m[mod]?.[a]).length, 0);
 
@@ -15,8 +31,7 @@ export function diffPermissions(a: PermissionMatrix, b: PermissionMatrix) {
   return out;
 }
 
-export const cloneMatrix = (m: PermissionMatrix): PermissionMatrix =>
-  Object.fromEntries(MODULES.map((mod) => [mod, { ...m[mod] }])) as PermissionMatrix;
+export const cloneMatrix = (m: PermissionMatrix): PermissionMatrix => normalizeMatrix(m);
 
 /** Apply a cell change while keeping "view" implied by any other granted action. */
 export function setPermission(m: PermissionMatrix, mod: ModuleKey, act: PermAction, value: boolean): PermissionMatrix {

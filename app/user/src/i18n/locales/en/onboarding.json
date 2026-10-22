@@ -1,7 +1,7 @@
 {
   "skip": "Skip",
   "next": "Next",
-  "getStarted": "Get Started",
+  "getStarted": "Get started",
   "haveAccount": "I already have an account",
   "a11y": {
     "skip": "Skip the introduction",
@@ -10,71 +10,36 @@
     "next": "Go to the next slide",
     "language": "Change app language",
     "english": "Switch to English",
-    "arabic": "Switch to Arabic",
-    "lessonPreview": "Video lesson preview",
-    "chatPreview": "AI tutor conversation preview",
-    "quizPreview": "Practice question preview"
+    "arabic": "Switch to Arabic"
   },
   "slide1": {
-    "eyebrow": "Premium video lessons",
-    "title": "Learn from the best",
-    "subtitle": "Iraq's top teachers explain every ministerial topic in crisp HD lessons you can replay anytime.",
-    "lessonTag": "Lesson 3 · Complex numbers",
-    "nowPlaying": "Now playing",
-    "rating": "4.9",
-    "learners": "12k students",
-    "hd": "HD"
+    "overline": "01 — LEARN",
+    "title": "Learn from Iraq's\n*finest* teachers",
+    "subtitle": "Crystal-clear HD lessons for every ministerial topic. Replay them anytime."
   },
   "slide2": {
-    "eyebrow": "Smart practice",
-    "title": "Practice. Fix mistakes. Master.",
-    "subtitle": "Thousands of ministerial-style questions. Every mistake is saved so you can retry it until it sticks.",
-    "questionLabel": "Question 12 of 40",
-    "question": "If z = 3 + 4i, what is |z| ?",
-    "option1": "5",
-    "option2": "7",
-    "option3": "25",
-    "option4": "√7",
-    "correct": "Correct! Well done",
-    "mistakeTag": "Mistake",
-    "mistake1": "Integration by parts",
-    "mistake2": "Ohm's law in series",
-    "retry": "Retry",
-    "chips": {
-      "bank": "Question Bank",
-      "mistakes": "My Mistakes",
-      "exam": "Exam Simulator"
-    }
+    "overline": "02 — PRACTICE",
+    "title": "Fix every mistake.\n*Master* the exam.",
+    "subtitle": "Thousands of ministerial-style questions, and a mistake log that turns weak spots into strengths."
   },
   "slide3": {
-    "eyebrow": "Always by your side",
-    "title": "Your AI Tutor, 24/7",
-    "subtitle": "Stuck at midnight? Ask in Arabic or English and get clear, step-by-step answers in seconds.",
-    "tutorName": "EDUWAY Tutor",
-    "online": "Online now",
-    "allowance": "{{used}} / {{total}}",
-    "allowanceLabel": "AI questions remaining this month",
-    "studentMessage": "Why does a heavier object need more force to speed up?",
-    "replyIntro": "Great question! Newton's second law connects them:",
-    "formula": "F = m · a",
-    "replyOutro": "Double the mass, and you need double the force for the same acceleration.",
-    "inputPlaceholder": "Ask anything…"
+    "overline": "03 — ASK",
+    "title": "Your personal\n*AI tutor*, 24/7",
+    "subtitle": "Stuck at midnight? Ask in Arabic or English and get clear, step-by-step answers in seconds."
   },
   "welcome": {
     "eyebrow": "6th Scientific · Iraq",
-    "title": "Your path to the top grade starts here",
-    "tagline": "Elite lessons, smart practice and an AI tutor — everything you need for the ministerial exam.",
+    "title": "Your path to\nthe *top grade*",
+    "tagline": "Elite lessons, smart practice and a 24/7 AI tutor. Everything you need, in one place.",
     "login": "Log in",
     "createAccount": "Create account",
     "trust": "Trusted by 40,000+ students across Iraq",
-    "rating": "4.9 average rating",
-    "badge": "Ministerial exam ready",
-    "subjects": "5 core subjects",
+    "rating": "4.9",
     "legalPrefix": "By continuing, you agree to our",
     "terms": "Terms of Service",
-    "and": "and",
     "privacy": "Privacy Policy",
     "langEn": "EN",
-    "langAr": "ع"
+    "langAr": "ع",
+    "trustCount": "Trusted by {{students}} students across Iraq"
   }
 }

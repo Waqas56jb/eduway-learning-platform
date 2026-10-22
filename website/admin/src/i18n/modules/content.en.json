@@ -18,7 +18,10 @@
     "deleteBlocked": "Remove this subject's units and lessons before deleting it.",
     "manageUnits": "Units & topics",
     "viewLessons": "Lessons",
-    "unitsLabel": "Units"
+    "unitsLabel": "Units",
+    "slug": "Slug",
+    "slugHint": "Stable key used in links and the apps, e.g. math",
+    "slugInvalid": "Use 2–31 lowercase letters, numbers or dashes, starting with a letter"
   },
   "units": {
     "title": "Units & Topics",
@@ -140,7 +143,10 @@
       "teacher": "Choose a teacher",
       "threshold": "Between 10% and 100%",
       "duration": "Enter a duration"
-    }
+    },
+    "videoAfterCreate": "Uploaded — processing starts when the lesson is created.",
+    "videoNotReady": "The video must finish processing before the lesson can be published.",
+    "pages": "pages"
   },
   "videos": {
     "title": "Video Library",
@@ -166,7 +172,8 @@
     "totalViews": "Total views",
     "readyAssets": "Ready to stream",
     "issues": "Needs attention",
-    "bulkResync": "Re-sync selected"
+    "bulkResync": "Re-sync selected",
+    "bulkResynced": "CDN re-sync queued for {{count}} assets"
   },
   "workflow": {
     "title": "Content Workflow",

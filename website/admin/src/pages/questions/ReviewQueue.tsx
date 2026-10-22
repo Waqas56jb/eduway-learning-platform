@@ -6,26 +6,25 @@ import toast from 'react-hot-toast';
 import type { Lang } from '@/types';
 import { cn } from '@/utils/cn';
 import { fmtNumber, fmtRelative } from '@/utils/format';
-import { useQuestions } from '@/store/questions';
-import { useAdminUsers, useSubjects, useTopics } from '@/store/core';
-import { useCan, useCurrentAdmin } from '@/store/auth';
-import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCan } from '@/store/auth';
+import { useLang, useLocalize } from '@/hooks/useLocale';
+import { errorMessage } from '@/api/client';
+import { useApiQuery } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { questionsApi, type QuestionVM } from '@/api/questions';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar, Badge, Button, Card, CardBody, CardHeader, EmptyState, Field, FilterSelect, Segmented, Skeleton, StatCard, Textarea } from '@/components/ui';
-import { DifficultyBadge, QuestionPreview, QuestionText, findSimilar } from '@/components/forms/QuestionForm';
+import { DifficultyBadge, QuestionPreview, QuestionText } from '@/components/forms/QuestionForm';
 
 export default function ReviewQueue() {
   const { t } = useTranslation();
   const L = useLocalize();
   const can = useCan();
-  const admin = useCurrentAdmin();
-  const loading = useMockLoading();
-  const all = useQuestions((s) => s.items);
-  const update = useQuestions((s) => s.update);
-  const subjects = useSubjects((s) => s.items);
-  const topics = useTopics((s) => s.items);
-  const admins = useAdminUsers((s) => s.items);
+  const uiLang = useLang();
+  const qc = useQueryClient();
+  const subjects = useLookups().subjects;
   const canApprove = can('questions', 'approve');
 
   const [subject, setSubject] = useState('');
@@ -35,24 +34,27 @@ export default function ReviewQueue() {
   const [lang, setLang] = useState<Lang>('en');
   const [session, setSession] = useState({ approved: 0, rejected: 0 });
   const listRef = useRef<HTMLUListElement>(null);
+  const [deciding, setDeciding] = useState(false);
+  const queueKey = qk.questions.sub('review-queue', subject);
+  const queueQ = useApiQuery(queueKey, () => questionsApi.reviewQueue({ subjectId: subject || undefined }));
+  const loading = queueQ.isLoading;
+  const pendingTotal = useApiQuery(qk.questions.sub('stats'), questionsApi.stats).data?.inReview;
 
-  const queue = useMemo(
-    () => all.filter((q) => q.status === 'in_review' && (!subject || q.subjectId === subject)).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)),
-    [all, subject],
-  );
+  const queue = useMemo<QuestionVM[]>(() => [...(queueQ.data?.items ?? [])].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)), [queueQ.data]);
   const current = queue.find((q) => q.id === selectedId) ?? queue[0];
   const currentIdx = current ? queue.indexOf(current) : -1;
-  const duplicateOf = current?.duplicateOf ? all.find((q) => q.id === current.duplicateOf) : current ? findSimilar(current, all)[0]?.q : undefined;
+  const duplicateOf = current?.duplicateOf
+    ? { code: current.duplicateCode ?? '', body_en: current.similar?.body.en ?? '', body_ar: current.similar?.body.ar ?? '' }
+    : current?.similar
+      ? { code: current.similar.code, body_en: current.similar.body.en, body_ar: current.similar.body.ar }
+      : undefined;
 
   useEffect(() => {
     setComment('');
     setCommentError(false);
   }, [current?.id]);
 
-  const nameOf = (id: string | null) => {
-    const a = admins.find((x) => x.id === id);
-    return a ? (L(a, 'name') !== '—' ? L(a, 'name') : a.name) : '—';
-  };
+  const nameOf = (q: QuestionVM) => (q.author ? q.author.name[uiLang] : '—');
 
   const goto = (i: number) => {
     const next = queue[Math.max(0, Math.min(queue.length - 1, i))];
@@ -62,27 +64,32 @@ export default function ReviewQueue() {
     }
   };
 
-  const decide = (approve: boolean) => {
-    if (!current || !canApprove) return;
+  const decide = async (approve: boolean) => {
+    if (!current || !canApprove || deciding) return;
     if (!approve && comment.trim().length < 5) {
       setCommentError(true);
       toast.error(t('questions.review.commentRequired'));
       return;
     }
     const nextId = queue[currentIdx + 1]?.id ?? queue[currentIdx - 1]?.id ?? null;
-    update(
-      current.id,
-      {
-        status: approve ? 'approved' : 'draft',
-        reviewerId: admin?.id ?? 'adm_3',
-        reviewComment: approve ? (comment.trim() || null) : comment.trim(),
-        updatedAt: new Date().toISOString(),
-      },
-      { action: approve ? 'question.approve' : 'question.reject', summary: `${approve ? 'Approved' : 'Rejected'} question ${current.code}${comment.trim() ? ` — ${comment.trim()}` : ''}` },
-    );
-    setSession((s) => (approve ? { ...s, approved: s.approved + 1 } : { ...s, rejected: s.rejected + 1 }));
-    toast.success(approve ? t('questions.toast.approved') : t('questions.toast.rejected'));
-    setSelectedId(nextId);
+    setDeciding(true);
+    try {
+      await questionsApi.transition(current.id, {
+        to: approve ? 'approved' : 'draft',
+        action: approve ? 'approve' : 'reject',
+        comment: comment.trim() || undefined,
+      });
+      // Optimistically drop it from the queue, then resync.
+      qc.setQueryData(queueKey, (old: typeof queueQ.data) => (old ? { ...old, items: old.items.filter((x) => x.id !== current.id) } : old));
+      setSession((s) => (approve ? { ...s, approved: s.approved + 1 } : { ...s, rejected: s.rejected + 1 }));
+      toast.success(approve ? t('questions.toast.approved') : t('questions.toast.rejected'));
+      setSelectedId(nextId);
+      qc.invalidateQueries({ queryKey: qk.questions.all });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setDeciding(false);
+    }
   };
 
   // Keyboard shortcuts: J/K or arrows to move, A approve, R reject (focus comment).
@@ -110,8 +117,6 @@ export default function ReviewQueue() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const subjectOf = (id: string) => subjects.find((s) => s.id === id);
-
   return (
     <>
       <PageHeader title={t('questions.review.title')} subtitle={t('questions.review.subtitle')} />
@@ -123,7 +128,7 @@ export default function ReviewQueue() {
       )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard loading={loading} label={t('questions.review.pending')} value={fmtNumber(all.filter((q) => q.status === 'in_review').length)} icon={<Inbox />} color="#F59E0B" hint={t('questions.review.pendingHint')} />
+        <StatCard loading={loading} label={t('questions.review.pending')} value={fmtNumber(pendingTotal ?? queueQ.data?.meta.total ?? queue.length)} icon={<Inbox />} color="#F59E0B" hint={t('questions.review.pendingHint')} />
         <StatCard loading={loading} label={t('questions.review.approvedSession')} value={fmtNumber(session.approved)} icon={<CheckCircle2 />} color="#16A34A" hint={t('questions.review.thisSession')} />
         <StatCard loading={loading} label={t('questions.review.rejectedSession')} value={fmtNumber(session.rejected)} icon={<XCircle />} color="#DC2626" hint={t('questions.review.thisSession')} />
       </div>
@@ -143,12 +148,14 @@ export default function ReviewQueue() {
                 <Skeleton key={i} className="h-16 w-full rounded-lg" />
               ))}
             </div>
+          ) : queueQ.isError ? (
+            <EmptyState title={t('api.loadFailed')} hint={errorMessage(queueQ.error)} action={<Button size="sm" variant="secondary" onClick={() => queueQ.refetch()}>{t('api.retry')}</Button>} />
           ) : queue.length === 0 ? (
             <EmptyState icon={<ClipboardCheck className="h-12 w-12 text-success" />} title={t('questions.review.emptyTitle')} hint={t('questions.review.emptyHint')} />
           ) : (
             <ul ref={listRef} className="scrollbar-thin flex-1 space-y-1 overflow-y-auto p-2" aria-label={t('questions.review.queue')}>
               {queue.map((q) => {
-                const s = subjectOf(q.subjectId);
+                const s = q.subject;
                 const active = q.id === current?.id;
                 return (
                   <li key={q.id}>
@@ -169,8 +176,8 @@ export default function ReviewQueue() {
                       </span>
                       <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
                         <span className="h-1.5 w-1.5 rounded-full" style={{ background: s?.color }} />
-                        {L(s, 'name')} · {nameOf(q.authorId)}
-                        {q.duplicateOf && (
+                        {s?.name[uiLang]} · {nameOf(q)}
+                        {(q.duplicateOf || q.similar) && (
                           <Badge tone="warning" className="ms-auto">
                             {t('questions.review.dup')}
                           </Badge>
@@ -207,7 +214,7 @@ export default function ReviewQueue() {
                     <Badge tone="navy">{t(`questions.types.${current.type}`)}</Badge>
                   </span>
                 }
-                subtitle={`${L(subjectOf(current.subjectId), 'name')} › ${L(topics.find((tp) => tp.id === current.topicId), 'name')}`}
+                subtitle={`${current.subject?.name[uiLang] ?? ''} › ${current.topic?.name[uiLang] ?? ''}`}
                 action={
                   <>
                     <Segmented size="sm" aria-label={t('common.language')} value={lang} onChange={setLang} options={[{ value: 'en', label: 'EN' }, { value: 'ar', label: 'ع' }]} />
@@ -223,8 +230,8 @@ export default function ReviewQueue() {
                   <div>
                     <dt className="text-muted">{t('questions.fields.author')}</dt>
                     <dd className="mt-1 flex items-center gap-2 font-medium text-ink">
-                      <Avatar name={nameOf(current.authorId)} src={admins.find((a) => a.id === current.authorId)?.avatar} size="xs" />
-                      {nameOf(current.authorId)}
+                      <Avatar name={nameOf(current)} src={current.author?.avatarUrl ?? undefined} size="xs" />
+                      {nameOf(current)}
                     </dd>
                   </div>
                   <div>
@@ -281,10 +288,10 @@ export default function ReviewQueue() {
                   />
                 </Field>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="success" icon={<CheckCircle2 className="h-4 w-4" />} disabled={!canApprove} onClick={() => decide(true)}>
+                  <Button variant="success" loading={deciding} icon={<CheckCircle2 className="h-4 w-4" />} disabled={!canApprove} onClick={() => decide(true)}>
                     {t('actions.approve')} <kbd className="ms-1 rounded bg-white/20 px-1 text-[10px]">A</kbd>
                   </Button>
-                  <Button variant="secondary" icon={<XCircle className="h-4 w-4 text-danger" />} disabled={!canApprove} onClick={() => decide(false)}>
+                  <Button variant="secondary" disabled={!canApprove || deciding} icon={<XCircle className="h-4 w-4 text-danger" />} onClick={() => decide(false)}>
                     {t('actions.reject')}
                   </Button>
                   <span className="ms-auto text-xs text-muted num">{t('questions.review.position', { n: currentIdx + 1, total: queue.length })}</span>

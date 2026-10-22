@@ -1,1 +1,31 @@
-{}
+{
+  "title": "Notifications",
+  "unreadCount_zero": "{{count}} unread",
+  "unreadCount_one": "{{count}} unread",
+  "unreadCount_two": "{{count}} unread",
+  "unreadCount_few": "{{count}} unread",
+  "unreadCount_many": "{{count}} unread",
+  "unreadCount_other": "{{count}} unread",
+  "allCaughtUp": "You're all caught up",
+  "markAll": "Mark all read",
+  "allMarked": "All notifications marked as read",
+  "tabs": {
+    "all": "All",
+    "unread": "Unread"
+  },
+  "today": "Today",
+  "earlier": "Earlier",
+  "delete": "Delete",
+  "deleted": "Notification deleted",
+  "unreadA11y": "Unread",
+  "swipeHint": "Swipe to delete",
+  "swipeTip": "Tip: swipe a notification to delete it",
+  "empty": {
+    "title": "No notifications yet",
+    "message": "Lesson releases, exam reminders and payment receipts will appear here.",
+    "unreadTitle": "You're all caught up",
+    "unreadMessage": "There are no unread notifications right now.",
+    "showAll": "Show all"
+  },
+  "yesterday": "Yesterday"
+}

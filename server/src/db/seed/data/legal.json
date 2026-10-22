@@ -1,0 +1,152 @@
+{
+ "en": {
+  "lastUpdated": "Last updated {{date}}",
+  "effective": "Effective for all EDUWAY accounts",
+  "contents": "Contents",
+  "jumpTo": "Jump to {{section}}",
+  "backToTop": "Back to top",
+  "questionsTitle": "Questions about this document?",
+  "questionsBody": "Write to us at {{email}} and our team will reply within 3 working days.",
+  "terms": {
+   "title": "Terms of Service",
+   "subtitle": "The agreement between you and EDUWAY",
+   "intro": "Welcome to EDUWAY. These Terms govern your use of the EDUWAY mobile app, website and related services (the \"Service\"). By creating an account or using the Service you agree to these Terms. If you are under 18, your parent or legal guardian must review and accept them with you.",
+   "sections": {
+    "accounts": {
+     "title": "1. Your account",
+     "body": "You register using an active Iraqi mobile number, verified with a one-time code. You must provide accurate information about your name, governorate and school, and keep it up to date.\n\n• One account is for one student only. Accounts may not be shared, sold or transferred.\n• You are responsible for all activity on your account and for keeping your verification codes private.\n• Tell us immediately at support@eduway.iq if you suspect unauthorised access."
+    },
+    "subscriptions": {
+     "title": "2. Subscriptions & payments",
+     "body": "Access to lessons, question banks, exam simulations and the AI tutor depends on the package you choose. Prices are shown in Iraqi Dinar (IQD) before you pay and include any applicable fees.\n\n• Monthly and yearly plans start on the day payment is confirmed and end on the date shown in your Subscription screen.\n• Payments are processed by licensed Iraqi payment providers (such as ZainCash, FastPay, Qi Card and AsiaHawala). EDUWAY does not store your full card or wallet credentials.\n• Plans do not renew automatically; we will remind you before your access ends.\n• Fees are non-refundable once content has been accessed, except where required by Iraqi law or where a technical fault on our side prevented access for more than 72 hours."
+    },
+    "devices": {
+     "title": "3. Single-device playback & sharing",
+     "body": "To protect our teachers' work and keep prices affordable, video lessons play on one device at a time.\n\n• Starting a lesson on a new device pauses playback on any other device signed in to your account.\n• You can review and sign out devices at any time from Settings → Active sessions.\n• Screen recording, re-uploading, or sharing lessons, notes or exam questions in groups or channels is strictly prohibited.\n• We may limit or suspend accounts that show patterns of sharing, such as frequent sign-ins from distant locations."
+    },
+    "content": {
+     "title": "4. Content & intellectual property",
+     "body": "All lessons, videos, summaries, questions, explanations, designs and the EDUWAY name and logo are owned by EDUWAY or its teachers and licensors, and are protected by Iraqi and international copyright law.\n\nYour subscription gives you a personal, non-exclusive, non-transferable licence to use the content for your own study during your subscription period. You may not copy, sell, translate, publish or create derivative works from it without our written permission. Notes you write in the app remain yours."
+    },
+    "ai": {
+     "title": "5. AI tutor fair use",
+     "body": "The AI tutor helps you understand concepts and practise problems. It is a learning aid, not a replacement for your teachers or official ministry materials.\n\n• Each package includes a monthly allowance of AI questions, shown on your Profile.\n• Answers are generated automatically and may occasionally contain mistakes; always check important results against your lessons.\n• Do not use the tutor to cheat in official exams, to generate harmful or offensive content, or to submit other people's personal information.\n• We may review anonymised conversations to improve answer quality and may limit usage that is automated or abusive."
+    },
+    "termination": {
+     "title": "6. Suspension & termination",
+     "body": "You may stop using EDUWAY and request deletion of your account at any time by contacting support.\n\nWe may suspend or close an account, without refund of the remaining period, if these Terms are seriously or repeatedly breached — for example account sharing, content piracy, payment fraud or abusive behaviour towards staff or other students. Where reasonable, we will warn you first and give you a chance to respond."
+    },
+    "law": {
+     "title": "7. Governing law",
+     "body": "These Terms are governed by the laws of the Republic of Iraq. Any dispute will first be handled through our support team in good faith; if it cannot be resolved within 30 days, it will be referred to the competent courts in Baghdad.\n\nWe may update these Terms to reflect changes in our service or the law. We will notify you in the app at least 14 days before material changes take effect. Continuing to use EDUWAY after that date means you accept the updated Terms."
+    }
+   }
+  },
+  "privacy": {
+   "title": "Privacy Policy",
+   "subtitle": "How we collect, use and protect your data",
+   "intro": "Your privacy matters to us, especially because most EDUWAY students are under 18. This policy explains what information we collect, why we collect it, and the choices you have. We collect only what we need to teach you well.",
+   "sections": {
+    "collected": {
+     "title": "1. Data we collect",
+     "body": "• Account details: your name, mobile number, governorate, school and profile photo.\n• Learning activity: lessons watched, playback position, quiz and exam answers, scores, mistakes, bookmarks and notes.\n• AI tutor messages and any images you choose to upload to it.\n• Payment records: package, amount, date and a receipt reference from the payment provider — never your full card or wallet PIN.\n• Device information: device model, operating system, app version, approximate location (city level) and sign-in times, used for single-device playback and security."
+    },
+    "use": {
+     "title": "2. How we use your data",
+     "body": "• To provide your lessons, track your progress and personalise practice to your weak topics.\n• To run the AI tutor and improve the accuracy of its answers.\n• To process payments and send receipts and renewal reminders.\n• To protect accounts, enforce single-device playback and prevent content piracy.\n• To send notifications you have enabled, which you can turn off at any time in Settings.\n\nWe never sell your personal data and we do not show third-party advertising in the app."
+    },
+    "storage": {
+     "title": "3. Storage & security",
+     "body": "Your data is stored on secure, encrypted servers and transmitted over HTTPS. Sign-in tokens are kept in your device's secure storage. Access by EDUWAY staff is limited to people who need it to support you.\n\nWe keep your account data while your account is active and for up to 12 months after your last subscription ends, so you can return without losing progress. Payment records are kept for the period required by Iraqi financial regulations."
+    },
+    "minors": {
+     "title": "4. Children, minors & parental consent",
+     "body": "EDUWAY is designed for 6th Scientific students, who are usually 16–18 years old. If you are under 18, you should use EDUWAY with the knowledge and consent of a parent or legal guardian, who is responsible for the subscription.\n\n• Parents may request a copy of their child's data, ask for corrections, or ask us to delete the account.\n• We do not knowingly collect data from children under 13. If we learn that we have, we will delete it promptly.\n• We never use students' data for advertising or share it with schools or third parties without consent, unless required by law."
+    },
+    "rights": {
+     "title": "5. Your rights",
+     "body": "You — or your parent or guardian — can at any time:\n\n• Access the personal data we hold about you and receive a copy.\n• Correct inaccurate details from Edit profile or by contacting support.\n• Delete your account and associated learning history.\n• Withdraw consent for optional notifications.\n• Object to a particular use of your data.\n\nWe respond to requests within 30 days and may need to verify your identity using your registered mobile number."
+    },
+    "contact": {
+     "title": "6. Contact us",
+     "body": "If you have any questions or concerns about this policy or how your data is handled, contact our privacy team:\n\n• Email: privacy@eduway.iq\n• Address: EDUWAY, Al-Karrada, Baghdad, Iraq\n\nWe may update this policy from time to time and will notify you in the app before significant changes take effect."
+    }
+   }
+  }
+ },
+ "ar": {
+  "lastUpdated": "آخر تحديث {{date}}",
+  "effective": "سارية على جميع حسابات EDUWAY",
+  "contents": "المحتويات",
+  "jumpTo": "الانتقال إلى {{section}}",
+  "backToTop": "العودة إلى الأعلى",
+  "questionsTitle": "هل لديك أسئلة حول هذه الوثيقة؟",
+  "questionsBody": "راسلنا على {{email}} وسيرد عليك فريقنا خلال ٣ أيام عمل.",
+  "terms": {
+   "title": "شروط الاستخدام",
+   "subtitle": "الاتفاقية بينك وبين EDUWAY",
+   "intro": "مرحباً بك في EDUWAY. تنظّم هذه الشروط استخدامك لتطبيق EDUWAY وموقعه الإلكتروني والخدمات المرتبطة بهما (\"الخدمة\"). بإنشائك حساباً أو استخدامك للخدمة فإنك توافق على هذه الشروط. إذا كان عمرك أقل من ١٨ عاماً، فيجب أن يطّلع عليها وليّ أمرك ويوافق عليها معك.",
+   "sections": {
+    "accounts": {
+     "title": "١. حسابك",
+     "body": "يتم التسجيل برقم هاتف عراقي فعّال يُتحقق منه برمز لمرة واحدة. يجب أن تقدّم معلومات صحيحة عن اسمك ومحافظتك ومدرستك وأن تحدّثها عند تغيّرها.\n\n• الحساب الواحد مخصص لطالب واحد فقط، ولا يجوز مشاركته أو بيعه أو نقله.\n• أنت مسؤول عن كل نشاط يتم عبر حسابك وعن الحفاظ على سرية رموز التحقق.\n• أبلغنا فوراً على support@eduway.iq إذا شككت بدخول غير مصرّح به إلى حسابك."
+    },
+    "subscriptions": {
+     "title": "٢. الاشتراكات والمدفوعات",
+     "body": "يعتمد وصولك إلى الدروس وبنوك الأسئلة ومحاكاة الامتحانات والمساعد الذكي على الباقة التي تختارها. تُعرض الأسعار بالدينار العراقي قبل الدفع وتشمل أي رسوم مطبّقة.\n\n• تبدأ الباقات الشهرية والسنوية من يوم تأكيد الدفع وتنتهي في التاريخ الظاهر في شاشة الاشتراك.\n• تتم المدفوعات عبر مزوّدي دفع عراقيين مرخّصين (مثل زين كاش وفاست باي وكي كارد وآسيا حوالة)، ولا تحتفظ EDUWAY ببيانات بطاقتك أو محفظتك كاملة.\n• لا تتجدد الباقات تلقائياً، وسنذكّرك قبل انتهاء اشتراكك.\n• الرسوم غير قابلة للاسترداد بعد الوصول إلى المحتوى، إلا إذا اقتضى القانون العراقي ذلك أو منع خلل تقني من جهتنا وصولك لأكثر من ٧٢ ساعة."
+    },
+    "devices": {
+     "title": "٣. التشغيل على جهاز واحد ومنع المشاركة",
+     "body": "حمايةً لجهود أساتذتنا وللحفاظ على أسعار مناسبة، تُعرض دروس الفيديو على جهاز واحد فقط في كل مرة.\n\n• عند بدء درس على جهاز جديد يتوقف التشغيل على أي جهاز آخر مسجّل في حسابك.\n• يمكنك مراجعة الأجهزة وتسجيل خروجها في أي وقت من الإعدادات ← الجلسات النشطة.\n• يُمنع منعاً باتاً تسجيل الشاشة أو إعادة رفع الدروس أو الملخصات أو أسئلة الامتحانات أو مشاركتها في المجموعات والقنوات.\n• قد نقيّد أو نوقف الحسابات التي تظهر عليها أنماط مشاركة، مثل تسجيل الدخول المتكرر من مواقع متباعدة."
+    },
+    "content": {
+     "title": "٤. المحتوى والملكية الفكرية",
+     "body": "جميع الدروس والفيديوهات والملخصات والأسئلة والشروحات والتصاميم واسم EDUWAY وشعارها مملوكة لـ EDUWAY أو لأساتذتها والجهات المرخِّصة لها، ومحمية بموجب قوانين حقوق المؤلف العراقية والدولية.\n\nيمنحك اشتراكك ترخيصاً شخصياً غير حصري وغير قابل للنقل لاستخدام المحتوى في دراستك الخاصة خلال مدة الاشتراك. لا يجوز نسخ المحتوى أو بيعه أو ترجمته أو نشره أو إنتاج أعمال مشتقة منه دون إذن كتابي منا. أما الملاحظات التي تكتبها في التطبيق فتبقى ملكاً لك."
+    },
+    "ai": {
+     "title": "٥. الاستخدام العادل للمساعد الذكي",
+     "body": "يساعدك المساعد الذكي على فهم المفاهيم والتدرّب على المسائل، وهو أداة تعليمية مساندة وليس بديلاً عن أساتذتك أو المناهج الوزارية الرسمية.\n\n• تتضمن كل باقة رصيداً شهرياً من أسئلة الذكاء الاصطناعي يظهر في ملفك الشخصي.\n• تُولَّد الإجابات آلياً وقد تحتوي أحياناً على أخطاء، لذا تحقّق دائماً من النتائج المهمة بالرجوع إلى دروسك.\n• لا تستخدم المساعد للغش في الامتحانات الرسمية أو لإنتاج محتوى مسيء أو ضار أو لإرسال بيانات شخصية لغيرك.\n• قد نراجع محادثات مجهولة الهوية لتحسين جودة الإجابات، وقد نقيّد الاستخدام الآلي أو المسيء."
+    },
+    "termination": {
+     "title": "٦. الإيقاف وإنهاء الحساب",
+     "body": "يمكنك التوقف عن استخدام EDUWAY وطلب حذف حسابك في أي وقت عبر التواصل مع الدعم.\n\nيحق لنا إيقاف الحساب أو إغلاقه دون استرداد المدة المتبقية في حال الإخلال الجسيم أو المتكرر بهذه الشروط، مثل مشاركة الحساب أو قرصنة المحتوى أو الاحتيال في الدفع أو الإساءة إلى الموظفين أو الطلبة الآخرين. وحيثما أمكن، سننبّهك أولاً ونمنحك فرصة للرد."
+    },
+    "law": {
+     "title": "٧. القانون الحاكم",
+     "body": "تخضع هذه الشروط لقوانين جمهورية العراق. يُعالج أي نزاع أولاً بحسن نية عبر فريق الدعم لدينا، وإن تعذّر حلّه خلال ٣٠ يوماً يُحال إلى المحاكم المختصة في بغداد.\n\nقد نحدّث هذه الشروط لتواكب التغييرات في خدماتنا أو في القانون، وسنُعلمك داخل التطبيق قبل ١٤ يوماً على الأقل من سريان أي تغيير جوهري. واستمرارك في استخدام EDUWAY بعد ذلك التاريخ يعني موافقتك على الشروط المحدّثة."
+    }
+   }
+  },
+  "privacy": {
+   "title": "سياسة الخصوصية",
+   "subtitle": "كيف نجمع بياناتك ونستخدمها ونحميها",
+   "intro": "خصوصيتك تهمّنا، خاصةً أن معظم طلبة EDUWAY دون سن ١٨ عاماً. توضّح هذه السياسة المعلومات التي نجمعها وسبب جمعها والخيارات المتاحة لك. نحن نجمع فقط ما نحتاجه لنعلّمك بشكل أفضل.",
+   "sections": {
+    "collected": {
+     "title": "١. البيانات التي نجمعها",
+     "body": "• بيانات الحساب: اسمك ورقم هاتفك ومحافظتك ومدرستك وصورتك الشخصية.\n• نشاطك التعليمي: الدروس التي شاهدتها وموضع التشغيل وإجاباتك في الاختبارات والامتحانات ودرجاتك وأخطاؤك وإشاراتك المرجعية وملاحظاتك.\n• رسائلك إلى المساعد الذكي وأي صور تختار رفعها إليه.\n• سجلات الدفع: الباقة والمبلغ والتاريخ ورقم الإيصال من مزوّد الدفع — ولا نحتفظ أبداً ببيانات بطاقتك كاملة أو الرقم السري لمحفظتك.\n• معلومات الجهاز: طراز الجهاز ونظام التشغيل وإصدار التطبيق والموقع التقريبي (على مستوى المدينة) وأوقات تسجيل الدخول، وذلك لتطبيق التشغيل على جهاز واحد ولأغراض الأمان."
+    },
+    "use": {
+     "title": "٢. كيف نستخدم بياناتك",
+     "body": "• لتقديم دروسك ومتابعة تقدّمك وتخصيص التدريب حسب نقاط ضعفك.\n• لتشغيل المساعد الذكي وتحسين دقة إجاباته.\n• لمعالجة المدفوعات وإرسال الإيصالات وتذكيرات التجديد.\n• لحماية الحسابات وتطبيق التشغيل على جهاز واحد ومنع قرصنة المحتوى.\n• لإرسال الإشعارات التي فعّلتها، ويمكنك إيقافها في أي وقت من الإعدادات.\n\nلا نبيع بياناتك الشخصية أبداً، ولا نعرض إعلانات لجهات خارجية داخل التطبيق."
+    },
+    "storage": {
+     "title": "٣. التخزين والأمان",
+     "body": "تُخزَّن بياناتك على خوادم آمنة ومشفّرة وتُنقل عبر اتصال HTTPS، وتُحفظ رموز تسجيل الدخول في التخزين الآمن لجهازك. ويقتصر وصول موظفي EDUWAY على من يحتاج إليها لمساعدتك.\n\nنحتفظ ببيانات حسابك ما دام حسابك فعّالاً ولمدة تصل إلى ١٢ شهراً بعد انتهاء آخر اشتراك، لتتمكن من العودة دون فقدان تقدّمك. أما سجلات الدفع فنحتفظ بها للمدة التي تفرضها الأنظمة المالية العراقية."
+    },
+    "minors": {
+     "title": "٤. القاصرون وموافقة وليّ الأمر",
+     "body": "صُمّم EDUWAY لطلبة السادس العلمي الذين تتراوح أعمارهم عادةً بين ١٦ و١٨ عاماً. إذا كان عمرك أقل من ١٨ عاماً، فينبغي أن تستخدم التطبيق بعلم وموافقة أحد والديك أو وليّ أمرك، وهو المسؤول عن الاشتراك.\n\n• يحق لأولياء الأمور طلب نسخة من بيانات أبنائهم أو تصحيحها أو حذف الحساب.\n• لا نجمع عن قصد بيانات أطفال دون سن ١٣ عاماً، وإن تبيّن لنا ذلك نحذفها فوراً.\n• لا نستخدم بيانات الطلبة لأغراض إعلانية ولا نشاركها مع المدارس أو أي جهة أخرى دون موافقة، إلا إذا ألزمنا القانون بذلك."
+    },
+    "rights": {
+     "title": "٥. حقوقك",
+     "body": "يحق لك — أو لوليّ أمرك — في أي وقت:\n\n• الاطلاع على بياناتك الشخصية التي نحتفظ بها والحصول على نسخة منها.\n• تصحيح البيانات غير الدقيقة من شاشة تعديل الملف الشخصي أو عبر الدعم.\n• حذف حسابك وسجلّك التعليمي المرتبط به.\n• سحب موافقتك على الإشعارات الاختيارية.\n• الاعتراض على أي استخدام معيّن لبياناتك.\n\nنرد على الطلبات خلال ٣٠ يوماً، وقد نحتاج إلى التحقق من هويتك عبر رقم هاتفك المسجّل."
+    },
+    "contact": {
+     "title": "٦. تواصل معنا",
+     "body": "إذا كانت لديك أي أسئلة أو مخاوف بشأن هذه السياسة أو طريقة التعامل مع بياناتك، تواصل مع فريق الخصوصية:\n\n• البريد الإلكتروني: privacy@eduway.iq\n• العنوان: EDUWAY، الكرادة، بغداد، العراق\n\nقد نحدّث هذه السياسة من وقت لآخر، وسنُعلمك داخل التطبيق قبل سريان أي تغييرات جوهرية."
+    }
+   }
+  }
+ }
+}

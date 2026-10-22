@@ -3,9 +3,9 @@ import { SearchX } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CourseCard } from '@/components/student/CourseCard';
-import { useSubjectAccess } from '@/components/student/lesson/access';
-import { Button, EmptyState, PageHeader, ProgressRing, Seo, SkeletonCard, useMockLoading } from '@/components/ui';
-import { subjects } from '@/data';
+import { useSubjects } from '@/api/catalog';
+import type { SubjectSummary } from '@/api/types';
+import { Button, EmptyState, ErrorState, PageHeader, ProgressRing, Seo, SkeletonCard } from '@/components/ui';
 import { useProgress } from '@/hooks/useProgress';
 import { cn } from '@/lib/utils';
 
@@ -14,13 +14,15 @@ const FILTERS: Filter[] = ['all', 'progress', 'completed'];
 
 export default function Subjects() {
   const { t } = useTranslation();
-  const ready = useMockLoading();
-  const { bySubject, overallPct, completedLessons, totalLessons } = useProgress();
-  const { isUnlocked } = useSubjectAccess();
+  // CAT-01 (authenticated: includes `locked` + `progress`), PRG-06 for the overall ring.
+  const { data: subjects = [], isLoading, isError, refetch } = useSubjects();
+  const { overallPct, completedLessons, totalLessons } = useProgress();
+  const ready = !isLoading;
   const [filter, setFilter] = useState<Filter>('all');
+  const progressOf = (s: SubjectSummary) => s.progress ?? { completed: 0, total: s.lessonsCount, pct: 0, avgPct: 0 };
 
   const visible = subjects.filter((s) => {
-    const p = bySubject[s.id].pct;
+    const p = progressOf(s).pct;
     if (filter === 'progress') return p > 0 && p < 100;
     if (filter === 'completed') return p >= 100;
     return true;
@@ -28,8 +30,8 @@ export default function Subjects() {
 
   const counts: Record<Filter, number> = {
     all: subjects.length,
-    progress: subjects.filter((s) => bySubject[s.id].pct > 0 && bySubject[s.id].pct < 100).length,
-    completed: subjects.filter((s) => bySubject[s.id].pct >= 100).length,
+    progress: subjects.filter((s) => progressOf(s).pct > 0 && progressOf(s).pct < 100).length,
+    completed: subjects.filter((s) => progressOf(s).pct >= 100).length,
   };
 
   return (
@@ -75,7 +77,9 @@ export default function Subjects() {
         ))}
       </div>
 
-      {!ready ? (
+      {isError ? (
+        <ErrorState onRetry={() => void refetch()} />
+      ) : !ready ? (
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonCard key={i} lines={3} />
@@ -102,7 +106,7 @@ export default function Subjects() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
             >
-              <CourseCard subject={s} progress={bySubject[s.id]} locked={!isUnlocked(s.id)} />
+              <CourseCard subject={s} progress={progressOf(s)} locked={!!s.locked} />
             </motion.li>
           ))}
         </motion.ul>

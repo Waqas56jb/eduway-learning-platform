@@ -1,5 +1,6 @@
 import { memo, useEffect } from 'react';
-import { I18nManager, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { isRTL } from '@/utils/rtl';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { gradients, useTheme } from '@/theme';
@@ -47,7 +48,7 @@ export const ProgressBar = memo(function ProgressBar({
 
   const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }));
   const useGradient = gradient && !color;
-  const rtl = I18nManager.isRTL;
+  const rtl = isRTL();
 
   return (
     <View

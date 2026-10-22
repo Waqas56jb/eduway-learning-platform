@@ -14,13 +14,13 @@ import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, FolderTree, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Topic, Unit } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/utils/cn';
-import { uid } from '@/utils/id';
-import { useLessons, useSubjects, useTopics, useUnits } from '@/store/core';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { errorMessage, isApiError, toastError } from '@/api/client';
+import { qk } from '@/api/keys';
+import { curriculumKeys, topicsApi, unitsApi, useSubjectsQuery, useUnitsQuery, type TopicVM, type UnitVM } from '@/api/content';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Button, EmptyState, Field, Input, Modal, Skeleton, Tabs, useConfirm } from '@/components/ui';
 
@@ -90,6 +90,8 @@ interface NameModalState {
 
 function NameModal({ state, onClose }: { state: NameModalState | null; onClose: () => void }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
   const [en, setEn] = useState('');
   const [ar, setAr] = useState('');
   const [touched, setTouched] = useState(false);
@@ -101,26 +103,27 @@ function NameModal({ state, onClose }: { state: NameModalState | null; onClose: 
     }
   }, [state]);
 
-  const save = () => {
+  const save = async () => {
     setTouched(true);
-    if (!state || en.trim().length < 2 || ar.trim().length < 2) return;
-    if (state.kind === 'unit') {
-      const st = useUnits.getState();
-      if (state.id) st.update(state.id, { name_en: en.trim(), name_ar: ar.trim() });
-      else {
-        const order = st.items.filter((u) => u.subjectId === state.parentId).length + 1;
-        st.add({ id: uid('unit'), subjectId: state.parentId, name_en: en.trim(), name_ar: ar.trim(), order });
+    if (!state || en.trim().length < 2 || ar.trim().length < 2 || saving) return;
+    const name = { en: en.trim(), ar: ar.trim() };
+    setSaving(true);
+    try {
+      if (state.kind === 'unit') {
+        if (state.id) await unitsApi.update(state.id, name);
+        else await unitsApi.create(state.parentId, name);
+      } else {
+        if (state.id) await topicsApi.update(state.id, name);
+        else await topicsApi.create(state.parentId, name);
       }
-    } else {
-      const st = useTopics.getState();
-      if (state.id) st.update(state.id, { name_en: en.trim(), name_ar: ar.trim() });
-      else {
-        const order = st.items.filter((x) => x.unitId === state.parentId).length + 1;
-        st.add({ id: uid('topic'), unitId: state.parentId, name_en: en.trim(), name_ar: ar.trim(), order });
-      }
+      await Promise.all(curriculumKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+      toast.success(state.id ? t('toast.updated', { entity: en.trim() }) : t('toast.created', { entity: en.trim() }));
+      onClose();
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setSaving(false);
     }
-    toast.success(state.id ? t('toast.updated', { entity: en.trim() }) : t('toast.created', { entity: en.trim() }));
-    onClose();
   };
 
   const title = state
@@ -140,7 +143,7 @@ function NameModal({ state, onClose }: { state: NameModalState | null; onClose: 
           <Button variant="secondary" onClick={onClose}>
             {t('actions.cancel')}
           </Button>
-          <Button onClick={save}>{state?.id ? t('actions.saveChanges') : t('actions.create')}</Button>
+          <Button onClick={save} loading={saving}>{state?.id ? t('actions.saveChanges') : t('actions.create')}</Button>
         </>
       }
     >
@@ -165,10 +168,10 @@ function NameModal({ state, onClose }: { state: NameModalState | null; onClose: 
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
-/** Reassign 1..n order within a group and write the full list back to the store. */
+/** Reassign 1..n order within a group (optimistic, before the server confirms). */
 function applyOrder<T extends { id: string; order: number }>(all: T[], groupIds: string[]): T[] {
   const pos = new Map(groupIds.map((id, i) => [id, i + 1]));
-  return all.map((x) => (pos.has(x.id) ? { ...x, order: pos.get(x.id)! } : x));
+  return all.map((x) => (pos.has(x.id) ? { ...x, order: pos.get(x.id)! } : x)).sort((a, b) => a.order - b.order);
 }
 
 export default function Units() {
@@ -177,82 +180,108 @@ export default function Units() {
   const can = useCan();
   const confirm = useConfirm();
   const location = useLocation();
-  const loading = useMockLoading();
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
-  const topics = useTopics((s) => s.items);
-  const lessons = useLessons((s) => s.items);
+  const qc = useQueryClient();
+  const subjectsQ = useSubjectsQuery();
+  const subjects = useMemo(() => subjectsQ.data ?? [], [subjectsQ.data]);
   const editable = can('content', 'edit');
 
   const sortedSubjects = useMemo(() => [...subjects].sort((a, b) => a.order - b.order), [subjects]);
   const initialSubject = (location.state as { subjectId?: string } | null)?.subjectId;
-  const [subjectId, setSubjectId] = useState(initialSubject ?? sortedSubjects[0]?.id ?? '');
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(units.map((u) => u.id)));
+  const [picked, setSubjectId] = useState(initialSubject ?? '');
+  const subjectId = picked || sortedSubjects[0]?.id || '';
+  const unitsQ = useUnitsQuery(subjectId);
+  const unitsKey = qk.units.list({ subjectId });
+  const subjectUnits = useMemo(() => unitsQ.data ?? [], [unitsQ.data]);
+  const loading = subjectsQ.isLoading || (!!subjectId && unitsQ.isLoading);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const seen = useMemo(() => new Set<string>(), []);
+  useEffect(() => {
+    // Expand newly loaded units by default.
+    const fresh = subjectUnits.filter((u) => !seen.has(u.id));
+    if (!fresh.length) return;
+    fresh.forEach((u) => seen.add(u.id));
+    setExpanded((e) => new Set([...e, ...fresh.map((u) => u.id)]));
+  }, [subjectUnits, seen]);
   const [modal, setModal] = useState<NameModalState | null>(null);
 
   const subject = subjects.find((s) => s.id === subjectId);
-  const subjectUnits = useMemo(() => units.filter((u) => u.subjectId === subjectId).sort((a, b) => a.order - b.order), [units, subjectId]);
-  const topicsOf = (unitId: string) => topics.filter((x) => x.unitId === unitId).sort((a, b) => a.order - b.order);
-  const lessonCount = (pred: (l: (typeof lessons)[number]) => boolean) => lessons.filter(pred).length;
+  const topicsOf = (unitId: string): TopicVM[] => subjectUnits.find((u) => u.id === unitId)?.topics ?? [];
+
+  const refresh = () => Promise.all(curriculumKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+  /** Optimistically write the new unit list into the cache; roll back on failure. */
+  const optimistic = async (next: UnitVM[], call: () => Promise<unknown>) => {
+    const prev = qc.getQueryData<UnitVM[]>(unitsKey);
+    qc.setQueryData(unitsKey, next);
+    try {
+      await call();
+      toast.success(t('content.units.reordered'));
+    } catch (e) {
+      qc.setQueryData(unitsKey, prev);
+      toastError(e);
+    } finally {
+      refresh();
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const reorderUnits = (ids: string[], movedName: string) => {
-    useUnits.getState().setItems(applyOrder(useUnits.getState().items, ids), { action: 'unit.reorder', summary: `Reordered units in ${subject?.name_en} (moved “${movedName}”)` });
-    toast.success(t('content.units.reordered'));
-  };
-  const reorderTopics = (unit: Unit, ids: string[], movedName: string) => {
-    useTopics.getState().setItems(applyOrder(useTopics.getState().items, ids), { action: 'topic.reorder', summary: `Reordered topics in unit “${unit.name_en}” (moved “${movedName}”)` });
-    toast.success(t('content.units.reordered'));
-  };
+  const reorderUnits = (ids: string[], movedId: string) =>
+    optimistic(applyOrder(subjectUnits, ids), () => unitsApi.reorder(subjectId, ids, movedId));
+  const reorderTopics = (unit: UnitVM, ids: string[], movedId: string) =>
+    optimistic(
+      subjectUnits.map((u) => (u.id === unit.id ? { ...u, topics: applyOrder(u.topics, ids) } : u)),
+      () => topicsApi.reorder(unit.id, ids, movedId),
+    );
 
   const onUnitDragEnd = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
     const ids = subjectUnits.map((u) => u.id);
     const next = arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id)));
-    reorderUnits(next, subjectUnits.find((u) => u.id === e.active.id)?.name_en ?? '');
+    reorderUnits(next, String(e.active.id));
   };
 
-  const moveUnitTo = (u: Unit, pos: number) => {
+  const moveUnitTo = (u: UnitVM, pos: number) => {
     const ids = subjectUnits.map((x) => x.id);
-    reorderUnits(arrayMove(ids, ids.indexOf(u.id), pos - 1), u.name_en);
+    reorderUnits(arrayMove(ids, ids.indexOf(u.id), pos - 1), u.id);
   };
-  const moveTopicTo = (unit: Unit, topic: Topic, pos: number) => {
+  const moveTopicTo = (unit: UnitVM, topic: TopicVM, pos: number) => {
     const ids = topicsOf(unit.id).map((x) => x.id);
-    reorderTopics(unit, arrayMove(ids, ids.indexOf(topic.id), pos - 1), topic.name_en);
+    reorderTopics(unit, arrayMove(ids, ids.indexOf(topic.id), pos - 1), topic.id);
   };
 
-  const deleteUnit = async (u: Unit) => {
-    const n = lessonCount((l) => l.unitId === u.id);
-    if (n) {
-      toast.error(t('content.units.deleteBlocked', { count: n }));
+  const remove = async (call: () => Promise<unknown>, name: string) => {
+    try {
+      await call();
+      toast.success(t('toast.deleted', { entity: name }));
+    } catch (e) {
+      const count = isApiError(e) ? Number(e.details.count ?? 0) : 0;
+      toast.error(isApiError(e) && e.reason === 'HAS_DEPENDENTS' ? t('content.units.deleteBlocked', { count }) : errorMessage(e));
+    } finally {
+      refresh();
+    }
+  };
+
+  const deleteUnit = async (u: UnitVM) => {
+    if (u.lessonCount) {
+      toast.error(t('content.units.deleteBlocked', { count: u.lessonCount }));
       return;
     }
     const ok = await confirm({ title: t('confirm.deleteTitle', { entity: L(u, 'name') }), body: t('content.units.deleteUnitBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    const tIds = topicsOf(u.id).map((x) => x.id);
-    if (tIds.length) useTopics.getState().removeMany(tIds, { silent: true });
-    useUnits.getState().remove(u.id);
-    const remaining = subjectUnits.filter((x) => x.id !== u.id).map((x) => x.id);
-    useUnits.getState().setItems(applyOrder(useUnits.getState().items, remaining));
-    toast.success(t('toast.deleted', { entity: L(u, 'name') }));
+    remove(() => unitsApi.remove(u.id), L(u, 'name'));
   };
 
-  const deleteTopic = async (unit: Unit, tp: Topic) => {
-    const n = lessonCount((l) => l.topicId === tp.id);
-    if (n) {
-      toast.error(t('content.units.deleteBlocked', { count: n }));
+  const deleteTopic = async (_unit: UnitVM, tp: TopicVM) => {
+    if (tp.lessonCount) {
+      toast.error(t('content.units.deleteBlocked', { count: tp.lessonCount }));
       return;
     }
     const ok = await confirm({ title: t('confirm.deleteTitle', { entity: L(tp, 'name') }), body: t('confirm.deleteBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    useTopics.getState().remove(tp.id);
-    const remaining = topicsOf(unit.id).filter((x) => x.id !== tp.id).map((x) => x.id);
-    useTopics.getState().setItems(applyOrder(useTopics.getState().items, remaining));
-    toast.success(t('toast.deleted', { entity: L(tp, 'name') }));
+    remove(() => topicsApi.remove(tp.id), L(tp, 'name'));
   };
 
   const toggle = (id: string) =>
@@ -290,7 +319,7 @@ export default function Units() {
                   {L(s, 'name')}
                 </span>
               ),
-              count: units.filter((u) => u.subjectId === s.id).length,
+              count: s.id === subjectId ? subjectUnits.length : s.stats.units,
             }))}
             value={subjectId}
             onChange={setSubjectId}
@@ -298,7 +327,7 @@ export default function Units() {
           />
           {subjectUnits.length > 0 && (
             <button
-              onClick={() => setExpanded(allOpen ? new Set() : new Set(units.map((u) => u.id)))}
+              onClick={() => setExpanded(allOpen ? new Set() : new Set(subjectUnits.map((u) => u.id)))}
               className="mb-3 text-xs font-medium text-muted transition hover:text-accent"
             >
               {allOpen ? t('content.units.collapseAll') : t('content.units.expandAll')}
@@ -312,6 +341,8 @@ export default function Units() {
                 <Skeleton key={i} className="h-28 rounded-xl" />
               ))}
             </div>
+          ) : unitsQ.isError ? (
+            <EmptyState title={t('api.loadFailed')} hint={errorMessage(unitsQ.error)} action={<Button size="sm" variant="secondary" onClick={() => unitsQ.refetch()}>{t('api.retry')}</Button>} />
           ) : subjectUnits.length === 0 ? (
             <EmptyState
               icon={<FolderTree className="h-10 w-10 text-accent" />}
@@ -350,7 +381,7 @@ export default function Units() {
                               </button>
                               <div className="hidden items-center gap-1.5 sm:flex">
                                 <Badge tone="navy">{t('content.units.topics', { count: ts.length })}</Badge>
-                                <Badge tone="neutral">{t('content.units.lessons', { count: lessonCount((l) => l.unitId === u.id) })}</Badge>
+                                <Badge tone="neutral">{t('content.units.lessons', { count: u.lessonCount })}</Badge>
                               </div>
                               {editable && (
                                 <Button variant="ghost" size="icon-sm" aria-label={t('content.units.editUnit')} onClick={() => setModal({ kind: 'unit', id: u.id, parentId: u.subjectId, name_en: u.name_en, name_ar: u.name_ar })}>
@@ -374,7 +405,7 @@ export default function Units() {
                                     onDragEnd={(e) => {
                                       if (!e.over || e.active.id === e.over.id) return;
                                       const ids = ts.map((x) => x.id);
-                                      reorderTopics(u, arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id))), ts.find((x) => x.id === e.active.id)?.name_en ?? '');
+                                      reorderTopics(u, arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id))), String(e.active.id));
                                     }}
                                   >
                                     <SortableContext items={ts.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -388,7 +419,7 @@ export default function Units() {
                                                 <span className="min-w-0 flex-1">
                                                   <span className="block truncate text-sm text-ink">{L(tp, 'name')}</span>
                                                 </span>
-                                                <span className="hidden text-xs text-muted num sm:inline">{t('content.units.lessons', { count: lessonCount((l) => l.topicId === tp.id) })}</span>
+                                                <span className="hidden text-xs text-muted num sm:inline">{t('content.units.lessons', { count: tp.lessonCount })}</span>
                                                 {editable && (
                                                   <Button variant="ghost" size="icon-sm" aria-label={t('content.units.editTopic')} onClick={() => setModal({ kind: 'topic', id: tp.id, parentId: tp.unitId, name_en: tp.name_en, name_ar: tp.name_ar })}>
                                                     <Pencil className="h-3.5 w-3.5" />

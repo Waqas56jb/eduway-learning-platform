@@ -14,8 +14,8 @@ import { PressableScale, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { palette, radius, space, useTheme } from '@/theme';
 
-/** "Saved ✓" pill that flashes each time `pulseKey` changes. */
-export const SavedIndicator = memo(function SavedIndicator({ pulseKey }: { pulseKey: number }) {
+/** "Saved ✓" pill that flashes each time `pulseKey` changes ("Saving…" while an upload is in flight). */
+export const SavedIndicator = memo(function SavedIndicator({ pulseKey, saving = false }: { pulseKey: number; saving?: boolean }) {
   const { colors } = useTheme();
   const { t } = useI18n('exams');
   const opacity = useSharedValue(0.55);
@@ -33,17 +33,17 @@ export const SavedIndicator = memo(function SavedIndicator({ pulseKey }: { pulse
     <Animated.View
       style={[styles.saved, { backgroundColor: colors.successSoft }, style]}
       accessibilityLiveRegion="polite"
-      accessibilityLabel={t('room.saved')}
+      accessibilityLabel={saving ? t('room.saving') : t('room.saved')}
     >
-      <Icon name="check" size={12} color={colors.success} strokeWidth={2.5} />
+      <Icon name={saving ? 'refresh' : 'check'} size={12} color={colors.success} strokeWidth={2.5} />
       <Text variant="caption" color={colors.success}>
-        {t('room.saved')}
+        {saving ? t('room.saving') : t('room.saved')}
       </Text>
     </Animated.View>
   );
 });
 
-/** Slim top banner shown while the (simulated) connection is down. */
+/** Slim top banner shown while the connection is down (answers keep queueing locally). */
 export function OfflineBanner() {
   const { t } = useI18n('exams');
   return (

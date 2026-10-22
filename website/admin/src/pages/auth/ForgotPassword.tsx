@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Input';
 import { AuthShell } from './AuthShell';
+import { authApi } from '@/api/auth';
+import { toastError } from '@/api/client';
 
 export default function ForgotPassword() {
   const { t } = useTranslation();
@@ -37,8 +39,12 @@ export default function ForgotPassword() {
             className="mt-6 space-y-4"
             noValidate
             onSubmit={handleSubmit(async (v) => {
-              await new Promise((r) => setTimeout(r, 700));
-              setSentTo(v.email);
+              try {
+                await authApi.forgotPassword(v.email.trim());
+                setSentTo(v.email.trim());
+              } catch (e) {
+                toastError(e);
+              }
             })}
           >
             <Field label={t('auth.email')} error={errors.email?.message} htmlFor="fp-email">

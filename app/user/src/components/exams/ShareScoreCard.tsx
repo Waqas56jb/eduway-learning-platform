@@ -1,5 +1,5 @@
-import { forwardRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { forwardRef, type ComponentRef } from 'react';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Logo } from '@/components/icons';
 import { Text } from '@/components/ui';
@@ -16,16 +16,25 @@ export interface ShareScoreCardProps {
 }
 
 /** Branded navy/gold card captured with react-native-view-shot for sharing. Brand colors only (theme independent). */
-export const ShareScoreCard = forwardRef<View, ShareScoreCardProps>(function ShareScoreCard(
+export const ShareScoreCard = forwardRef<ComponentRef<typeof View>, ShareScoreCardProps>(function ShareScoreCard(
   { studentName, examTitle, subjectLabel, score, passed, dateLabel },
   ref,
 ) {
   const { t } = useI18n('exams');
+  const { width } = useWindowDimensions();
+  const narrow = width < 375;
+  // Score disc scales with the screen so the meta column keeps room at 320pt.
+  const disc = narrow ? 92 : 112;
   return (
     <View ref={ref} collapsable={false} style={styles.shell}>
-      <LinearGradient colors={gradients.navy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
-        <View style={styles.glow} />
-        <View style={styles.glowSmall} />
+      <LinearGradient
+        colors={gradients.navy}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.card, narrow && styles.cardNarrow]}
+      >
+        <View style={styles.glow} pointerEvents="none" />
+        <View style={styles.glowSmall} pointerEvents="none" />
         <View style={styles.top}>
           <Logo size={40} variant="gold" withWordmark />
           <Text variant="caption" color="rgba(255,255,255,0.6)">
@@ -43,9 +52,18 @@ export const ShareScoreCard = forwardRef<View, ShareScoreCardProps>(function Sha
           {subjectLabel}
         </Text>
 
-        <View style={styles.scoreRow}>
-          <View style={styles.scoreCircle}>
-            <Text variant="display" display color={palette.navy} tabular style={styles.scoreText}>
+        <View style={[styles.scoreRow, narrow && styles.scoreRowNarrow]}>
+          <View style={[styles.scoreCircle, { width: disc, height: disc, borderRadius: disc / 2 }]}>
+            <Text
+              variant={narrow ? 'h1' : 'display'}
+              display
+              color={palette.navy}
+              tabular
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              style={styles.scoreText}
+            >
               {`${score}%`}
             </Text>
           </View>
@@ -82,6 +100,7 @@ export const ShareScoreCard = forwardRef<View, ShareScoreCardProps>(function Sha
 const styles = StyleSheet.create({
   shell: { borderRadius: radius.xl, overflow: 'hidden' },
   card: { padding: space.xxl, overflow: 'hidden' },
+  cardNarrow: { padding: space.xl },
   glow: {
     position: 'absolute',
     width: 260,
@@ -105,10 +124,9 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   overline: { marginTop: space.xl, marginBottom: space.xs },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: space.xl, marginTop: space.xl },
+  scoreRowNarrow: { gap: space.lg },
   scoreCircle: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    paddingHorizontal: space.sm,
     backgroundColor: palette.gold,
     borderWidth: 4,
     borderColor: palette.goldLight,

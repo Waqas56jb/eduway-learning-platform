@@ -22,6 +22,8 @@ import { Checkbox } from './Switch';
 import { EmptyState, Skeleton } from './Feedback';
 import { Popover } from './Menu';
 import { Pagination } from './Pagination';
+import type { ServerTableState } from '@/api/hooks';
+import { errorMessage } from '@/api/client';
 
 /* Column meta extensions — set on a column via `meta: { ... }`. */
 declare module '@tanstack/react-table' {
@@ -70,6 +72,14 @@ export interface DataTableProps<T> {
   rowClassName?: (row: T) => string | undefined;
   /** Render the table without the card frame (e.g. inside another card). */
   bare?: boolean;
+  /** Server-driven paging/sorting/search (from `usePagedList().server`). */
+  server?: ServerTableState;
+  /** Server export (contract §0.7). Receives selected row ids when called from the bulk bar. Replaces the client CSV export. */
+  onExport?: (ids?: string[]) => void;
+  exporting?: boolean;
+  /** Load error → error state with retry. */
+  error?: unknown;
+  onRetry?: () => void;
 }
 
 function defaultSearchText(row: unknown): string {
@@ -102,14 +112,23 @@ export function DataTable<T>({
   className,
   rowClassName,
   bare,
+  server,
+  onExport,
+  exporting,
+  error,
+  onRetry,
 }: DataTableProps<T>) {
   const { t } = useTranslation();
-  const [sorting, setSorting] = useState<SortingState>(initialSort);
-  const [query, setQuery] = useState('');
+  const [localSorting, setLocalSorting] = useState<SortingState>(initialSort);
+  const [localQuery, setLocalQuery] = useState('');
+  const sorting = server ? server.sorting : localSorting;
+  const query = server ? server.search : localQuery;
+  const setQuery = server ? server.onSearch : setLocalQuery;
   const q = useDebounce(query, 200);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [visibility, setVisibility] = useState<VisibilityState>(() => Object.fromEntries(initialHidden.map((k) => [k, false])));
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize });
+  const [localPagination, setPagination] = useState({ pageIndex: 0, pageSize });
+  const pagination = server ? { pageIndex: server.page, pageSize: server.pageSize } : localPagination;
 
   const selectable = !!bulkActions;
 
@@ -142,11 +161,26 @@ export function DataTable<T>({
   const table = useReactTable({
     data,
     columns: allColumns,
-    state: { sorting, globalFilter: q, rowSelection, columnVisibility: visibility, pagination },
-    onSortingChange: setSorting,
+    state: { sorting, globalFilter: server ? '' : q, rowSelection, columnVisibility: visibility, pagination },
+    onSortingChange: (u) => {
+      const next = typeof u === 'function' ? u(sorting) : u;
+      if (server) server.onSorting(next);
+      else setLocalSorting(next);
+    },
+    manualPagination: !!server,
+    manualSorting: !!server,
+    manualFiltering: !!server,
+    pageCount: server ? Math.max(1, Math.ceil(server.total / server.pageSize)) : undefined,
+    enableMultiSort: false,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setVisibility,
-    onPaginationChange: setPagination,
+    onPaginationChange: (u) => {
+      if (server) {
+        const next = typeof u === 'function' ? u(pagination) : u;
+        if (next.pageSize !== server.pageSize) server.onPageSize(next.pageSize);
+        else server.onPage(next.pageIndex);
+      } else setPagination(u);
+    },
     getRowId: getRowId ?? ((row, i) => ((row as { id?: string }).id ?? String(i))),
     globalFilterFn: (row, _col, value: string) => {
       if (!value) return true;
@@ -182,7 +216,13 @@ export function DataTable<T>({
   const selected = table.getSelectedRowModel().rows.map((r) => r.original);
   const clear = () => setRowSelection({});
 
+  const total = server ? server.total : filteredRows.length;
+
   const handleExport = () => {
+    if (onExport) {
+      onExport();
+      return;
+    }
     const cols = table.getVisibleLeafColumns().filter((c) => !c.columnDef.meta?.noExport && c.id !== '__select');
     const rows = table.getSortedRowModel().rows.filter((r) => filteredRows.includes(r));
     const out = rows.map((r) =>
@@ -210,7 +250,7 @@ export function DataTable<T>({
   const body = (
     <>
       {/* Toolbar */}
-      {(!hideSearch || toolbar || exportName || toolbarEnd) && (
+      {(!hideSearch || toolbar || exportName || onExport || toolbarEnd) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
           {!hideSearch && (
             <div className="relative w-full sm:w-64">
@@ -250,8 +290,8 @@ export function DataTable<T>({
                 ))}
               </Popover>
             )}
-            {exportName && (
-              <Button variant="secondary" size="sm" onClick={handleExport} disabled={loading || filteredRows.length === 0} icon={<Download className="h-4 w-4" />}>
+            {(exportName || onExport) && (
+              <Button variant="secondary" size="sm" onClick={handleExport} loading={exporting} disabled={loading || total === 0} icon={<Download className="h-4 w-4" />}>
                 <span className="hidden md:inline">{t('actions.exportCsv')}</span>
               </Button>
             )}
@@ -358,22 +398,29 @@ export function DataTable<T>({
                 ))}
           </tbody>
         </table>
-        {!loading && filteredRows.length === 0 && (
+        {!loading && !!error && (
           <EmptyState
-            title={data.length === 0 ? (emptyTitle ?? t('common.emptyTitle')) : t('common.noResults')}
-            hint={data.length === 0 ? (emptyHint ?? t('common.emptyHint')) : t('common.noResultsHint')}
-            action={data.length === 0 ? emptyAction : query ? <Button variant="secondary" size="sm" onClick={() => setQuery('')}>{t('actions.clearFilters')}</Button> : undefined}
+            title={t('api.loadFailed')}
+            hint={errorMessage(error)}
+            action={onRetry ? <Button variant="secondary" size="sm" onClick={onRetry}>{t('api.retry')}</Button> : undefined}
+          />
+        )}
+        {!loading && !error && total === 0 && (
+          <EmptyState
+            title={data.length === 0 && !query ? (emptyTitle ?? t('common.emptyTitle')) : t('common.noResults')}
+            hint={data.length === 0 && !query ? (emptyHint ?? t('common.emptyHint')) : t('common.noResultsHint')}
+            action={data.length === 0 && !query ? emptyAction : query ? <Button variant="secondary" size="sm" onClick={() => setQuery('')}>{t('actions.clearFilters')}</Button> : undefined}
           />
         )}
       </div>
 
-      {!loading && filteredRows.length > 0 && (
+      {!loading && total > 0 && (
         <Pagination
           page={pagination.pageIndex}
           pageSize={pagination.pageSize}
-          total={filteredRows.length}
-          onPage={(p) => setPagination((s) => ({ ...s, pageIndex: p }))}
-          onPageSize={(s) => setPagination({ pageIndex: 0, pageSize: s })}
+          total={total}
+          onPage={(p) => (server ? server.onPage(p) : setPagination((s) => ({ ...s, pageIndex: p })))}
+          onPageSize={(s) => (server ? server.onPageSize(s) : setPagination({ pageIndex: 0, pageSize: s }))}
           className="border-t border-line"
         />
       )}

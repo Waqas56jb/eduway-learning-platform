@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Icon } from '@/components/icons';
 import { PressableScale, Text } from '@/components/ui';
-import { upcomingExams } from '@/data';
+import { useDashboard } from '@/api';
 import { useI18n } from '@/hooks/useI18n';
 import { gradients, palette, radius, shadows, space } from '@/theme';
 import { formatDate } from '@/utils/format';
@@ -22,7 +22,7 @@ function daysUntil(iso: string, now: Date): number {
 /** Navy reminder card for the next upcoming exam with a day countdown. */
 export const ExamReminder = memo(function ExamReminder() {
   const { t, L, lang } = useI18n('home');
-  const exam = upcomingExams[0];
+  const exam = useDashboard().data?.upcomingExams[0];
   const now = useMemo(() => new Date(), []);
   if (!exam) return null;
 
@@ -36,7 +36,8 @@ export const ExamReminder = memo(function ExamReminder() {
       onPress={() => router.push('/exams')}
       accessibilityRole="button"
       accessibilityLabel={t('exam.a11y', { title, when })}
-      style={[styles.wrap, shadows.lg]}
+      scaleTo={0.98}
+      style={[styles.wrap, shadows.md]}
     >
       <LinearGradient colors={gradients.navy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
         <View style={styles.ring} pointerEvents="none" />
@@ -66,13 +67,15 @@ export const ExamReminder = memo(function ExamReminder() {
                 {when}
               </Text>
             </View>
-            <Text variant="caption" color="rgba(255,255,255,0.7)" numberOfLines={1} style={styles.flexShrink}>
+            <Text variant="caption" color="rgba(255,255,255,0.72)" numberOfLines={1}>
               {time}
             </Text>
           </View>
         </View>
 
-        <Icon name="chevron" size={20} color="rgba(255,255,255,0.6)" />
+        <View style={styles.chevron}>
+          <Icon name="chevron" size={18} color={palette.goldLight} />
+        </View>
       </LinearGradient>
     </PressableScale>
   );
@@ -113,12 +116,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
+    height: 24,
     paddingHorizontal: space.sm + 2,
-    paddingVertical: 3,
     borderRadius: radius.pill,
     backgroundColor: palette.gold,
   },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs },
-  flexShrink: { flexShrink: 1 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.sm, rowGap: space.xs, marginTop: space.xs + 2 },
+  chevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
   flex: { flex: 1 },
 });

@@ -6,33 +6,73 @@ import { z } from 'zod';
 import { ArrowLeft, Braces, Save, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { NotifChannel, NotificationTemplate, NotifType } from '@/types';
-import { NOTIF_CHANNELS, NOTIF_TYPES, TEMPLATE_VARIABLES } from '@/data/messaging';
-import { useTemplates } from '@/store/messaging';
+import type { NotifChannel, NotifType } from '@/types';
+import { NOTIF_CHANNELS, NOTIF_TYPES, notificationsApi, type TemplateVM, type TemplateWrite } from '@/api/notifications';
+import { qk } from '@/api/keys';
+import { useApiMutation, useApiQuery } from '@/api/hooks';
+import { isApiError } from '@/api/client';
 import { useCan } from '@/store/auth';
 import { useLang } from '@/hooks/useLocale';
-import { uid } from '@/utils/id';
 import { cn } from '@/utils/cn';
 import { fmtRelative } from '@/utils/format';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Badge, Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, Field, Input, Segmented, Select, Switch, Textarea, useConfirm } from '@/components/ui';
-import { extractVariables, HAS_SUBJECT, PhonePreview, smsSegments } from './_shared';
+import { QueryError } from '@/components/ui/QueryError';
+import { Badge, Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, Field, Input, Segmented, Select, SkeletonCard, Switch, Textarea, useConfirm } from '@/components/ui';
+import { extractVariables, HAS_SUBJECT, PhonePreview, smsSegments, useTemplateVariables } from './_shared';
 
 type TextField = 'subject_en' | 'subject_ar' | 'body_en' | 'body_ar';
 
+/** Loads the template (ADM-NTT-02) then mounts the form with real defaults. */
 export default function TemplateEditor() {
+  const { t } = useTranslation();
+  const { id } = useParams();
+  const q = useApiQuery(qk.templates.detail(id), () => notificationsApi.template(id!), { enabled: !!id });
+
+  if (!id) return <Editor existing={undefined} />;
+  if (q.isLoading) {
+    return (
+      <div>
+        <PageHeader title={t('notifications.templates.title')} current={id} />
+        <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+          <div className="space-y-6">
+            <SkeletonCard lines={4} />
+            <SkeletonCard lines={8} />
+          </div>
+          <SkeletonCard lines={10} />
+        </div>
+      </div>
+    );
+  }
+  if (q.error && !(isApiError(q.error) && q.error.status === 404)) {
+    return (
+      <div>
+        <PageHeader title={t('notifications.templates.title')} current={id} />
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      </div>
+    );
+  }
+  if (!q.data) {
+    return (
+      <div>
+        <PageHeader title={t('notifications.editor.notFound')} current={id} />
+        <Card>
+          <EmptyState title={t('notifications.editor.notFound')} hint={t('errors.notFoundSub')} action={<ButtonLink to="/notifications/templates" size="sm">{t('actions.back')}</ButtonLink>} />
+        </Card>
+      </div>
+    );
+  }
+  return <Editor key={q.data.id} existing={q.data} />;
+}
+
+function Editor({ existing }: { existing: TemplateVM | undefined }) {
   const { t } = useTranslation();
   const lang = useLang();
   const navigate = useNavigate();
-  const { id } = useParams();
   const [params] = useSearchParams();
   const can = useCan();
   const confirm = useConfirm();
-  const existing = useTemplates((s) => s.items.find((i) => i.id === id));
-  const add = useTemplates((s) => s.add);
-  const update = useTemplates((s) => s.update);
-  const remove = useTemplates((s) => s.remove);
-  const isNew = !id;
+  const vars = useTemplateVariables();
+  const isNew = !existing;
   const editable = can('notifications', isNew ? 'create' : 'edit');
 
   const schema = useMemo(
@@ -80,6 +120,7 @@ export default function TemplateEditor() {
     setValue,
     getValues,
     reset,
+    setError,
     formState: { errors, isDirty, isSubmitting },
   } = useForm<Form>({ resolver: zodResolver(schema), defaultValues: defaults });
 
@@ -90,7 +131,7 @@ export default function TemplateEditor() {
   const v = watch();
   const showSubject = HAS_SUBJECT[v.channel];
   const used = extractVariables(v.subject_en, v.subject_ar, v.body_en, v.body_ar);
-  const unknown = used.filter((k) => !TEMPLATE_VARIABLES[k]);
+  const unknown = vars.isLoading || vars.error ? [] : used.filter((k) => !vars.samples[k]);
 
   const reg = (name: TextField) => {
     const r = register(name);
@@ -118,35 +159,53 @@ export default function TemplateEditor() {
     });
   };
 
-  if (!isNew && !existing) {
-    return (
-      <div>
-        <PageHeader title={t('notifications.editor.notFound')} current={id} />
-        <Card>
-          <EmptyState title={t('notifications.editor.notFound')} hint={t('errors.notFoundSub')} action={<ButtonLink to="/notifications/templates" size="sm">{t('actions.back')}</ButtonLink>} />
-        </Card>
-      </div>
-    );
-  }
+  /** Map server field errors (`subject.en`, `body.ar`, …) back onto the flat form fields. */
+  const applyFieldErrors = (err: unknown) => {
+    if (!isApiError(err)) return;
+    const fields = err.fields;
+    for (const [path, msg] of Object.entries(fields)) {
+      const key = path.replace(/^(subject|body)\.(en|ar)$/, '$1_$2') as keyof Form;
+      if (key in defaults) setError(key, { type: 'server', message: msg });
+    }
+    toast.error(err.message || t('apiErrors.VALIDATION_ERROR'));
+  };
+
+  const create = useApiMutation((body: TemplateWrite) => notificationsApi.createTemplate(body), {
+    invalidate: [qk.templates.all],
+    silentError: true,
+    onError: applyFieldErrors,
+  });
+  const update = useApiMutation((body: TemplateWrite) => notificationsApi.updateTemplate(existing!.id, body), {
+    invalidate: [qk.templates.all],
+    silentError: true,
+    onError: applyFieldErrors,
+  });
+  const remove = useApiMutation(() => notificationsApi.deleteTemplate(existing!.id), {
+    invalidate: [qk.templates.all],
+    success: () => t('toast.deleted', { entity: existing?.name ?? '' }),
+    onSuccess: () => navigate('/notifications/templates'),
+  });
 
   const onSubmit = async (f: Form) => {
-    await new Promise((r) => setTimeout(r, 400));
-    const payload = {
-      ...f,
-      subject_en: HAS_SUBJECT[f.channel] ? f.subject_en : '',
-      subject_ar: HAS_SUBJECT[f.channel] ? f.subject_ar : '',
-      variables: extractVariables(f.subject_en, f.subject_ar, f.body_en, f.body_ar),
-      updatedAt: new Date().toISOString(),
+    const withSubject = HAS_SUBJECT[f.channel];
+    const body: TemplateWrite = {
+      name: f.name.trim(),
+      type: f.type,
+      channel: f.channel,
+      active: f.active,
+      subject: { en: withSubject ? f.subject_en : '', ar: withSubject ? f.subject_ar : '' },
+      body: { en: f.body_en, ar: f.body_ar },
     };
     if (isNew) {
-      const tpl: NotificationTemplate = { id: uid('tpl'), ...payload };
-      add(tpl);
-      toast.success(t('toast.created', { entity: f.name }));
+      const tpl = await create.mutateAsync(body).catch(() => null);
+      if (!tpl) return;
+      toast.success(t('toast.created', { entity: tpl.name }));
       navigate(`/notifications/templates/${tpl.id}`, { replace: true });
     } else {
-      update(existing!.id, payload);
+      const tpl = await update.mutateAsync(body).catch(() => null);
+      if (!tpl) return;
       reset(f);
-      toast.success(t('toast.updated', { entity: f.name }));
+      toast.success(t('toast.updated', { entity: tpl.name }));
     }
   };
 
@@ -154,9 +213,7 @@ export default function TemplateEditor() {
     if (!existing) return;
     const ok = await confirm({ title: t('confirm.deleteTitle', { entity: existing.name }), body: t('confirm.deleteBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    remove(existing.id);
-    toast.success(t('toast.deleted', { entity: existing.name }));
-    navigate('/notifications/templates');
+    remove.mutate();
   };
 
   const counter = (text: string) => {
@@ -232,10 +289,11 @@ export default function TemplateEditor() {
               <div>
                 <span className="label">{t('notifications.variables')}</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {Object.keys(TEMPLATE_VARIABLES).map((k) => (
+                  {vars.list.map(({ key: k, description }) => (
                     <button
                       key={k}
                       type="button"
+                      title={description?.[previewLang]}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertVar(k)}
                       className={cn(
@@ -247,6 +305,12 @@ export default function TemplateEditor() {
                       {`{${k}}`}
                     </button>
                   ))}
+                  {vars.isLoading && Array.from({ length: 6 }).map((_, i) => <span key={i} className="h-6 w-20 animate-pulse rounded-md bg-ink/5" />)}
+                  {!!vars.error && (
+                    <button type="button" onClick={() => vars.refetch()} className="text-xs font-medium text-danger underline-offset-2 hover:underline">
+                      {t('notifications.editor.variablesFailed')}
+                    </button>
+                  )}
                 </div>
                 <p className="mt-1.5 text-xs text-muted">{t('notifications.editor.variablesHint')}</p>
                 {unknown.length > 0 && <p className="mt-1 text-xs font-medium text-danger">{t('notifications.editor.unknownVars', { vars: unknown.map((u) => `{${u}}`).join(', ') })}</p>}
@@ -284,17 +348,17 @@ export default function TemplateEditor() {
               action={<Segmented size="sm" value={previewLang} onChange={setPreviewLang} options={[{ value: 'en', label: 'EN' }, { value: 'ar', label: 'ع' }]} />}
             />
             <CardBody className="bg-surface-2">
-              <PhonePreview channel={v.channel} lang={previewLang} subject={previewLang === 'ar' ? v.subject_ar : v.subject_en} body={(previewLang === 'ar' ? v.body_ar : v.body_en) || t('notifications.editor.emptyBody')} />
+              <PhonePreview channel={v.channel} lang={previewLang} subject={previewLang === 'ar' ? v.subject_ar : v.subject_en} body={(previewLang === 'ar' ? v.body_ar : v.body_en) || t('notifications.editor.emptyBody')} samples={vars.samples} />
             </CardBody>
           </Card>
           {used.length > 0 && (
             <Card>
               <CardHeader title={t('notifications.editor.sampleValues')} />
               <ul className="divide-y divide-line text-xs">
-                {used.filter((k) => TEMPLATE_VARIABLES[k]).map((k) => (
+                {used.filter((k) => vars.samples[k]).map((k) => (
                   <li key={k} className="flex items-center justify-between gap-3 px-5 py-2">
                     <code className="text-primary" dir="ltr">{`{${k}}`}</code>
-                    <span className="truncate text-muted">{TEMPLATE_VARIABLES[k][previewLang]}</span>
+                    <span className="truncate text-muted">{vars.samples[k][previewLang]}</span>
                   </li>
                 ))}
               </ul>

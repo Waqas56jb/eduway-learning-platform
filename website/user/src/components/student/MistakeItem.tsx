@@ -3,13 +3,14 @@ import { BookOpen, Check, ChevronDown, Lightbulb, Repeat, RotateCcw, Trophy, X }
 import { useCallback, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, useToast } from '@/components/ui';
-import { Formula, RichText } from '@/components/ui/MathText';
+import { Formula, MathText, RichText } from '@/components/ui/MathText';
 import { QuizCard } from '@/components/student/QuizCard';
-import { getLesson } from '@/data';
+import { errorMessage } from '@/api/client';
+import { useRetryMistake, useSetMistakeStatus } from '@/api/mistakes';
+import type { AnswerFeedback, QuestionReview } from '@/api/types';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { cn } from '@/lib/utils';
-import type { Mistake, MistakeStatus, Question } from '@/types';
+import type { Mistake, MistakeStatus } from '@/types';
 import { difficultyTone, sourceLabelKey } from './practice/utils';
 
 const STATUSES: MistakeStatus[] = ['unresolved', 'reviewed', 'mastered'];
@@ -27,54 +28,70 @@ export function MistakeItem({
   onActivity,
 }: {
   mistake: Mistake;
-  question: Question;
+  question: QuestionReview;
   /** Called when the student retries or changes the status, so the list can keep this item in view. */
   onActivity?: (mistakeId: string) => void;
 }) {
   const { t } = useTranslation();
   const { l, fmtRelative } = useLang();
-  const { setMistakeStatus, addMistake } = useStudent();
+  // MST-04 status changes (optimistic) and MST-05 retry (server decides; correct → mastered, history kept).
+  const setStatus = useSetMistakeStatus();
+  const retry = useRetryMistake();
   const toast = useToast();
   const panelId = useId();
   const [open, setOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryChoice, setRetryChoice] = useState<number | null>(null);
-  const lesson = question.lessonId ? getLesson(question.lessonId) : undefined;
+  const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
+  const lessonId = mistake.lessonId ?? question.lessonId;
+  const retryCorrect = !!feedback?.correct;
 
   const onRetry = useCallback(
     (choice: number) => {
       if (retryChoice !== null) return;
       onActivity?.(mistake.id);
       setRetryChoice(choice);
-      if (choice === question.correctIndex) {
-        toast.show({
-          type: 'success',
-          title: t('practice.mistakes.retry.correctToast'),
-          description: t('practice.mistakes.retry.correctToastBody'),
-        });
-      } else {
-        addMistake(question.id, choice, mistake.source);
-        toast.show({ type: 'warning', title: t('practice.mistakes.retry.wrongToast') });
-      }
+      retry.mutate(
+        { id: mistake.id, optionId: question.options[choice]?.id, chosenIndex: choice },
+        {
+          onSuccess: (res) => {
+            setFeedback(res);
+            if (res.correct) {
+              toast.show({
+                type: 'success',
+                title: t('practice.mistakes.retry.correctToast'),
+                description: t('practice.mistakes.retry.correctToastBody'),
+              });
+            } else {
+              toast.show({ type: 'warning', title: t('practice.mistakes.retry.wrongToast') });
+            }
+          },
+          onError: (e) => {
+            setRetryChoice(null);
+            toast.error(errorMessage(e));
+          },
+        },
+      );
     },
-    [retryChoice, question, mistake.id, mistake.source, addMistake, onActivity, toast, t],
+    [retryChoice, question, mistake.id, retry, onActivity, toast, t],
   );
 
   const startRetry = () => {
     setRetryChoice(null);
+    setFeedback(null);
     setRetrying(true);
   };
 
   const changeStatus = (status: MistakeStatus) => {
+    if (status === mistake.status) return;
     onActivity?.(mistake.id);
-    setMistakeStatus(mistake.id, status);
+    setStatus.mutate({ id: mistake.id, status });
   };
 
   const markMastered = () => {
     onActivity?.(mistake.id);
-    setMistakeStatus(mistake.id, 'mastered');
+    setStatus.mutate({ id: mistake.id, status: 'mastered' }, { onSuccess: () => toast.success(t('practice.mistakes.masteredToast')) });
     setRetrying(false);
-    toast.success(t('practice.mistakes.masteredToast'));
   };
 
   return (
@@ -96,7 +113,9 @@ export function MistakeItem({
           {mistake.status === 'mastered' ? <Trophy className="h-4 w-4" /> : mistake.status === 'reviewed' ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
         </span>
         <span className="min-w-0 flex-1">
-          <span dir="auto" className={cn('block font-semibold leading-relaxed text-primary', !open && 'line-clamp-2')}>{l(question.text)}</span>
+          <span dir="auto" className={cn('block font-semibold leading-relaxed text-primary', !open && 'line-clamp-2')}>
+            <MathText text={l(question.text)} />
+          </span>
           <span className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge tone={difficultyTone(question.difficulty)}>{t(`common.difficulty.${question.difficulty}`)}</Badge>
             <Badge tone="muted">{t(sourceLabelKey(mistake.source))}</Badge>
@@ -106,7 +125,7 @@ export function MistakeItem({
                 {t('practice.mistakes.repeated', { count: mistake.repeatCount })}
               </Badge>
             )}
-            <span className="text-xs text-muted">· {fmtRelative(mistake.date)}</span>
+            <span className="text-xs text-muted">· {fmtRelative(mistake.date, { clampFuture: true })}</span>
           </span>
         </span>
         <ChevronDown
@@ -134,8 +153,24 @@ export function MistakeItem({
               {!retrying && (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <AnswerBox kind="wrong" label={t('common.yourAnswer')} text={l(question.options[mistake.chosenIndex])} />
-                    <AnswerBox kind="right" label={t('common.correctAnswer')} text={l(question.options[question.correctIndex])} />
+                    <AnswerBox
+                      kind="wrong"
+                      label={t('common.yourAnswer')}
+                      text={
+                        question.options[mistake.chosenIndex]
+                          ? l(question.options[mistake.chosenIndex].text)
+                          : t('practice.results.stats.skipped')
+                      }
+                    />
+                    <AnswerBox
+                      kind="right"
+                      label={t('common.correctAnswer')}
+                      text={
+                        question.options[question.correctIndex]
+                          ? l(question.options[question.correctIndex].text)
+                          : question.acceptedAnswers.map((a) => l(a)).join(' / ')
+                      }
+                    />
                   </div>
                   <div className="rounded-2xl border border-accent/25 bg-accent/5 p-4 text-ink">
                     <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent">
@@ -153,15 +188,18 @@ export function MistakeItem({
                     question={question}
                     selected={retryChoice}
                     onSelect={onRetry}
+                    correctIndex={feedback ? feedback.correctIndex : null}
+                    explanation={feedback ? feedback.explanation : undefined}
+                    pending={retryChoice !== null && !feedback}
                     mode="instant"
                     showMeta={false}
                     showBookmark={false}
                     keyboard={false}
                     className="!p-4 !shadow-none sm:!p-5"
                   />
-                  {retryChoice !== null && (
+                  {retryChoice !== null && feedback && (
                     <div className="mt-3 flex flex-wrap gap-2" aria-live="polite">
-                      {retryChoice === question.correctIndex && mistake.status !== 'mastered' && (
+                      {retryCorrect && mistake.status !== 'mastered' && (
                         <Button size="sm" variant="gold" onClick={markMastered} leftIcon={<Trophy className="h-4 w-4" />}>
                           {t('practice.mistakes.retry.markMastered')}
                         </Button>
@@ -204,8 +242,8 @@ export function MistakeItem({
                       {t('practice.mistakes.retry.cta')}
                     </Button>
                   )}
-                  {lesson && (
-                    <Button size="sm" variant="outline" to={`/student/lesson/${lesson.id}`} leftIcon={<BookOpen className="h-4 w-4" />}>
+                  {lessonId && (
+                    <Button size="sm" variant="outline" to={`/student/lesson/${lessonId}`} leftIcon={<BookOpen className="h-4 w-4" />}>
                       {t('practice.mistakes.goToLesson')}
                     </Button>
                   )}
@@ -231,7 +269,9 @@ function AnswerBox({ kind, label, text }: { kind: 'wrong' | 'right'; label: stri
         >
           {wrong ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
         </span>
-        <span dir="auto">{text}</span>
+        <span dir="auto">
+          <MathText text={text} />
+        </span>
       </p>
     </div>
   );

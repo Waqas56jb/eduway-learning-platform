@@ -1,16 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, CheckCircle2, Eye, HardDrive, RefreshCw, Repeat2, ServerCog } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { VideoAsset } from '@/types';
 import { fmtBytes, fmtCompact, fmtDate, fmtDuration, fmtNumber } from '@/utils/format';
-import { useLessons, useSubjects } from '@/store/core';
-import { useVideos } from '@/store/content';
 import { useCan } from '@/store/auth';
-import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useLang, useLocalize } from '@/hooks/useLocale';
+import { exportRequest, useApiMutation, useApiQuery, useExport, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { videosApi, type VideoVM } from '@/api/content';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Button, DataTable, FilterSelect, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
 
@@ -19,64 +19,62 @@ export default function Videos() {
   const L = useLocalize();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const videos = useVideos((s) => s.items);
-  const lessons = useLessons((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
+  const lang = useLang();
+  const lookups = useLookups();
+  const subjects = lookups.subjects;
   const [subject, setSubject] = useState('');
   const [stream, setStream] = useState('');
   const [cdn, setCdn] = useState('');
-
-  const lessonMap = useMemo(() => new Map(lessons.map((l) => [l.id, l])), [lessons]);
-  const subjectMap = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const canAct = can('content', 'edit');
+  const [inFlight, setInFlight] = useState(false);
 
-  const data = useMemo(
-    () =>
-      videos.filter((v) => {
-        const l = lessonMap.get(v.lessonId);
-        return (!subject || l?.subjectId === subject) && (!stream || v.streamStatus === stream) && (!cdn || v.cdnStatus === cdn);
-      }),
-    [videos, lessonMap, subject, stream, cdn],
-  );
+  const list = usePagedList<VideoVM>({
+    key: qk.videos.list,
+    fetcher: videosApi.list,
+    filters: { subjectId: subject, streamStatus: stream, cdnStatus: cdn },
+    initialSort: '-views',
+    // Keep the table live while assets are being re-synced / re-encoded.
+    refetchInterval: inFlight ? 5000 : undefined,
+  });
+  const data = list.items;
+  useEffect(() => setInFlight(data.some((v) => v.streamStatus === 'processing' || v.cdnStatus === 'pending')), [data]);
+  const statsQ = useApiQuery(qk.videos.sub('stats'), videosApi.stats, { refetchInterval: inFlight ? 5000 : undefined });
+  const totals = statsQ.data;
+  const loading = statsQ.isLoading;
 
-  const totals = useMemo(
-    () => ({
-      storage: videos.reduce((s, v) => s + v.sizeMb, 0),
-      views: videos.reduce((s, v) => s + v.views, 0),
-      ready: videos.filter((v) => v.streamStatus === 'ready' && v.cdnStatus === 'synced').length,
-      issues: videos.filter((v) => v.streamStatus === 'failed' || v.cdnStatus === 'error').length,
-    }),
-    [videos],
-  );
+  const invalidate = [qk.videos.all, qk.lessons.all];
+  const resyncMut = useApiMutation((v: VideoVM) => videosApi.cdnResync(v.id), {
+    invalidate,
+    onSuccess: (_d, v) => toast.success(t('content.videos.resynced', { id: v.assetId })),
+  });
+  const reprocessMut = useApiMutation((v: { video: VideoVM; reason?: string }) => videosApi.reprocess(v.video.id, v.reason), {
+    invalidate,
+    onSuccess: (_d, v) => toast.success(t('content.videos.reprocessed', { id: v.video.assetId })),
+  });
+  const bulkMut = useApiMutation((ids: string[]) => videosApi.bulkCdnResync(ids), {
+    invalidate,
+    onSuccess: (r) => {
+      toast.success(t('content.videos.bulkResynced', { count: r.succeeded.length }));
+      if (r.failed.length) toast.error(t('api.bulkPartial', { count: r.failed.length }));
+    },
+  });
+  const exp = useExport('/admin/videos/export', 'video-library');
 
-  const resync = (v: VideoAsset) => {
-    useVideos.getState().update(v.id, { cdnStatus: 'pending' }, { action: 'video.cdn_resync', summary: `Queued CDN re-sync for ${v.assetId}` });
-    toast.success(t('content.videos.resynced', { id: v.assetId }));
-    setTimeout(() => {
-      useVideos.getState().update(v.id, { cdnStatus: 'synced' }, { silent: true });
-      toast.success(t('content.videos.resyncDone', { id: v.assetId }));
-    }, 2200);
-  };
-
-  const reprocess = async (v: VideoAsset) => {
+  const resync = (v: VideoVM) => resyncMut.mutate(v);
+  const reprocess = async (v: VideoVM) => {
     const ok = await confirm({ title: t('content.videos.reprocessTitle'), body: t('content.videos.reprocessBody'), tone: 'warning', confirmText: t('content.videos.reprocess') });
     if (!ok) return;
-    useVideos.getState().update(v.id, { streamStatus: 'processing', cdnStatus: 'pending' }, { action: 'video.reprocess', summary: `Started re-encoding ${v.assetId}` });
-    toast.success(t('content.videos.reprocessed', { id: v.assetId }));
-    setTimeout(() => {
-      useVideos.getState().update(v.id, { streamStatus: 'ready', cdnStatus: 'synced', uploadedAt: new Date().toISOString() }, { silent: true });
-      toast.success(t('content.videos.reprocessDone', { id: v.assetId }));
-    }, 3500);
+    reprocessMut.mutate({ video: v, reason: ok.reason || undefined });
   };
 
-  const columns = useMemo<ColumnDef<VideoAsset>[]>(
+  const columns = useMemo<ColumnDef<VideoVM>[]>(
     () => [
       {
         id: 'assetId',
         header: t('content.videos.assetId'),
         meta: { label: t('content.videos.assetId') },
         accessorKey: 'assetId',
+        enableSorting: false,
         cell: ({ row }) => (
           <span className="whitespace-nowrap rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[11px] text-ink/80" dir="ltr">
             {row.original.assetId}
@@ -86,29 +84,35 @@ export default function Videos() {
       {
         id: 'lesson',
         header: t('common.lesson'),
-        meta: { label: t('common.lesson'), exportValue: (v) => lessonMap.get(v.lessonId)?.title_en ?? '' },
-        accessorFn: (v) => L(lessonMap.get(v.lessonId), 'title'),
+        meta: { label: t('common.lesson') },
+        enableSorting: false,
+        accessorFn: (v) => v.lesson?.title[lang] ?? '',
         cell: ({ row }) => {
-          const l = lessonMap.get(row.original.lessonId);
-          const s = l ? subjectMap.get(l.subjectId) : undefined;
+          const l = row.original.lesson;
+          const s = l?.subject;
           return l ? (
             <Link to={`/content/lessons/${l.id}`} onClick={(e) => e.stopPropagation()} className="group flex min-w-[220px] items-center gap-2">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s?.color }} />
-              <span className="truncate font-medium text-ink group-hover:text-accent">{L(l, 'title')}</span>
+              <span className="truncate font-medium text-ink group-hover:text-accent">{l.title[lang]}</span>
             </Link>
           ) : (
             '—'
           );
         },
       },
-      { id: 'size', header: t('content.videos.size'), meta: { label: t('content.videos.size'), align: 'end' }, accessorKey: 'sizeMb', cell: ({ row }) => fmtBytes(row.original.sizeMb * 1024) },
-      { id: 'duration', header: t('content.videos.duration'), meta: { label: t('content.videos.duration'), align: 'end', exportValue: (v) => fmtDuration(v.durationSec) }, accessorKey: 'durationSec', cell: ({ row }) => fmtDuration(row.original.durationSec) },
-      { id: 'resolution', header: t('content.videos.resolution'), meta: { label: t('content.videos.resolution') }, accessorKey: 'resolution', cell: ({ row }) => <Badge tone={row.original.resolution === '4K' ? 'accent' : 'neutral'}>{row.original.resolution}</Badge> },
-      { id: 'stream', header: t('content.videos.stream'), meta: { label: t('content.videos.stream') }, accessorKey: 'streamStatus', cell: ({ row }) => <StatusBadge status={row.original.streamStatus} /> },
-      { id: 'cdn', header: t('content.videos.cdn'), meta: { label: t('content.videos.cdn') }, accessorKey: 'cdnStatus', cell: ({ row }) => <StatusBadge status={row.original.cdnStatus} /> },
+      { id: 'sizeMb', header: t('content.videos.size'), meta: { label: t('content.videos.size'), align: 'end' }, accessorKey: 'sizeMb', cell: ({ row }) => fmtBytes(row.original.sizeMb * 1024) },
+      { id: 'durationSec', header: t('content.videos.duration'), meta: { label: t('content.videos.duration'), align: 'end', exportValue: (v) => fmtDuration(v.durationSec) }, accessorKey: 'durationSec', cell: ({ row }) => fmtDuration(row.original.durationSec) },
+      { id: 'resolution', header: t('content.videos.resolution'), meta: { label: t('content.videos.resolution') }, accessorKey: 'resolution', enableSorting: false, cell: ({ row }) => <Badge tone={row.original.resolution === '4K' ? 'accent' : 'neutral'}>{row.original.resolution}</Badge> },
+      { id: 'stream', header: t('content.videos.stream'), meta: { label: t('content.videos.stream') }, accessorKey: 'streamStatus', enableSorting: false, cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5" title={row.original.error ?? undefined}>
+          <StatusBadge status={row.original.streamStatus} />
+          {row.original.streamStatus === 'processing' && row.original.processingProgress != null && <span className="text-[11px] text-muted num">{Math.round(row.original.processingProgress)}%</span>}
+        </span>
+      ) },
+      { id: 'cdn', header: t('content.videos.cdn'), meta: { label: t('content.videos.cdn') }, accessorKey: 'cdnStatus', enableSorting: false, cell: ({ row }) => <StatusBadge status={row.original.cdnStatus} /> },
       { id: 'views', header: t('content.videos.views'), meta: { label: t('content.videos.views'), align: 'end' }, accessorKey: 'views', cell: ({ row }) => fmtNumber(row.original.views) },
       { id: 'replays', header: t('content.videos.replays'), meta: { label: t('content.videos.replays'), align: 'end' }, accessorKey: 'replays', cell: ({ row }) => fmtNumber(row.original.replays) },
-      { id: 'uploaded', header: t('content.videos.uploaded'), meta: { label: t('content.videos.uploaded') }, accessorKey: 'uploadedAt', cell: ({ row }) => <span className="whitespace-nowrap text-xs text-muted">{fmtDate(row.original.uploadedAt)}</span> },
+      { id: 'uploadedAt', header: t('content.videos.uploaded'), meta: { label: t('content.videos.uploaded') }, accessorKey: 'uploadedAt', cell: ({ row }) => <span className="whitespace-nowrap text-xs text-muted">{fmtDate(row.original.uploadedAt)}</span> },
       ...(canAct
         ? [
             {
@@ -117,7 +121,7 @@ export default function Videos() {
               enableSorting: false,
               enableHiding: false,
               meta: { noExport: true, align: 'end' as const },
-              cell: ({ row }: { row: { original: VideoAsset } }) => {
+              cell: ({ row }: { row: { original: VideoVM } }) => {
                 const v = row.original;
                 const busy = v.streamStatus === 'processing';
                 return (
@@ -135,12 +139,12 @@ export default function Videos() {
                   </div>
                 );
               },
-            } satisfies ColumnDef<VideoAsset>,
+            } satisfies ColumnDef<VideoVM>,
           ]
         : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, L, lessonMap, subjectMap, canAct],
+    [t, lang, canAct],
   );
 
   return (
@@ -148,23 +152,22 @@ export default function Videos() {
       <PageHeader title={t('content.videos.title')} subtitle={t('content.videos.subtitle')} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('content.videos.totalStorage')} value={fmtBytes(totals.storage * 1024)} icon={<HardDrive />} color="#2563EB" hint={`${fmtNumber(videos.length)} ${t('nav.videos').toLowerCase()}`} />
-        <StatCard loading={loading} label={t('content.videos.totalViews')} value={fmtCompact(totals.views)} icon={<Eye />} color="#C9A24A" hint={`${fmtCompact(videos.reduce((s, v) => s + v.replays, 0))} ${t('content.videos.replays').toLowerCase()}`} />
-        <StatCard loading={loading} label={t('content.videos.readyAssets')} value={fmtNumber(totals.ready)} icon={<CheckCircle2 />} color="#16A34A" hint={`${Math.round((totals.ready / Math.max(1, videos.length)) * 100)}%`} />
-        <StatCard loading={loading} label={t('content.videos.issues')} value={fmtNumber(totals.issues)} icon={<AlertTriangle />} color="#DC2626" hint={`${t('content.videos.stream')} / ${t('content.videos.cdn')}`} />
+        <StatCard loading={loading} label={t('content.videos.totalStorage')} value={fmtBytes((totals?.totalStorageMb ?? 0) * 1024)} icon={<HardDrive />} color="#2563EB" hint={`${fmtNumber(totals?.count ?? 0)} ${t('nav.videos').toLowerCase()}`} />
+        <StatCard loading={loading} label={t('content.videos.totalViews')} value={fmtCompact(totals?.totalViews ?? 0)} icon={<Eye />} color="#C9A24A" hint={`${fmtCompact(totals?.totalReplays ?? 0)} ${t('content.videos.replays').toLowerCase()}`} />
+        <StatCard loading={loading} label={t('content.videos.readyAssets')} value={fmtNumber(totals?.ready ?? 0)} icon={<CheckCircle2 />} color="#16A34A" hint={`${Math.round(totals?.readyPct ?? 0)}%`} />
+        <StatCard loading={loading} label={t('content.videos.issues')} value={fmtNumber(totals?.issues ?? 0)} icon={<AlertTriangle />} color="#DC2626" hint={`${t('content.videos.stream')} / ${t('content.videos.cdn')}`} />
       </div>
 
       <DataTable
         data={data}
         columns={columns}
-        loading={loading}
-        exportName={can('content', 'export') ? 'video-library' : undefined}
-        searchText={(v) => {
-          const l = lessonMap.get(v.lessonId);
-          return `${v.assetId} ${l?.title_en ?? ''} ${l?.title_ar ?? ''}`;
-        }}
-        initialSort={[{ id: 'views', desc: true }]}
-        initialHidden={['uploaded']}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
+        onExport={can('content', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
+        initialHidden={['uploadedAt']}
         rowClassName={(v) => (v.streamStatus === 'failed' || v.cdnStatus === 'error' ? 'bg-danger/[0.03]' : undefined)}
         toolbar={
           <>
@@ -179,9 +182,10 @@ export default function Videos() {
                 <Button
                   size="sm"
                   variant="secondary"
+                  loading={bulkMut.isPending}
                   icon={<Repeat2 className="h-3.5 w-3.5" />}
-                  onClick={() => {
-                    rows.filter((v) => v.streamStatus !== 'processing').forEach(resync);
+                  onClick={async () => {
+                    await bulkMut.mutateAsync(rows.filter((v) => v.streamStatus !== 'processing').map((v) => v.id)).catch(() => undefined);
                     clear();
                   }}
                 >

@@ -1,9 +1,8 @@
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Button, Card, Divider, ProgressBar, Text } from '@/components/ui';
-import { weakTopics } from '@/data';
+import { useWeakTopics } from '@/api/progress';
 import { useI18n } from '@/hooks/useI18n';
 import { space, subjectColors, useTheme } from '@/theme';
 
@@ -11,6 +10,17 @@ import { space, subjectColors, useTheme } from '@/theme';
 export const WeakTopics = memo(function WeakTopics() {
   const { colors } = useTheme();
   const { t, L } = useI18n('progress');
+  const weakTopics = useWeakTopics(5).data ?? [];
+
+  if (!weakTopics.length) {
+    return (
+      <Card variant="muted" elevated={false}>
+        <Text variant="body" color="muted">
+          {t('weak.empty')}
+        </Text>
+      </Card>
+    );
+  }
 
   return (
     <Card padded={false}>
@@ -18,14 +28,14 @@ export const WeakTopics = memo(function WeakTopics() {
         const tone = w.accuracy < 55 ? colors.danger : colors.warning;
         const topic = L(w.topic);
         return (
-          <Animated.View key={w.lessonId} entering={FadeInDown.duration(300).delay(i * 50)}>
+          <View key={w.topicId}>
             {i > 0 ? <Divider /> : null}
             <View style={styles.row}>
               <View style={styles.flex}>
                 <View style={styles.titleRow}>
-                  <View style={[styles.dot, { backgroundColor: subjectColors[w.subjectId] }]} />
+                  <View style={[styles.dot, { backgroundColor: subjectColors[w.subjectSlug as keyof typeof subjectColors] ?? colors.accent }]} />
                   <Text variant="caption" color="muted" numberOfLines={1}>
-                    {t(`common:subjects.${w.subjectId}`)}
+                    {t(`common:subjects.${w.subjectSlug}`)}
                   </Text>
                 </View>
                 <Text variant="bodyMedium" numberOfLines={2}>
@@ -40,15 +50,17 @@ export const WeakTopics = memo(function WeakTopics() {
                   </Text>
                 </View>
               </View>
-              <Button
-                title={t('weak.review')}
-                variant="outline"
-                size="sm"
-                onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: w.lessonId } })}
-                accessibilityLabel={t('weak.reviewA11y', { topic })}
-              />
+              {w.lessonId ? (
+                <Button
+                  title={t('weak.review')}
+                  variant="outline"
+                  size="sm"
+                  onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: w.lessonId! } })}
+                  accessibilityLabel={t('weak.reviewA11y', { topic })}
+                />
+              ) : null}
             </View>
-          </Animated.View>
+          </View>
         );
       })}
     </Card>

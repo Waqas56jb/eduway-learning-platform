@@ -4,7 +4,7 @@ import Animated, { FadeIn, FadeInDown, LinearTransition, useAnimatedStyle, useSh
 import { Icon } from '@/components/icons';
 import { MathText, PressableScale, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import type { AnswerRecord } from '@/store/progressStore';
+import type { AnswerRecord } from '@/utils/quiz';
 import { radius, space, useTheme } from '@/theme';
 import type { Question } from '@/types';
 

@@ -4,7 +4,7 @@ import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Icon, type IconName } from '@/components/icons';
 import { Confetti, ProgressRing, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { radius, space, useTheme } from '@/theme';
+import { radius, shadows, space, useTheme } from '@/theme';
 import { formatDuration } from '@/utils/format';
 import { QUIZ_PASS_MARK, scoreBand } from '@/utils/quiz';
 
@@ -17,6 +17,8 @@ export interface QuizResultSummaryProps {
   passed: boolean;
   /** Overrides the band headline ("Outstanding!", "Well done!", "Keep going!"). */
   title?: string;
+  /** Pass mark shown in the status pill (quiz rule `passThreshold`). */
+  passMark?: number;
 }
 
 /** Animated score ring, band message and stat pills. Fires confetti when passed. */
@@ -27,10 +29,11 @@ export const QuizResultSummary = memo(function QuizResultSummary({
   timeSpentSec,
   passed,
   title,
+  passMark = QUIZ_PASS_MARK,
 }: QuizResultSummaryProps) {
   const { colors } = useTheme();
   const { t } = useI18n('quiz');
-  const band = scoreBand(score);
+  const band = scoreBand(score, passMark);
   const ringColor = passed ? colors.accent : colors.warning;
   const incorrect = Math.max(0, total - correct);
 
@@ -52,31 +55,34 @@ export const QuizResultSummary = memo(function QuizResultSummary({
   return (
     <View style={styles.container}>
       <Animated.View
-        entering={ZoomIn.duration(420).springify().damping(14)}
+        entering={ZoomIn.duration(420).springify().damping(18).stiffness(220)}
+        style={styles.ringWrap}
         accessible
         accessibilityRole="summary"
         accessibilityLabel={t('result.scoreA11y', { score, correct, total })}
       >
-        <ProgressRing
-          progress={score}
-          size={176}
-          strokeWidth={14}
-          color={ringColor}
-          trackColor={colors.surfaceMuted}
-          label=" "
-        >
-          <View style={styles.ringCenter}>
-            <Text variant="display" display tabular align="center" style={styles.score}>
-              {score}
-              <Text variant="h3" color="muted">
-                %
+        <View style={[styles.halo, { backgroundColor: passed ? colors.accentSoft : colors.warningSoft }]} pointerEvents="none" />
+        <View style={[styles.ringPlate, shadows.md, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <ProgressRing
+            progress={score}
+            size={RING}
+            strokeWidth={14}
+            color={passed ? undefined : ringColor}
+            trackColor={colors.surfaceMuted}
+          >
+            <View style={styles.ringCenter}>
+              <Text variant="display" display tabular align="center" style={styles.score}>
+                {score}
+                <Text variant="h3" color="muted">
+                  %
+                </Text>
               </Text>
-            </Text>
-            <Text variant="caption" color="muted" align="center" tabular>
-              {correct}/{total}
-            </Text>
-          </View>
-        </ProgressRing>
+              <Text variant="caption" color="muted" align="center" tabular>
+                {correct}/{total}
+              </Text>
+            </View>
+          </ProgressRing>
+        </View>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.headline}>
@@ -88,7 +94,7 @@ export const QuizResultSummary = memo(function QuizResultSummary({
         >
           <Icon name={passed ? 'trophy' : 'target'} size={14} color={passed ? colors.accent : colors.warning} />
           <Text variant="label" color={passed ? colors.accent : colors.warning}>
-            {passed ? t('result.passed') : t('result.notPassed')} · {t('result.passMark', { value: QUIZ_PASS_MARK })}
+            {passed ? t('result.passed') : t('result.notPassed')} · {t('result.passMark', { value: passMark })}
           </Text>
         </View>
         <Text variant="h1" display align="center">
@@ -122,10 +128,24 @@ export const QuizResultSummary = memo(function QuizResultSummary({
   );
 });
 
+const RING = 168;
+const PLATE = RING + 24;
+const HALO = PLATE + 40;
+
 const styles = StyleSheet.create({
   container: { alignItems: 'center', gap: space.xl },
+  ringWrap: { width: HALO, height: HALO, alignItems: 'center', justifyContent: 'center' },
+  halo: { position: 'absolute', width: HALO, height: HALO, borderRadius: HALO / 2 },
+  ringPlate: {
+    width: PLATE,
+    height: PLATE,
+    borderRadius: PLATE / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ringCenter: { alignItems: 'center', justifyContent: 'center' },
-  score: { fontSize: 48, lineHeight: 56 },
+  score: { fontSize: 46, lineHeight: 54 },
   headline: { alignItems: 'center', gap: space.sm, paddingHorizontal: space.md },
   statusPill: {
     flexDirection: 'row',

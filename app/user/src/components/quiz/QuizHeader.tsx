@@ -41,8 +41,8 @@ export const QuizHeader = memo(function QuizHeader({
       <View style={styles.row}>
         <IconButton icon="close" variant="surface" onPress={onClose} accessibilityLabel={t('header.close')} />
         <View style={styles.titleWrap}>
-          <Text variant="overline" color="accent" align="center">
-            {t('title').toUpperCase()}
+          <Text variant="overline" color="accent" align="center" numberOfLines={1}>
+            {t('title')}
           </Text>
           <Text variant="label" align="center" numberOfLines={1}>
             {title}

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -104,7 +104,7 @@ export const OtpInput = memo(function OtpInput({
   accessibilityLabel,
   style,
 }: OtpInputProps) {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
   const [focused, setFocused] = useState(false);
   const shake = useSharedValue(0);
 
@@ -187,7 +187,11 @@ const styles = StyleSheet.create({
   digit: { fontFamily: fonts.semibold, fontSize: 24, lineHeight: 30, textAlign: 'center' },
   caret: { position: 'absolute', width: 2, height: 26, borderRadius: 1 },
   hiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    start: 0,
+    end: 0,
     opacity: 0.015,
     color: 'transparent',
     fontSize: 1,

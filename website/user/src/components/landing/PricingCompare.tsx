@@ -1,7 +1,7 @@
 import { Check, Crown, Minus, MoveHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Reveal, SectionHeading } from '@/components/ui';
-import { packages } from '@/data';
+import { usePackages } from '@/api/packages';
+import { Reveal, SectionHeading, Skeleton } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 import type { Package } from '@/types';
@@ -11,24 +11,29 @@ type Cell = boolean | number | { key: string };
 
 const unlimited = { key: 'unlimited' };
 
-/** Comparison rows, each resolving a value per package. */
+/** Comparison rows, each resolving a value per package from the admin-managed `comparison` block (PAY-01). */
 const ROWS: { key: string; value: (p: Package) => Cell }[] = [
-  { key: 'subjects', value: (p) => p.subjects.length },
-  { key: 'lessons', value: () => true },
-  { key: 'quizzes', value: () => true },
-  { key: 'bank', value: (p) => (p.id === 'single' ? { key: 'subjectBank' } : p.id === 'full' ? unlimited : { key: 'fullBank' }) },
-  { key: 'mistakes', value: () => true },
-  { key: 'simulator', value: (p) => (p.id === 'single' ? false : p.id === 'full' ? unlimited : true) },
-  { key: 'ai', value: (p) => p.aiQuota },
-  { key: 'pdf', value: (p) => p.id !== 'single' },
-  { key: 'analytics', value: (p) => p.id === 'full' },
-  { key: 'devices', value: () => true },
-  { key: 'support', value: (p) => p.id === 'full' },
+  { key: 'subjects', value: (p) => p.comparison?.subjectsCount ?? p.subjects.length },
+  { key: 'lessons', value: (p) => p.comparison?.lessons ?? true },
+  { key: 'quizzes', value: (p) => p.comparison?.quizzes ?? true },
+  {
+    key: 'bank',
+    value: (p) =>
+      p.comparison?.questionBank === 'subject' ? { key: 'subjectBank' } : p.comparison?.questionBank === 'unlimited' ? unlimited : { key: 'fullBank' },
+  },
+  { key: 'mistakes', value: (p) => p.comparison?.mistakes ?? true },
+  { key: 'simulator', value: (p) => (p.comparison?.examSimulator === 'unlimited' ? unlimited : !!p.comparison?.examSimulator) },
+  { key: 'ai', value: (p) => p.comparison?.aiQuota ?? p.aiQuota },
+  { key: 'pdf', value: (p) => !!p.comparison?.pdfResources },
+  { key: 'analytics', value: (p) => !!p.comparison?.analytics },
+  { key: 'devices', value: (p) => (p.comparison?.devices ? p.comparison.devices : true) },
+  { key: 'support', value: (p) => !!p.comparison?.prioritySupport },
 ];
 
 export function PricingCompare() {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
+  const { data: packages = [], isLoading } = usePackages();
 
   const renderCell = (cell: Cell, popular: boolean) => {
     if (cell === true)
@@ -63,7 +68,8 @@ export function PricingCompare() {
             <MoveHorizontal className="h-4 w-4 text-accent" aria-hidden />
             {t('pricingPage.compare.scrollHint')}
           </p>
-          <div className="overflow-x-auto rounded-3xl border border-primary/[0.07] bg-white shadow-soft scrollbar-none">
+          {isLoading && <Skeleton className="h-[560px] rounded-3xl" />}
+          <div hidden={isLoading} className="relative overflow-x-auto rounded-3xl border border-primary/[0.07] bg-white shadow-soft scrollbar-none">
             <table className="w-full min-w-[640px] border-collapse text-start">
               <caption className="sr-only">{t('pricingPage.compare.caption')}</caption>
               <thead>

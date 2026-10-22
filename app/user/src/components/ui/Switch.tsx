@@ -1,5 +1,6 @@
 import { memo, useEffect } from 'react';
-import { I18nManager, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { isRTL } from '@/utils/rtl';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { palette, useTheme } from '@/theme';
 import { haptic } from '@/utils/haptics';
@@ -23,7 +24,7 @@ const TRAVEL = TRACK_W - KNOB - PAD * 2;
 export const Switch = memo(function Switch({ value, onValueChange, accessibilityLabel, disabled, style }: SwitchProps) {
   const { isDark } = useTheme();
   const progress = useSharedValue(value ? 1 : 0);
-  const dir = I18nManager.isRTL ? -1 : 1;
+  const dir = isRTL() ? -1 : 1;
 
   useEffect(() => {
     progress.value = withSpring(value ? 1 : 0, { damping: 16, stiffness: 240, mass: 0.7 });

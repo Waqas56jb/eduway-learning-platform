@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export function Skeleton({ className }: { className?: string }) {
@@ -41,17 +40,4 @@ export function SkeletonList({ rows = 4, className }: { rows?: number; className
       ))}
     </div>
   );
-}
-
-/**
- * Simulates network latency for mock data so skeleton states are visible briefly.
- * Returns `true` once "loaded".
- */
-export function useMockLoading(ms = 550) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setReady(true), ms);
-    return () => window.clearTimeout(t);
-  }, [ms]);
-  return ready;
 }

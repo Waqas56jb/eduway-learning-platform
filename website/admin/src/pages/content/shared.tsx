@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
-import type { ContentStatus, Lesson, LessonVersion } from '@/types';
-import { uid } from '@/utils/id';
-import { useLessons } from '@/store/core';
-import { useCan, useCurrentAdmin } from '@/store/auth';
+import { useQueryClient } from '@tanstack/react-query';
+import type { ContentStatus, Lesson } from '@/types';
+import { useCan } from '@/store/auth';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Field, Input } from '@/components/ui/Input';
-import { MOCK_NOW } from '@/utils/random';
+import { qk } from '@/api/keys';
+import { lessonsApi, type LessonVM, type LessonWriteDto } from '@/api/content';
 
 export const CONTENT_STATUSES: ContentStatus[] = ['draft', 'in_review', 'approved', 'scheduled', 'published', 'archived'];
 
@@ -25,26 +25,11 @@ export const STATUS_COLOR: Record<ContentStatus, string> = {
   archived: '#64748B',
 };
 
-const STATUS_ACTION: Record<ContentStatus, string> = {
-  draft: 'revert_draft',
-  in_review: 'submit',
-  approved: 'approve',
-  scheduled: 'schedule',
-  published: 'publish',
-  archived: 'archive',
-};
-
-export function nextVersion(lesson: Pick<Lesson, 'versions'>, status: ContentStatus, note: string, author: string): LessonVersion[] {
-  const top = lesson.versions.reduce((m, v) => Math.max(m, v.version), 0);
-  return [{ id: uid('ver'), version: top + 1, author, note, status, createdAt: new Date().toISOString() }, ...lesson.versions];
-}
-
-/** Status transitions for lessons with permission checks, version entries and audit summaries. */
+/** Status transitions for lessons (ADM-LSN-06). The server writes the version entry and the audit log. */
 export function useLessonStatus() {
   const { t } = useTranslation();
   const can = useCan();
-  const admin = useCurrentAdmin();
-  const update = useLessons((s) => s.update);
+  const qc = useQueryClient();
 
   const allowed = useCallback(
     (to: ContentStatus) => (APPROVAL_STATUSES.has(to) ? can('content', 'approve') : can('content', 'edit') || can('content', 'create')),
@@ -52,22 +37,18 @@ export function useLessonStatus() {
   );
 
   const move = useCallback(
-    (lesson: Lesson, to: ContentStatus, publishAt?: string | null) => {
-      const author = admin?.name ?? 'System';
-      const patch: Partial<Lesson> = {
-        status: to,
-        updatedAt: new Date().toISOString(),
-        versions: nextVersion(lesson, to, t(`content.editor.versionNote.${to}`, { lng: 'en' }), author),
-      };
-      if (to === 'scheduled') patch.publishAt = publishAt ?? null;
-      if (to === 'published') patch.publishAt = new Date().toISOString();
-      if (to === 'draft' || to === 'in_review' || to === 'approved') patch.publishAt = null;
-      update(lesson.id, patch, {
-        action: `lesson.${STATUS_ACTION[to]}`,
-        summary: `Moved lesson “${lesson.title_en}” from ${lesson.status.replace('_', ' ')} to ${to.replace('_', ' ')}`,
+    async (lesson: Pick<Lesson, 'id'>, to: ContentStatus, publishAt?: string | null, patch?: Partial<LessonWriteDto>): Promise<LessonVM> => {
+      const res = await lessonsApi.transition(lesson.id, {
+        to,
+        publishAt: to === 'scheduled' ? (publishAt ?? undefined) : undefined,
+        note: t(`content.editor.versionNote.${to}`, { lng: 'en' }),
+        patch,
       });
+      qc.setQueryData(qk.lessons.detail(lesson.id), res);
+      await Promise.all([qc.invalidateQueries({ queryKey: qk.lessons.all }), qc.invalidateQueries({ queryKey: qk.dashboard.all })]);
+      return res;
     },
-    [admin, t, update],
+    [t, qc],
   );
 
   return { allowed, move };
@@ -75,7 +56,7 @@ export function useLessonStatus() {
 
 /** Default schedule time: tomorrow 18:00 local. */
 const defaultSchedule = () => {
-  const d = new Date(MOCK_NOW > new Date() ? MOCK_NOW : new Date());
+  const d = new Date();
   d.setDate(d.getDate() + 1);
   d.setHours(18, 0, 0, 0);
   return format(d, "yyyy-MM-dd'T'HH:mm");

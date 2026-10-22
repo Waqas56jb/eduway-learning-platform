@@ -3,13 +3,24 @@ import { StyleSheet, View } from 'react-native';
 import { Icon, SubjectIcon } from '@/components/icons';
 import { PressableScale, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import type { Attempt } from '@/store';
-import { radius, space, subjectColors, useTheme } from '@/theme';
+import type { SubjectId } from '@/types';
+import { radius, shadows, space, subjectColors, useTheme } from '@/theme';
 import { timeAgo } from '@/utils/format';
 
+/** A finished practice session (PRA-05 row). */
+export interface RecentAttempt {
+  id: string;
+  subjectId?: SubjectId;
+  attemptNo: number;
+  score: number;
+  correct: number;
+  total: number;
+  date: string;
+}
+
 interface Props {
-  attempt: Attempt;
-  onPress(attempt: Attempt): void;
+  attempt: RecentAttempt;
+  onPress(attempt: RecentAttempt): void;
 }
 
 export const RecentAttemptRow = memo(function RecentAttemptRow({ attempt, onPress }: Props) {
@@ -25,7 +36,7 @@ export const RecentAttemptRow = memo(function RecentAttemptRow({ attempt, onPres
       onPress={() => onPress(attempt)}
       accessibilityRole="button"
       accessibilityLabel={t('recent.a11y', { title, score: attempt.score, when })}
-      style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      style={[styles.row, shadows.sm, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
       <View style={[styles.icon, { backgroundColor: `${color}1F` }]}>
         {attempt.subjectId ? (
@@ -57,12 +68,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    padding: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 64,
+    minHeight: 76,
   },
-  icon: { width: 42, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1, gap: space.xxs },
-  score: { paddingHorizontal: space.sm, paddingVertical: space.xs, borderRadius: radius.pill },
+  score: { minWidth: 48, height: 26, paddingHorizontal: space.sm, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { activityHeatmap } from '@/data';
+import type { StreakCalendarDto } from '@/api/types';
 import { useLang } from '@/hooks/useLang';
 
 /** cream → gold → navy */
@@ -12,12 +12,15 @@ type Cell = { date: string; level: number } | null;
  * GitHub-style activity grid: one column per week, one row per weekday (Saturday first,
  * as the Iraqi school week starts on Saturday). Columns follow the reading direction.
  */
-export function ActivityHeatmap() {
+export function ActivityHeatmap({ calendar }: { calendar: StreakCalendarDto }) {
   const { t } = useTranslation();
   const { fmtDate, isRtl } = useLang();
   const scrollRef = useRef<HTMLDivElement>(null);
+  // PRG-09: one row per day with a server-computed intensity level (thresholds from settings).
+  const activityHeatmap = calendar.days;
 
   const weeks = useMemo(() => {
+    if (!activityHeatmap.length) return [] as Cell[][];
     const first = new Date(`${activityHeatmap[0].date}T12:00:00Z`);
     const lead = (first.getUTCDay() + 1) % 7; // Sat = 0
     const cells: Cell[] = [...Array<Cell>(lead).fill(null), ...activityHeatmap];
@@ -25,7 +28,7 @@ export function ActivityHeatmap() {
     const out: Cell[][] = [];
     for (let i = 0; i < cells.length; i += 7) out.push(cells.slice(i, i + 7));
     return out;
-  }, []);
+  }, [activityHeatmap]);
 
   const monthLabels = useMemo(() => {
     let prev = '';
@@ -48,7 +51,10 @@ export function ActivityHeatmap() {
     [fmtDate],
   );
 
-  const active = activityHeatmap.filter((d) => d.level > 0).length;
+  const active = calendar.activeDays;
+  const stats = { longest: calendar.longest, month: calendar.activeDaysLast30, busiest: calendar.busiestWeekday };
+  // busiestWeekday: 0 = Saturday. 2026-10-17 is a Saturday — used only to localise the weekday name.
+  const busiestName = stats.busiest === null ? '—' : fmtDate(new Date(Date.UTC(2026, 9, 17 + stats.busiest, 12)), { weekday: 'long' });
 
   // Show the most recent weeks first on narrow screens.
   useEffect(() => {
@@ -112,6 +118,18 @@ export function ActivityHeatmap() {
           {t('account.progress.more')}
         </span>
       </div>
+      <dl className="mt-5 grid grid-cols-3 gap-2 border-t border-primary/5 pt-5 sm:gap-3">
+        {[
+          [t('account.progress.heatStats.longest'), t('account.progress.daysValue', { count: stats.longest })],
+          [t('account.progress.heatStats.month'), t('account.progress.daysValue', { count: stats.month })],
+          [t('account.progress.heatStats.busiest'), busiestName],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-cream/70 px-3 py-2.5">
+            <dt className="text-[11px] leading-snug text-muted">{label}</dt>
+            <dd className="mt-0.5 text-sm font-bold text-primary num sm:text-base">{value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

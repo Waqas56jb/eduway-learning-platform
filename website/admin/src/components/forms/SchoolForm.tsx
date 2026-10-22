@@ -4,11 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import type { School } from '@/types';
-import { governorates } from '@/data';
-import { useMarketers, useSchools } from '@/store/core';
+import { isApiError, toastError } from '@/api/client';
+import { useLookups } from '@/api/lookups';
+import { partnerKeys, schoolsApi, type SchoolWriteDto } from '@/api/partners';
 import { useLocalize } from '@/hooks/useLocale';
-import { uid } from '@/utils/id';
+import { useAttributionGuard } from '@/pages/marketers/attribution';
 import { Button, Drawer, Field, Input, Select } from '@/components/ui';
 
 interface SchoolFormProps {
@@ -24,10 +26,10 @@ const toDateInput = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) 
 export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const marketers = useMarketers((s) => s.items);
-  const add = useSchools((s) => s.add);
-  const update = useSchools((s) => s.update);
-  const existing = useSchools((s) => s.items);
+  const lookups = useLookups();
+  const marketers = lookups.marketers;
+  const qc = useQueryClient();
+  const guard = useAttributionGuard();
 
   const req = t('errors.required');
   const schema = z
@@ -37,8 +39,7 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
       code: z
         .string()
         .trim()
-        .regex(/^[A-Z0-9-]{4,16}$/, t('schools.codeFormat'))
-        .refine((c) => !existing.some((s) => s.code === c && s.id !== school?.id), { message: `${t('schools.fields.code')} ✕` }),
+        .regex(/^[A-Z0-9-]{4,16}$/, t('schools.codeFormat')),
       city_en: z.string().trim().min(2, req),
       city_ar: z.string().trim().min(2, req),
       governorateId: z.string().min(1, req),
@@ -61,7 +62,7 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
     code: school?.code ?? '',
     city_en: school?.city_en ?? '',
     city_ar: school?.city_ar ?? '',
-    governorateId: school?.governorateId ?? 'gov_bgd',
+    governorateId: school?.governorateId ?? 'baghdad',
     contactName: school?.contactName ?? '',
     contactMobile: school?.contactMobile ?? '',
     marketerId: school?.marketerId ?? '',
@@ -74,6 +75,7 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: defaults() });
 
@@ -83,28 +85,52 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
   }, [open, school?.id]);
 
   const onSubmit = async (v: FormValues) => {
-    await new Promise((r) => setTimeout(r, 300));
-    const patch = {
-      ...v,
-      marketerId: v.marketerId || null,
+    const body: SchoolWriteDto = {
+      name: { en: v.name_en, ar: v.name_ar },
+      code: v.code,
+      city: { en: v.city_en, ar: v.city_ar },
+      governorateId: v.governorateId,
+      contactName: v.contactName,
+      contactMobile: v.contactMobile,
       contractStart: new Date(v.contractStart).toISOString(),
       contractEnd: new Date(v.contractEnd).toISOString(),
+      status: v.status,
     };
-    if (school) {
-      update(school.id, patch);
-      toast.success(t('toast.updated', { entity: t('schools.entity') }));
-    } else {
-      add({
-        id: uid('sch'),
-        ...patch,
-        verifiedPaidStudents: 0,
-        tier: 'Bronze',
-        pendingSettlement: 0,
-        notes: [],
-      });
-      toast.success(t('toast.created', { entity: t('schools.entity') }));
+    const target = v.marketerId || null;
+    try {
+      if (school) {
+        // marketerId is not writable via PATCH (contract §34.1 #23) — attribution goes through the guarded endpoint.
+        await schoolsApi.update(school.id, body);
+        if (target !== school.marketerId) {
+          const cur = marketers.find((m) => m.id === school.marketerId);
+          const res = await guard({
+            schoolName: L(school, 'name'),
+            currentMarketerName: cur ? L(cur, 'name') : null,
+            needsReason: !!school.marketerId && !!target,
+            run: (overrideReason) => schoolsApi.setMarketer(school.id, { marketerId: target, overrideReason }),
+          });
+          if (res?.overridden) toast.success(t('marketers.detail.overridden'));
+        }
+        toast.success(t('toast.updated', { entity: t('schools.entity') }));
+      } else {
+        await schoolsApi.create({ ...body, marketerId: target });
+        toast.success(t('toast.created', { entity: t('schools.entity') }));
+      }
+      await Promise.all(partnerKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+      onClose();
+    } catch (e) {
+      if (isApiError(e) && e.code === 'CONFLICT') {
+        setError('code', { message: t('schools.codeTaken') });
+        return;
+      }
+      if (isApiError(e) && Object.keys(e.fields).length) {
+        for (const [k, msg] of Object.entries(e.fields)) {
+          setError(k.replace(/^(name|city)\.(en|ar)$/, '$1_$2') as keyof FormValues, { message: msg });
+        }
+        return;
+      }
+      toastError(e);
     }
-    onClose();
   };
 
   return (
@@ -149,13 +175,13 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
             <Input id="sf-city-ar" dir="rtl" invalid={!!errors.city_ar} {...register('city_ar')} />
           </Field>
           <Field label={t('common.governorate')} error={errors.governorateId?.message} required htmlFor="sf-gov">
-            <Select id="sf-gov" options={governorates.map((g) => ({ value: g.id, label: L(g, 'name') }))} {...register('governorateId')} />
+            <Select id="sf-gov" options={lookups.governorates.map((g) => ({ value: g.id, label: L(g, 'name') }))} {...register('governorateId')} />
           </Field>
           <Field label={t('schools.fields.marketer')} htmlFor="sf-mkt">
             <Select
               id="sf-mkt"
               placeholder={t('schools.unassigned')}
-              options={marketers.map((m) => ({ value: m.id, label: L(m, 'name') }))}
+              options={marketers.filter((m) => m.status === 'active' || m.id === school?.marketerId).map((m) => ({ value: m.id, label: L(m, 'name') }))}
               {...register('marketerId')}
             />
           </Field>

@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { memo, useCallback } from 'react';
 import { Dialog } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { useAuthStore } from '@/store';
+import { useAuthStore } from '@/store/authStore';
 import { haptic } from '@/utils/haptics';
 
 export interface LogoutDialogProps {

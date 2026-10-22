@@ -53,7 +53,8 @@
     "smsNote": "Arabic SMS uses UCS-2 encoding: 70 characters per segment (67 when split). Keep OTP and alert messages to a single segment to reduce cost.",
     "preview": "Live preview",
     "emptyBody": "Your message preview will appear here.",
-    "sampleValues": "Sample values"
+    "sampleValues": "Sample values",
+    "variablesFailed": "Couldn’t load variables — retry"
   },
   "campaign": {
     "title": "Send campaign",
@@ -90,7 +91,21 @@
     "cancelCampaign": "Cancel campaign",
     "cancelTitle": "Cancel “{{name}}”?",
     "cancelBody": "The scheduled send will be stopped and the campaign moved back to drafts.",
-    "cancelledToast": "Scheduled campaign cancelled"
+    "cancelledToast": "Scheduled campaign cancelled",
+    "subscriptionStatus": "Subscription status",
+    "platforms": "Platforms",
+    "platformsHint": "Target app users (iOS / Android push) and/or the website. Leave empty for all.",
+    "allPlatforms": "All platforms",
+    "matchedOf": "{{matched}} students match, {{reachable}} reachable on this channel",
+    "excluded": {
+      "noPushToken": "{{count}} without a push token",
+      "noEmail": "{{count}} without email",
+      "optedOut": "{{count}} opted out",
+      "locked": "{{count}} locked"
+    },
+    "pushReach": "{{count}} matching students have no registered app device and will be skipped.",
+    "noRecipients": "No students can be reached with these filters on this channel.",
+    "loadingTemplates": "Loading templates…"
   },
   "log": {
     "title": "Delivery log",
@@ -107,6 +122,13 @@
     "attempts": "Attempts",
     "retried": "{{count}} message(s) queued for retry",
     "retryAllFailed": "Retry all failed",
-    "retrySelected": "Retry {{count}} failed"
+    "retrySelected": "Retry {{count}} failed",
+    "nothingToRetry": "No failed messages to retry"
+  },
+  "bulkFailed": "{{count}} item(s) could not be updated: {{message}}",
+  "platforms": {
+    "web": "Website",
+    "ios": "iOS app",
+    "android": "Android app"
   }
 }

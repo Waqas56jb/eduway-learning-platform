@@ -1,9 +1,16 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
-import { BellOff, CheckCheck, ChevronRight, Crown, PlayCircle, Receipt, Sparkles, Timer, type LucideIcon } from 'lucide-react';
+import { BellOff, CheckCheck, ChevronRight, Crown, PlayCircle, Receipt, Sparkles, Timer, Trash2, type LucideIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, EmptyState, PageHeader, Seo, SkeletonList, Tabs, useMockLoading, useToast } from '@/components/ui';
+import {
+  notificationHref,
+  useDeleteNotification,
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotifications,
+} from '@/api/notifications';
+import { Button, EmptyState, ErrorState, PageHeader, Seo, SkeletonList, Tabs, useToast } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { useStudent } from '@/hooks/useProgress';
 import { cn } from '@/lib/utils';
@@ -31,21 +38,21 @@ function groupOf(iso: string, now: Date): Group {
 export default function Notifications() {
   const { t } = useTranslation();
   const { l, fmtRelative, fmtDate } = useLang();
-  const { notifications, unreadCount, markNotificationRead, markAllNotificationsRead } = useStudent();
+  const { unreadCount } = useStudent();
   const toast = useToast();
   const navigate = useNavigate();
-  const ready = useMockLoading(600);
+  // NTF-01 (newest 100; tabs filter client-side so read/unread changes animate in place), NTF-03/04/05.
+  const listQ = useNotifications('all', 100);
+  const markRead = useMarkNotificationRead();
+  const markAll = useMarkAllNotificationsRead();
+  const remove = useDeleteNotification();
+  const ready = !listQ.isLoading;
   const [filter, setFilter] = useState<Filter>('all');
 
-  const sorted = useMemo(() => [...notifications].sort((a, b) => b.date.localeCompare(a.date)), [notifications]);
+  const sorted = useMemo(() => [...(listQ.data?.items ?? [])].sort((a, b) => b.date.localeCompare(a.date)), [listQ.data]);
 
-  // Mock timestamps are fixed; if the newest one lies in the future of this device's clock, shift the
-  // whole feed back so it never reads "in 10 hours" while keeping the relative spacing intact.
-  const shiftMs = useMemo(() => {
-    const newest = sorted.length ? new Date(sorted[0].date).getTime() : 0;
-    return Math.max(0, newest - Date.now() + 20 * 60_000);
-  }, [sorted]);
-  const shown = useCallback((iso: string) => new Date(new Date(iso).getTime() - shiftMs).toISOString(), [shiftMs]);
+  // Clamp server timestamps that are slightly ahead of this device's clock (never "in 2 minutes").
+  const shown = useCallback((iso: string) => (new Date(iso).getTime() > Date.now() ? new Date().toISOString() : iso), []);
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { all: sorted.length, unread: 0, lesson: 0, exam: 0, payment: 0, subscription: 0 };
@@ -53,8 +60,11 @@ export default function Notifications() {
       if (!n.read) c.unread++;
       if (n.type in c) c[n.type as Filter]++;
     }
+    // Server totals (meta.counts) win when the feed is longer than the loaded page.
+    const m = listQ.data?.meta.counts;
+    if (m) for (const k of Object.keys(c) as Filter[]) if (typeof m[k] === 'number') c[k] = Math.max(c[k], m[k]);
     return c;
-  }, [sorted]);
+  }, [sorted, listQ.data]);
 
   const visible = sorted.filter((n) =>
     filter === 'all' ? true : filter === 'unread' ? !n.read : n.type === filter,
@@ -72,8 +82,8 @@ export default function Notifications() {
   }, [visible, shown]);
 
   const open = (n: AppNotification) => {
-    if (!n.read) markNotificationRead(n.id);
-    if (n.link) navigate(n.link);
+    if (!n.read) markRead.mutate(n.id);
+    if (n.target?.kind && n.target.kind !== 'none' && n.target.kind !== 'notifications') navigate(notificationHref(n));
   };
 
   const filters: Filter[] = ['all', 'unread', 'lesson', 'exam', 'payment', 'subscription'];
@@ -91,10 +101,8 @@ export default function Notifications() {
             variant="outline"
             disabled={unreadCount === 0}
             leftIcon={<CheckCheck className="h-4 w-4" aria-hidden />}
-            onClick={() => {
-              markAllNotificationsRead();
-              toast.success(t('account.notifications.markedAll'));
-            }}
+            loading={markAll.isPending}
+            onClick={() => markAll.mutate(undefined, { onSuccess: () => toast.success(t('account.notifications.markedAll')) })}
           >
             {t('account.notifications.markAll')}
           </Button>
@@ -109,7 +117,9 @@ export default function Notifications() {
         className="mb-6"
       />
 
-      {!ready ? (
+      {listQ.isError ? (
+        <ErrorState onRetry={() => void listQ.refetch()} />
+      ) : !ready ? (
         <SkeletonList rows={5} />
       ) : groups.length === 0 ? (
         <EmptyState
@@ -149,6 +159,7 @@ export default function Notifications() {
                             animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 6) * 0.04 } }}
                             exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
                           >
+                            <div className="group/row relative">
                             <button
                               type="button"
                               onClick={() => open(n)}
@@ -184,7 +195,7 @@ export default function Notifications() {
                                 ) : (
                                   <span className="mt-1.5 h-2.5 w-2.5" aria-hidden />
                                 )}
-                                {n.link && (
+                                {n.target?.kind && n.target.kind !== 'none' && (
                                   <ChevronRight
                                     className="h-4 w-4 text-muted/60 transition group-hover:translate-x-0.5 group-hover:text-primary rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5"
                                     aria-hidden
@@ -192,6 +203,16 @@ export default function Notifications() {
                                 )}
                               </span>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => remove.mutate(n.id)}
+                              aria-label={t('account.notifications.delete')}
+                              title={t('account.notifications.delete')}
+                              className="absolute bottom-3 end-3 rounded-lg p-1.5 text-muted/60 opacity-0 transition hover:bg-danger/10 hover:text-danger focus:opacity-100 group-hover/row:opacity-100 sm:end-4"
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </button>
+                            </div>
                           </motion.li>
                         );
                       })}

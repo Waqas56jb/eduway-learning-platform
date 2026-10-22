@@ -59,7 +59,9 @@
     "removeOverrideTitle": "Remove this lesson override?",
     "removeOverrideBody": "The lesson will fall back to its subject's default quiz rule.",
     "noOverrides": "No lesson overrides",
-    "noOverridesHint": "Every lesson uses its subject default."
+    "noOverridesHint": "Every lesson uses its subject default.",
+    "cooldownMinutes": "Cooldown",
+    "overrideExists": "This lesson already has an override."
   },
   "blueprints": {
     "title": "Exam Blueprints",
@@ -112,7 +114,11 @@
     "availabilityHint": "Counts approved and published questions in the bank for each difficulty.",
     "shortTitle": "Publish with gaps in the question pool?",
     "shortBody": "{{count}} row(s) do not have enough approved questions. Students may receive fewer questions than planned.",
-    "publishedToast": "Blueprint published"
+    "publishedToast": "Blueprint published",
+    "passMark": "Pass mark",
+    "passMarkHint": "Minimum score to pass this exam",
+    "descriptionEn": "Description (English)",
+    "descriptionAr": "Description (Arabic)"
   },
   "attempts": {
     "title": "Attempts",
@@ -123,7 +129,8 @@
     "time": "Time",
     "kind": {
       "quiz": "Lesson quiz",
-      "exam": "Exam"
+      "exam": "Exam",
+      "practice": "Practice"
     },
     "statTotal": "Attempts",
     "statAvg": "Average score",
@@ -134,6 +141,7 @@
     "studentAnswer": "Student's answer",
     "correctAnswer": "Correct answer",
     "notAnswered": "Not answered",
-    "removedQuestion": "This question has been removed from the bank."
+    "removedQuestion": "This question has been removed from the bank.",
+    "platform": "Platform"
   }
 }

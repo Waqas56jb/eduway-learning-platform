@@ -1,7 +1,7 @@
 import { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
-import { weeklyStudy } from '@/data';
+import type { WeeklyStudyDto } from '@/api/types';
 import { useLang } from '@/hooks/useLang';
 
 const HEIGHT = 260;
@@ -26,12 +26,12 @@ function ChartTooltip({ active, payload }: TooltipProps<number, string>) {
 }
 
 /** Area chart of minutes studied per day this week (RTL-aware axes). */
-export function WeeklyStudyChart() {
+export function WeeklyStudyChart({ days }: { days: WeeklyStudyDto['days'] }) {
   const { l, isRtl } = useLang();
   const gid = `wk-${useId().replace(/:/g, '')}`;
   const data = useMemo<Point[]>(
-    () => weeklyStudy.map((d) => ({ day: l(d.day), minutes: d.minutes, questions: d.questions })),
-    [l],
+    () => days.map((d) => ({ day: l(d.day), minutes: d.minutes, questions: d.questions })),
+    [l, days],
   );
 
   return (

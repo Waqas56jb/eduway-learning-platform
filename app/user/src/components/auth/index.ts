@@ -1,11 +1,14 @@
-export { AuthScaffold } from './AuthScaffold';
-export { MobileField } from './MobileField';
-export { SelectField } from './SelectField';
+export { AuthScaffold, useAuthReveal } from './AuthScaffold';
+export { MobileField, AUTH_INPUT_STYLE } from './MobileField';
+export { SelectField, AUTH_FIELD_HEIGHT } from './SelectField';
 export { PickerRow } from './PickerRow';
 export { GovernoratePicker } from './GovernoratePicker';
 export { SchoolPicker } from './SchoolPicker';
 export { DemoHint } from './DemoHint';
 export { StepIndicator } from './StepIndicator';
 export { LegalLinks } from './LegalLinks';
+export { FormSection } from './FormSection';
+export { AuthSwitchLink } from './AuthSwitchLink';
 export { useFieldError } from './useFieldError';
+export { useKeyboard } from './useKeyboard';
 export * from './schemas';

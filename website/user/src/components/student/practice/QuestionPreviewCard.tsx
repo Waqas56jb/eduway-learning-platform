@@ -1,20 +1,32 @@
 import { motion } from 'framer-motion';
 import { Play, Star, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Lock } from 'lucide-react';
+import { useAppConfig } from '@/api/appSettings';
+import { useBookmarks } from '@/api/bookmarks';
+import { useSubjectLookup } from '@/api/catalog';
+import type { QuestionPublic } from '@/api/types';
 import { Badge, Button } from '@/components/ui';
-import { getSubject } from '@/data';
+import { MathText } from '@/components/ui/MathText';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { cn } from '@/lib/utils';
-import type { Question } from '@/types';
 import { difficultyTone, tagLabel } from './utils';
 
 /** Compact question card for bank results: preview text, meta, tags and a bookmark toggle. */
-export function QuestionPreviewCard({ question, onPractice }: { question: Question; onPractice: (q: Question) => void }) {
+export function QuestionPreviewCard({
+  question,
+  onPractice,
+  busy,
+}: {
+  question: QuestionPublic;
+  onPractice: (q: QuestionPublic) => void;
+  busy?: boolean;
+}) {
   const { t } = useTranslation();
   const { l } = useLang();
-  const { isBookmarked, toggleBookmark } = useStudent();
-  const subject = getSubject(question.subjectId);
+  const { isBookmarked, toggleBookmark } = useBookmarks();
+  const subject = useSubjectLookup()(question.subjectSlug);
+  const { data: config } = useAppConfig();
   const marked = isBookmarked(question.id);
 
   return (
@@ -32,6 +44,12 @@ export function QuestionPreviewCard({ question, onPractice }: { question: Questi
             {t(`common.difficulty.${question.difficulty}`)}
           </Badge>
           <span className="text-xs font-medium text-muted">{l(question.topic)}</span>
+          {question.locked && (
+            <Badge tone="muted">
+              <Lock className="h-3 w-3" aria-hidden />
+              {t('common.locked')}
+            </Badge>
+          )}
         </div>
         <button
           type="button"
@@ -45,7 +63,7 @@ export function QuestionPreviewCard({ question, onPractice }: { question: Questi
       </div>
 
       <h3 dir="auto" className="line-clamp-2 font-sans text-base font-semibold leading-relaxed tracking-normal text-primary">
-        {l(question.text)}
+        <MathText text={l(question.text)} />
       </h3>
 
       <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
@@ -53,7 +71,7 @@ export function QuestionPreviewCard({ question, onPractice }: { question: Questi
           {question.tags.slice(0, 3).map((tag) => (
             <li key={tag} className="inline-flex items-center gap-1 rounded-full bg-cream px-2 py-0.5 text-[11px] font-medium text-muted">
               <Tag className="h-3 w-3" aria-hidden />
-              {tagLabel(t, tag)}
+              {config?.tagLabels[tag] ? l(config.tagLabels[tag]) : tagLabel(t, tag)}
             </li>
           ))}
         </ul>
@@ -61,6 +79,7 @@ export function QuestionPreviewCard({ question, onPractice }: { question: Questi
           size="sm"
           variant="subtle"
           onClick={() => onPractice(question)}
+          loading={busy}
           leftIcon={<Play className="h-3.5 w-3.5 rtl:-scale-x-100" />}
           aria-label={t('practice.bank.tryOneLabel', { text: l(question.text) })}
         >

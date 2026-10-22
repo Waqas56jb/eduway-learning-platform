@@ -2,9 +2,11 @@ import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter } from 'react-router-dom';
 import { MotionConfig } from 'framer-motion';
 import { ToastProvider } from '@/components/ui';
+import { ApiBridge } from '@/components/system/ApiBridge';
+import { LegalPrompt } from '@/components/system/LegalPrompt';
+import { MaintenanceGate } from '@/components/system/MaintenanceGate';
 import { AuthProvider } from '@/context/AuthContext';
 import { LangProvider } from '@/context/LangContext';
-import { StudentProvider } from '@/context/StudentContext';
 import { AppRoutes } from '@/routes/AppRoutes';
 
 export default function App() {
@@ -14,11 +16,13 @@ export default function App() {
         <MotionConfig reducedMotion="user">
           <LangProvider>
             <AuthProvider>
-              <StudentProvider>
-                <ToastProvider>
+              <ToastProvider>
+                <ApiBridge />
+                <MaintenanceGate>
                   <AppRoutes />
-                </ToastProvider>
-              </StudentProvider>
+                  <LegalPrompt />
+                </MaintenanceGate>
+              </ToastProvider>
             </AuthProvider>
           </LangProvider>
         </MotionConfig>

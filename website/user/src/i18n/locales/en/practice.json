@@ -206,10 +206,22 @@
       "passMark": "Pass mark"
     },
     "rules": {
-      "timed": { "title": "Timed like the real exam", "body": "The countdown keeps running even if you refresh." },
-      "autosave": { "title": "Autosave on every answer", "body": "Your answers are saved instantly as you work." },
-      "flag": { "title": "Flag questions", "body": "Mark tricky questions and come back before submitting." },
-      "autoSubmit": { "title": "Auto-submit at zero", "body": "When time runs out, your paper is submitted for you." }
+      "timed": {
+        "title": "Timed like the real exam",
+        "body": "The countdown keeps running even if you refresh."
+      },
+      "autosave": {
+        "title": "Autosave on every answer",
+        "body": "Your answers are saved instantly as you work."
+      },
+      "flag": {
+        "title": "Flag questions",
+        "body": "Mark tricky questions and come back before submitting."
+      },
+      "autoSubmit": {
+        "title": "Auto-submit at zero",
+        "body": "When time runs out, your paper is submitted for you."
+      }
     },
     "blueprints": "Exam papers",
     "blueprintsSub": "Choose a paper. Each attempt counts, so start when you're ready.",
@@ -223,7 +235,8 @@
       "notTaken": "Not attempted",
       "start": "Start exam",
       "resume": "Resume exam · {{time}} left",
-      "noAttempts": "No attempts left"
+      "noAttempts": "No attempts left",
+      "opensOn": "Opens {{date}}"
     },
     "confirm": {
       "body": "Once you begin, the timer starts and cannot be paused.",
@@ -237,7 +250,8 @@
     },
     "recent": "Recent attempts",
     "pastResults": "Past results",
-    "viewResult": "View result"
+    "viewResult": "View result",
+    "noHistory": "Finished exams will appear here."
   },
   "timer": {
     "label": "Time remaining: {{time}}",
@@ -261,7 +275,8 @@
       "saving": "Saving…",
       "justNow": "Saved just now",
       "minutesAgo_one": "Saved {{count}} min ago",
-      "minutesAgo_other": "Saved {{count}} min ago"
+      "minutesAgo_other": "Saved {{count}} min ago",
+      "offline": "Not saved — retrying"
     },
     "nav": {
       "title": "Questions",
@@ -298,7 +313,8 @@
     "notFound": {
       "title": "Exam not found",
       "body": "This exam paper doesn't exist or is no longer available."
-    }
+    },
+    "preparing": "Preparing your exam paper…"
   },
   "result": {
     "seoTitle": "Result — {{title}}",

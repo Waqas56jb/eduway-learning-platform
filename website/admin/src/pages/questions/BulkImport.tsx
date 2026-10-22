@@ -1,21 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, FlaskConical, PartyPopper, RotateCcw, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Difficulty, Question, QuestionType } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/utils/cn';
-import { downloadFile, toCsv } from '@/utils/csv';
+import { toCsv } from '@/utils/csv';
 import { fmtNumber } from '@/utils/format';
-import { uid } from '@/utils/id';
-import { useQuestions } from '@/store/questions';
-import { useSubjects, useTopics, useUnits } from '@/store/core';
-import { logAudit } from '@/store/audit';
-import { useCan, useCurrentAdmin } from '@/store/auth';
-import { useLocalize } from '@/hooks/useLocale';
+import { useCan } from '@/store/auth';
+import { useLang } from '@/hooks/useLocale';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Button, ButtonLink, Card, CardBody, CardHeader, DataTable, FileUpload, Segmented } from '@/components/ui';
-import { QuestionText, nextQuestionCode, similarity } from '@/components/forms/QuestionForm';
+import { QuestionText } from '@/components/forms/QuestionForm';
+import { download, errorMessage, http, toastError } from '@/api/client';
+import { qk } from '@/api/keys';
+import { uploadFile } from '@/api/storage';
+import { questionsApi, type ImportPreviewDto, type ImportRow } from '@/api/questions';
+import type { PageMeta, SuccessEnvelope } from '@/api/types';
 
 const COLUMNS = [
   'subject', 'unit', 'topic', 'type', 'difficulty', 'body_en', 'body_ar',
@@ -27,7 +28,7 @@ type Raw = Record<Col, string>;
 
 const row = (v: Partial<Raw>): Raw => Object.fromEntries(COLUMNS.map((c) => [c, v[c] ?? ''])) as Raw;
 
-/** Example content used for the template and the "sample file" demo (3 rows intentionally invalid). */
+/** Example rows for the "Use sample file" button — sent through the real import pipeline (3 rows intentionally invalid). */
 const SAMPLE: Raw[] = [
   row({ subject: 'math', unit: '1', topic: '1', type: 'mcq', difficulty: 'easy', body_en: 'Simplify $(1 + i)^2$.', body_ar: 'بسّط $(1 + i)^2$.', option_a_en: '$2i$', option_a_ar: '$2i$', option_b_en: '$2$', option_b_ar: '$2$', option_c_en: '$0$', option_c_ar: '$0$', option_d_en: '$1 + 2i$', option_d_ar: '$1 + 2i$', correct: 'A', explanation_en: '$(1+i)^2 = 1 + 2i + i^2 = 2i$.', explanation_ar: '$(1+i)^2 = 1 + 2i - 1 = 2i$.', tags: 'complex-numbers;squares', source: 'Ministerial Exam', year: '2023' }),
   row({ subject: 'math', unit: '3', topic: '2', type: 'mcq', difficulty: 'medium', body_en: 'Evaluate $\\int_1^{e} \\frac{1}{x}\\,dx$.', body_ar: 'احسب $\\int_1^{e} \\frac{1}{x}\\,dx$.', option_a_en: '$1$', option_a_ar: '$1$', option_b_en: '$e$', option_b_ar: '$e$', option_c_en: '$0$', option_c_ar: '$0$', option_d_en: '$e - 1$', option_d_ar: '$e - 1$', correct: 'A', explanation_en: '$[\\ln x]_1^e = 1 - 0 = 1$.', explanation_ar: '$[\\ln x]_1^e = 1$.', tags: 'definite-integral;logarithm', source: 'EDUWAY Original' }),
@@ -44,197 +45,160 @@ const SAMPLE: Raw[] = [
   row({ subject: 'physics', unit: '3', topic: '1', type: 'mcq', difficulty: 'expert', body_en: 'The frequency of the Iraqi national grid is:', body_ar: 'تردد الشبكة الوطنية العراقية:', option_a_en: '50 Hz', option_a_ar: '50 Hz', option_b_en: '60 Hz', option_b_ar: '60 Hz', correct: 'E', explanation_en: 'Iraq uses a 50 Hz supply.', explanation_ar: 'يعتمد العراق تردد 50 Hz.', tags: 'ac', source: 'EDUWAY Original', year: '2031' }),
 ];
 
-/** Minimal RFC-4180 CSV parser (quotes, escaped quotes, CRLF, BOM). */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let cur: string[] = [];
-  let field = '';
-  let quoted = false;
-  const s = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    if (quoted) {
-      if (ch === '"' && s[i + 1] === '"') {
-        field += '"';
-        i++;
-      } else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ',') {
-      cur.push(field);
-      field = '';
-    } else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && s[i + 1] === '\n') i++;
-      cur.push(field);
-      if (cur.some((c) => c.trim())) rows.push(cur);
-      cur = [];
-      field = '';
-    } else field += ch;
-  }
-  cur.push(field);
-  if (cur.some((c) => c.trim())) rows.push(cur);
-  return rows;
-}
-
 interface Parsed {
   index: number;
   raw: Raw;
-  errors: Partial<Record<Col | 'duplicate', string>>;
-  question: Question | null;
+  errors: Record<string, string>;
+  valid: boolean;
+  duplicateOf: ImportRow['duplicateOf'];
+  resolved: ImportRow['resolved'];
+}
+
+const toParsed = (r: ImportRow): Parsed => ({
+  index: r.row,
+  raw: row(r.raw as Partial<Raw>),
+  errors: { ...r.errors },
+  valid: r.valid,
+  duplicateOf: r.duplicateOf,
+  resolved: r.resolved,
+});
+
+/** ADM-IMP-03 returns the rows page in `data.rows` and paging in `meta`. */
+async function fetchImport(importId: string, params: { filter: 'all' | 'valid' | 'invalid'; page: number; pageSize: number }) {
+  const res = await http.get<SuccessEnvelope<ImportPreviewDto>>(`/admin/questions/import/${importId}`, { params });
+  return { preview: res.data.data, meta: res.data.meta as PageMeta | undefined };
 }
 
 type Step = 1 | 2 | 3 | 4;
 
 export default function BulkImport() {
   const { t } = useTranslation();
-  const L = useLocalize();
+  const lang = useLang();
   const can = useCan();
-  const admin = useCurrentAdmin();
-  const all = useQuestions((s) => s.items);
-  const addQ = useQuestions((s) => s.add);
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
-  const topics = useTopics((s) => s.items);
+  const qc = useQueryClient();
 
   const [step, setStep] = useState<Step>(1);
   const [fileName, setFileName] = useState('');
+  const [importId, setImportId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ImportPreviewDto | null>(null);
   const [rows, setRows] = useState<Parsed[]>([]);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
   const [filter, setFilter] = useState<'all' | 'valid' | 'errors'>('all');
   const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const [committing, setCommitting] = useState(false);
+  const [rowsLoading, setRowsLoading] = useState(false);
 
-  const validate = (raws: Raw[]): Parsed[] =>
-    raws.map((r, i) => {
-      const errors: Parsed['errors'] = {};
-      const subject = subjects.find((s) => s.key === r.subject.trim().toLowerCase());
-      if (!subject) errors.subject = t('questions.import.errSubject', { value: r.subject || '∅' });
-      const unit = subject ? units.find((u) => u.subjectId === subject.id && u.order === Number(r.unit)) : undefined;
-      if (subject && !unit) errors.unit = t('questions.import.errUnit', { value: r.unit || '∅' });
-      const topic = unit ? topics.find((tp) => tp.unitId === unit.id && tp.order === Number(r.topic)) : undefined;
-      if (unit && !topic) errors.topic = t('questions.import.errTopic', { value: r.topic || '∅' });
-      const type = r.type.trim().toLowerCase() as QuestionType;
-      if (!['mcq', 'true_false', 'fill_blank'].includes(type)) errors.type = t('questions.import.errType', { value: r.type || '∅' });
-      const difficulty = r.difficulty.trim().toLowerCase() as Difficulty;
-      if (!['easy', 'medium', 'hard'].includes(difficulty)) errors.difficulty = t('questions.import.errDifficulty', { value: r.difficulty || '∅' });
-      if (r.body_en.trim().length < 8) errors.body_en = t('questions.import.errBody');
-      if (r.body_ar.trim().length < 5) errors.body_ar = t('questions.import.errBody');
-      const letters = ['a', 'b', 'c', 'd'] as const;
-      const opts = letters
-        .map((l) => ({ l, en: r[`option_${l}_en` as Col].trim(), ar: r[`option_${l}_ar` as Col].trim() }))
-        .filter((o) => o.en || o.ar);
-      if (type !== 'fill_blank' && opts.length < 2) errors.option_a_en = t('questions.validation.minOptions');
-      if (opts.some((o) => !o.en || !o.ar)) errors.option_a_ar = t('questions.validation.emptyOption');
-      const correct = r.correct.trim().toLowerCase();
-      if (!opts.some((o) => o.l === correct)) errors.correct = t('questions.import.errCorrect', { value: r.correct || '∅' });
-      if (r.year.trim() && (!/^\d{4}$/.test(r.year.trim()) || +r.year < 2000 || +r.year > 2027)) errors.year = t('questions.import.errYear', { value: r.year });
-      if (!r.explanation_en.trim() || !r.explanation_ar.trim()) errors.explanation_en = t('questions.import.errExplanation');
-      const dup = topic ? all.find((q) => q.topicId === topic.id && similarity(q.body_en, r.body_en) >= 0.8) : undefined;
-      if (dup) errors.duplicate = t('questions.import.errDuplicate', { code: dup.code });
+  // Load the current preview page whenever import / filter / paging changes; poll while the server is parsing.
+  useEffect(() => {
+    if (!importId) return;
+    let stop = false;
+    let timer: number | undefined;
+    const run = async () => {
+      setRowsLoading(true);
+      try {
+        const r = await fetchImport(importId, { filter: filter === 'errors' ? 'invalid' : filter, page: page + 1, pageSize });
+        if (stop) return;
+        setPreview(r.preview);
+        if (r.preview.status === 'parsing') {
+          timer = window.setTimeout(run, 2000);
+          return;
+        }
+        setRows((r.preview.rows ?? []).map(toParsed));
+        setMeta(r.meta ?? null);
+        setParsing(false);
+        if (r.preview.status === 'failed' || r.preview.status === 'expired') toast.error(t(`apiErrors.reasons.${r.preview.status === 'expired' ? 'IMPORT_EXPIRED' : 'IMPORT_NOT_READY'}`));
+      } catch (e) {
+        if (!stop) {
+          toastError(e);
+          setParsing(false);
+        }
+      } finally {
+        if (!stop) setRowsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      stop = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [importId, filter, page, pageSize, t]);
 
-      const ok = Object.keys(errors).length === 0;
-      const qid = uid('q');
-      const question: Question | null =
-        ok && subject && unit && topic
-          ? {
-              id: qid,
-              code: '',
-              subjectId: subject.id,
-              unitId: unit.id,
-              topicId: topic.id,
-              type,
-              difficulty,
-              body_en: r.body_en.trim(),
-              body_ar: r.body_ar.trim(),
-              image: null,
-              options: (type === 'fill_blank' ? opts.filter((o) => o.l === correct) : opts).map((o, k) => ({ id: `${qid}_${k}`, text_en: o.en, text_ar: o.ar, correct: o.l === correct })),
-              explanation_en: r.explanation_en.trim(),
-              explanation_ar: r.explanation_ar.trim(),
-              tags: r.tags.split(/[;|]/).map((x) => x.trim()).filter(Boolean),
-              source: r.source.trim() || 'EDUWAY Original',
-              year: r.year.trim() ? Number(r.year) : null,
-              status: 'draft',
-              authorId: admin?.id ?? 'adm_1',
-              reviewerId: null,
-              usageCount: 0,
-              accuracy: 0,
-              duplicateOf: null,
-              reviewComment: null,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }
-          : null;
-      return { index: i + 2, raw: r, errors, question };
-    });
-
-  const downloadTemplate = () => {
-    downloadFile(toCsv(SAMPLE.slice(0, 3) as unknown as Record<string, unknown>[], COLUMNS.map((c) => ({ key: c, header: c }))), 'eduway-question-import-template.csv');
-    toast.success(t('questions.import.templateDownloaded'));
-    if (step === 1) setStep(2);
+  const downloadTemplate = async () => {
+    try {
+      await download('/admin/questions/import/template', { params: { format: 'csv' }, fallbackName: 'eduway-question-import-template.csv' });
+      toast.success(t('questions.import.templateDownloaded'));
+      if (step === 1) setStep(2);
+    } catch (e) {
+      toastError(e);
+    }
   };
 
-  const load = async (raws: Raw[], name: string) => {
-    setParsing(true);
-    await new Promise((r) => setTimeout(r, 700));
-    setRows(validate(raws));
-    setFileName(name);
-    setFilter('all');
-    setResult(null);
-    setParsing(false);
-    setStep(3);
-  };
-
+  /** Upload to storage (STO-01) then hand the file key to the import parser (ADM-IMP-02). */
   const onFile = async (file: File) => {
-    if (/\.xlsx?$/i.test(file.name)) {
-      // XLSX parsing is mocked in this build — the sample rows stand in for the sheet contents.
-      toast(t('questions.import.xlsxMock'), { icon: '📊' });
-      await load(SAMPLE, file.name);
-      return;
+    setParsing(true);
+    setUploadPct(0);
+    try {
+      const up = await uploadFile(file, 'question_import', setUploadPct);
+      setUploadPct(null);
+      const created = await questionsApi.import.upload(up.fileKey);
+      setFileName(created.fileName || file.name);
+      setPreview(created);
+      setFilter('all');
+      setPage(0);
+      setResult(null);
+      setImportId(created.importId);
+      setStep(3);
+    } catch (e) {
+      setUploadPct(null);
+      setParsing(false);
+      toast.error(errorMessage(e));
     }
-    const text = await file.text();
-    const table = parseCsv(text);
-    if (table.length < 2) {
-      toast.error(t('questions.import.emptyFile'));
-      return;
-    }
-    const header = table[0].map((h) => h.trim().toLowerCase());
-    const missing = COLUMNS.filter((c) => !header.includes(c));
-    if (missing.length > 4) {
-      toast.error(t('questions.import.badHeader', { cols: missing.slice(0, 4).join(', ') }));
-      return;
-    }
-    const raws = table.slice(1).map((cells) => row(Object.fromEntries(header.map((h, i) => [h, cells[i] ?? ''])) as Partial<Raw>));
-    await load(raws, file.name);
   };
 
-  const valid = rows.filter((r) => r.question);
-  const invalid = rows.length - valid.length;
-
-  const doImport = () => {
-    const pool = [...all];
-    valid.forEach((r) => {
-      const q = r.question!;
-      const subj = subjects.find((s) => s.id === q.subjectId);
-      const unit = units.find((u) => u.id === q.unitId);
-      const created = { ...q, code: nextQuestionCode(pool, subj?.key ?? '', unit?.name_en ?? '') };
-      pool.push(created);
-      addQ(created, { silent: true });
-    });
-    logAudit({ action: 'question.bulk_import', entity: 'question', entityId: `${valid.length} records`, summary: `Imported ${valid.length} questions from ${fileName} (${invalid} rows skipped)`, after: { imported: valid.length, skipped: invalid, file: fileName } });
-    setResult({ imported: valid.length, skipped: invalid });
-    setStep(4);
-    toast.success(t('questions.import.imported', { count: valid.length }));
+  const loadSample = () => {
+    const csv = toCsv(SAMPLE as unknown as Record<string, unknown>[], COLUMNS.map((c) => ({ key: c, header: c })));
+    onFile(new File(['\ufeff' + csv], 'sample-ministerial-batch.csv', { type: 'text/csv' }));
   };
+
+  const totals = preview?.totals ?? { rows: 0, valid: 0, invalid: 0 };
+  const validCount = totals.valid;
+  const invalid = totals.invalid;
+
+  const doImport = async () => {
+    if (!importId) return;
+    setCommitting(true);
+    try {
+      const r = await questionsApi.import.commit(importId);
+      setResult({ imported: r.imported, skipped: r.skipped });
+      setStep(4);
+      toast.success(t('questions.import.imported', { count: r.imported }));
+      qc.invalidateQueries({ queryKey: qk.questions.all });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  const downloadErrors = () =>
+    importId && download(`/admin/questions/import/${importId}/errors`, { fallbackName: `import-errors-${importId}.csv` }).catch(toastError);
 
   const reset = () => {
     setRows([]);
+    setPreview(null);
+    setImportId(null);
     setFileName('');
     setResult(null);
     setStep(2);
   };
 
-  const shown = rows.filter((r) => (filter === 'all' ? true : filter === 'valid' ? !!r.question : !r.question));
+  const shown = rows;
 
-  const errCell = (r: Parsed, ...keys: (Col | 'duplicate')[]) => keys.some((k) => r.errors[k]);
+  const errCell = (r: Parsed, ...keys: (Col | 'duplicate')[]) => keys.some((k) => r.errors[k] || (k === 'duplicate' && r.duplicateOf));
   const cellCls = (bad: boolean) => cn('rounded px-1.5 py-0.5', bad && 'bg-danger/10 text-danger ring-1 ring-danger/30');
 
   const columns = useMemo<ColumnDef<Parsed, unknown>[]>(
@@ -242,10 +206,10 @@ export default function BulkImport() {
       { id: 'row', accessorKey: 'index', header: t('questions.import.row'), meta: { className: 'w-14' }, cell: ({ row: r }) => <span className="text-xs text-muted num">#{r.original.index}</span> },
       {
         id: 'ok',
-        accessorFn: (r) => (r.question ? 1 : 0),
+        accessorFn: (r) => (r.valid ? 1 : 0),
         header: t('common.status'),
         cell: ({ row: r }) =>
-          r.original.question ? (
+          r.original.valid ? (
             <Badge tone="success" icon={<CheckCircle2 className="h-3 w-3" />}>
               {t('questions.import.valid')}
             </Badge>
@@ -260,8 +224,8 @@ export default function BulkImport() {
         accessorFn: (r) => r.raw.subject,
         header: t('common.subject'),
         cell: ({ row: r }) => {
-          const s = subjects.find((x) => x.key === r.original.raw.subject.toLowerCase());
-          return <span className={cellCls(errCell(r.original, 'subject'))}>{s ? L(s, 'name') : r.original.raw.subject || '∅'}</span>;
+          const s = r.original.resolved?.subject;
+          return <span className={cellCls(errCell(r.original, 'subject'))}>{s ? s.name[lang] : r.original.raw.subject || '∅'}</span>;
         },
       },
       {
@@ -307,7 +271,7 @@ export default function BulkImport() {
         header: t('questions.import.issues'),
         enableSorting: false,
         cell: ({ row: r }) => {
-          const e = Object.values(r.original.errors);
+          const e = [...Object.values(r.original.errors), ...(r.original.duplicateOf && !r.original.errors.duplicate ? [t('questions.import.errDuplicate', { code: r.original.duplicateOf.code })] : [])];
           return e.length ? (
             <ul className="min-w-[14rem] list-disc space-y-0.5 ps-4 text-xs text-danger">
               {e.map((m, i) => (
@@ -320,7 +284,8 @@ export default function BulkImport() {
         },
       },
     ],
-    [t, L, subjects],
+     
+    [t, lang],
   );
 
   const STEPS: { n: Step; label: string }[] = [
@@ -390,15 +355,21 @@ export default function BulkImport() {
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
             <FileSpreadsheet className="h-5 w-5 text-accent" />
             <span className="text-sm font-semibold text-ink">{fileName}</span>
-            <Badge tone="neutral">{t('questions.import.rowsTotal', { count: rows.length })}</Badge>
-            <Badge tone="success">{t('questions.import.rowsValid', { count: valid.length })}</Badge>
+            <Badge tone="neutral">{t('questions.import.rowsTotal', { count: totals.rows })}</Badge>
+            <Badge tone="success">{t('questions.import.rowsValid', { count: validCount })}</Badge>
             {invalid > 0 && <Badge tone="danger">{t('questions.import.rowsInvalid', { count: invalid })}</Badge>}
+            {preview?.status === 'parsing' && <Badge tone="warning">{t('questions.import.parsing')}</Badge>}
             <div className="ms-auto flex flex-wrap gap-2">
+              {invalid > 0 && (
+                <Button variant="ghost" size="sm" icon={<Download className="h-4 w-4" />} onClick={downloadErrors}>
+                  {t('questions.import.errorReport')}
+                </Button>
+              )}
               <Button variant="ghost" size="sm" icon={<RotateCcw className="h-4 w-4" />} onClick={reset}>
                 {t('questions.import.chooseAnother')}
               </Button>
-              <Button size="sm" icon={<Upload className="h-4 w-4" />} disabled={!valid.length} onClick={doImport}>
-                {t('questions.import.importValid', { count: valid.length })}
+              <Button size="sm" icon={<Upload className="h-4 w-4" />} loading={committing} disabled={!validCount || preview?.status !== 'ready'} onClick={doImport}>
+                {t('questions.import.importValid', { count: validCount })}
               </Button>
             </div>
           </div>
@@ -407,17 +378,35 @@ export default function BulkImport() {
             columns={columns}
             getRowId={(r) => String(r.index)}
             hideSearch
+            loading={rowsLoading && rows.length === 0}
             pageSize={25}
-            rowClassName={(r) => (r.question ? undefined : 'bg-danger/[0.03]')}
+            server={{
+              total: meta?.total ?? (filter === 'all' ? totals.rows : filter === 'valid' ? validCount : invalid),
+              page,
+              pageSize,
+              onPage: setPage,
+              onPageSize: (n) => {
+                setPageSize(n);
+                setPage(0);
+              },
+              sorting: [],
+              onSorting: () => undefined,
+              search: '',
+              onSearch: () => undefined,
+            }}
+            rowClassName={(r) => (r.valid ? undefined : 'bg-danger/[0.03]')}
             toolbar={
               <Segmented
                 size="sm"
                 aria-label={t('actions.filter')}
                 value={filter}
-                onChange={setFilter}
+                onChange={(v) => {
+                  setFilter(v);
+                  setPage(0);
+                }}
                 options={[
-                  { value: 'all', label: `${t('common.all')} (${rows.length})` },
-                  { value: 'valid', label: `${t('questions.import.valid')} (${valid.length})` },
+                  { value: 'all', label: `${t('common.all')} (${totals.rows})` },
+                  { value: 'valid', label: `${t('questions.import.valid')} (${validCount})` },
                   { value: 'errors', label: `${t('questions.import.withErrors')} (${invalid})` },
                 ]}
               />
@@ -429,14 +418,14 @@ export default function BulkImport() {
           <Card>
             <CardHeader title={t('questions.import.uploadTitle')} subtitle={t('questions.import.uploadHint')} icon={<Upload className="h-4 w-4" />} />
             <CardBody className="space-y-4">
-              <FileUpload accept=".csv,.xlsx,.xls" maxSizeMb={10} onFile={(f) => onFile(f)} hint={t('questions.import.formats')} disabled={parsing} />
+              <FileUpload accept=".csv,.xlsx,.xls" maxSizeMb={10} onFile={(f) => onFile(f)} hint={t('questions.import.formats')} disabled={parsing} progress={uploadPct} />
               {parsing && <p className="animate-pulse text-center text-sm text-muted">{t('questions.import.parsing')}</p>}
               <div className="flex items-center gap-3 text-xs text-muted">
                 <span className="h-px flex-1 bg-line" />
                 {t('questions.import.or')}
                 <span className="h-px flex-1 bg-line" />
               </div>
-              <Button variant="outline" className="w-full" icon={<FlaskConical className="h-4 w-4" />} loading={parsing} onClick={() => load(SAMPLE, 'sample-ministerial-batch.csv')}>
+              <Button variant="outline" className="w-full" icon={<FlaskConical className="h-4 w-4" />} loading={parsing} onClick={loadSample}>
                 {t('questions.import.useSample')}
               </Button>
             </CardBody>

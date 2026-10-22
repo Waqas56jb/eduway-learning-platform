@@ -54,7 +54,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const fid = id ?? auto;
   return (
     <FieldShell label={label} hint={hint} error={error} optional={optional} id={fid} className={wrapperClassName}>
-      <div className="relative">
+      {/* Wrapper follows the input's own dir so a dir="ltr" field in an RTL page keeps icon + padding on the same side. */}
+      <div className="relative" dir={rest.dir}>
         {icon && <span className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-4 text-muted">{icon}</span>}
         <input
           ref={ref}

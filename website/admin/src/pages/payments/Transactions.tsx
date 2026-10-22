@@ -3,75 +3,62 @@ import { useNavigate } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle2, Undo2, Wallet } from 'lucide-react';
-import type { Transaction } from '@/types';
 import { fmtDateTime, fmtMoney, fmtNumber, fmtPercent } from '@/utils/format';
-import { usePackages, useRefunds, useSchools, useStudents, useTransactions } from '@/store/core';
 import { useCan } from '@/store/auth';
 import { rangeFromPreset, type DateRange } from '@/store/ui';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { qk } from '@/api/keys';
+import { exportRequest, useExport, usePagedList } from '@/api/hooks';
+import { useLookups } from '@/api/lookups';
+import { paymentsApi, toTransactionVM, usePaymentsSummary, type TransactionVM } from '@/api/payments';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, DataTable, DateRangePicker, FilterSelect, StatCard, StatusBadge } from '@/components/ui';
-import { CAPTURED, GATEWAYS, GatewayChip } from './shared';
+import { GATEWAYS, GatewayChip } from './shared';
 
 const STATUSES = ['initiated', 'pending', 'paid', 'failed', 'cancelled', 'refunded', 'partially_refunded'] as const;
-
-type Source = 'school' | 'promo' | 'direct';
-const sourceOf = (t: Transaction): Source => (t.schoolId ? 'school' : t.promoCode ? 'promo' : 'direct');
 
 export default function Transactions() {
   const { t } = useTranslation();
   const L = useLocalize();
   const can = useCan();
   const navigate = useNavigate();
-  const txns = useTransactions((s) => s.items);
-  const students = useStudents((s) => s.items);
-  const packages = usePackages((s) => s.items);
-  const schools = useSchools((s) => s.items);
-  const pendingRefunds = useRefunds((s) => s.items.filter((r) => r.status === 'pending').length);
+  const lookups = useLookups();
+  const packages = lookups.packages;
   const [range, setRange] = useState<DateRange>(() => rangeFromPreset('12m'));
-  const loading = useMockLoading(450, [range]);
   const [status, setStatus] = useState('');
   const [gateway, setGateway] = useState('');
   const [pkg, setPkg] = useState('');
   const [source, setSource] = useState('');
 
-  const studentName = (id: string) => L(students.find((s) => s.id === id), 'name');
-  const packageName = (id: string) => L(packages.find((p) => p.id === id), 'name');
+  const filters = { from: range.from, to: range.to, status, gateway, packageId: pkg, source };
+  const list = usePagedList({
+    key: qk.payments.list,
+    fetcher: (p) => paymentsApi.list(p),
+    filters,
+    initialSort: '-createdAt',
+    pageSize: 25,
+  });
+  const rows = useMemo(() => list.items.map(toTransactionVM), [list.items]);
+  const summary = usePaymentsSummary({ ...filters, q: list.exportFilters.q });
+  const exp = useExport('/admin/payments/export', 'transactions');
+  const loading = summary.isLoading;
+  const kpi = {
+    gross: summary.data?.gross ?? 0,
+    paid: summary.data?.paidCount ?? 0,
+    failedRate: summary.data?.failureRate ?? 0,
+    refunded: summary.data?.refunded ?? 0,
+  };
+  const pendingRefunds = summary.data?.pendingRefunds ?? 0;
 
-  const rows = useMemo(
-    () =>
-      txns.filter(
-        (x) =>
-          x.createdAt >= range.from &&
-          x.createdAt <= range.to &&
-          (!status || x.status === status) &&
-          (!gateway || x.gateway === gateway) &&
-          (!pkg || x.packageId === pkg) &&
-          (!source || sourceOf(x) === source),
-      ),
-    [txns, range, status, gateway, pkg, source],
-  );
+  const studentName = (x: TransactionVM) => L(x, 'studentName');
+  const packageName = (x: TransactionVM) => L(x, 'packageName');
 
-  const kpi = useMemo(() => {
-    const captured = rows.filter((r) => CAPTURED.includes(r.status));
-    const gross = captured.reduce((s, r) => s + r.amount, 0);
-    const refunded = rows.reduce((s, r) => s + r.refundedAmount, 0);
-    const settledAttempts = rows.filter((r) => r.status !== 'initiated' && r.status !== 'pending');
-    const failed = rows.filter((r) => r.status === 'failed').length;
-    return {
-      gross,
-      paid: captured.length,
-      failedRate: settledAttempts.length ? (failed / settledAttempts.length) * 100 : 0,
-      refunded,
-    };
-  }, [rows]);
-
-  const columns = useMemo<ColumnDef<Transaction>[]>(
+  const columns = useMemo<ColumnDef<TransactionVM>[]>(
     () => [
       {
         id: 'ref',
         accessorKey: 'ref',
+        enableSorting: false,
         header: t('payments.ref'),
         meta: { label: t('payments.ref') },
         cell: ({ row }) => (
@@ -82,14 +69,16 @@ export default function Transactions() {
       },
       {
         id: 'student',
-        accessorFn: (x) => studentName(x.studentId),
+        accessorFn: (x) => studentName(x),
+        enableSorting: false,
         header: t('common.student'),
         meta: { label: t('common.student') },
-        cell: ({ row }) => <span className="whitespace-nowrap font-medium text-ink">{studentName(row.original.studentId)}</span>,
+        cell: ({ row }) => <span className="whitespace-nowrap font-medium text-ink">{studentName(row.original)}</span>,
       },
       {
         id: 'package',
-        accessorFn: (x) => packageName(x.packageId),
+        accessorFn: (x) => packageName(x),
+        enableSorting: false,
         header: t('common.package'),
         meta: { label: t('common.package') },
         cell: ({ getValue }) => <span className="whitespace-nowrap text-ink/80">{getValue<string>()}</span>,
@@ -106,7 +95,7 @@ export default function Transactions() {
           </div>
         ),
       },
-      { id: 'currency', accessorKey: 'currency', header: t('common.currency'), meta: { label: t('common.currency') } },
+      { id: 'currency', accessorKey: 'currency', enableSorting: false, header: t('common.currency'), meta: { label: t('common.currency') } },
       {
         id: 'gateway',
         accessorKey: 'gateway',
@@ -123,18 +112,18 @@ export default function Transactions() {
       },
       {
         id: 'source',
-        accessorFn: (x) => (x.schoolId ? schools.find((s) => s.id === x.schoolId)?.code : x.promoCode) ?? t('payments.sources.direct'),
+        accessorFn: (x) => (x.schoolId ? x.schoolCode : x.promoCode) ?? t('payments.sources.direct'),
+        enableSorting: false,
         header: t('payments.source'),
         meta: { label: t('payments.source') },
         cell: ({ row }) => {
           const x = row.original;
-          const src = sourceOf(x);
+          const src = x.source;
           if (src === 'direct') return <span className="text-xs text-muted">{t('payments.sources.direct')}</span>;
-          const school = schools.find((s) => s.id === x.schoolId);
           return (
             <div className="min-w-[8rem]">
-              <Badge tone={src === 'school' ? 'info' : 'accent'}>{src === 'school' ? school?.code : x.promoCode}</Badge>
-              {school && <div className="mt-0.5 max-w-[12rem] truncate text-[11px] text-muted">{L(school, 'name')}</div>}
+              <Badge tone={src === 'school' ? 'info' : 'accent'}>{src === 'school' ? x.schoolCode : x.promoCode}</Badge>
+              {x.schoolId && <div className="mt-0.5 max-w-[12rem] truncate text-[11px] text-muted">{L(x, 'schoolName')}</div>}
             </div>
           );
         },
@@ -148,7 +137,7 @@ export default function Transactions() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, L, students, packages, schools],
+    [t, L],
   );
 
   return (
@@ -157,7 +146,7 @@ export default function Transactions() {
 
       <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard loading={loading} label={t('payments.kpi.gross')} value={fmtMoney(kpi.gross, 'IQD', true)} icon={<Wallet />} color="#C9A24A" hint={t(`dateRange.${range.preset}`)} />
-        <StatCard loading={loading} label={t('payments.kpi.paid')} value={fmtNumber(kpi.paid)} icon={<CheckCircle2 />} color="#16A34A" hint={t('common.results', { count: rows.length })} />
+        <StatCard loading={loading} label={t('payments.kpi.paid')} value={fmtNumber(kpi.paid)} icon={<CheckCircle2 />} color="#16A34A" hint={t('common.results', { count: summary.data?.total ?? list.meta.total })} />
         <StatCard loading={loading} label={t('payments.kpi.failedRate')} value={fmtPercent(kpi.failedRate, 1)} icon={<AlertTriangle />} color="#DC2626" hint={t(`dateRange.${range.preset}`)} />
         <StatCard
           loading={loading}
@@ -173,13 +162,15 @@ export default function Transactions() {
       <DataTable
         data={rows}
         columns={columns}
-        loading={loading}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={list.refetch}
+        server={list.server}
         pageSize={25}
-        initialSort={[{ id: 'createdAt', desc: true }]}
         initialHidden={['currency']}
         onRowClick={(x) => navigate(`/payments/transactions/${x.id}`)}
-        exportName={can('payments', 'export') ? 'transactions' : undefined}
-        searchText={(x) => `${x.ref} ${studentName(x.studentId)} ${students.find((s) => s.id === x.studentId)?.mobile ?? ''} ${x.promoCode ?? ''}`}
+        onExport={can('payments', 'export') ? () => exp.mutate(exportRequest('csv', list.exportFilters)) : undefined}
+        exporting={exp.isPending}
         toolbar={
           <>
             <FilterSelect label={t('payments.filters.status')} value={status} onChange={setStatus} options={STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) }))} />

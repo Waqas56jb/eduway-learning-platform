@@ -13,50 +13,50 @@ export interface SectionHeaderProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Section title with an optional "See all" style action at the end edge. */
+/**
+ * Section title (h3) with an optional gold "See all" text button on the end edge. The action is
+ * vertically centered on the title line (not the subtitle), so it reads as aligned with the title.
+ */
 export const SectionHeader = memo(function SectionHeader({ title, subtitle, actionLabel, onAction, style }: SectionHeaderProps) {
   const { colors, isDark } = useTheme();
   const actionColor = isDark ? colors.accentLight : '#8A6A22';
 
   return (
-    <View style={[styles.row, style]}>
-      <View style={styles.texts}>
-        <Text variant="h3" accessibilityRole="header" numberOfLines={1}>
+    <View style={[styles.container, style]}>
+      <View style={styles.row}>
+        <Text variant="h3" accessibilityRole="header" numberOfLines={1} style={styles.title}>
           {title}
         </Text>
-        {subtitle ? (
-          <Text variant="caption" color="muted" numberOfLines={2} style={styles.subtitle}>
-            {subtitle}
-          </Text>
+        {actionLabel && onAction ? (
+          <PressableScale
+            onPress={onAction}
+            hitSlop={HIT_SLOP}
+            haptics={false}
+            scaleTo={0.95}
+            accessibilityRole="button"
+            accessibilityLabel={actionLabel}
+            style={styles.action}
+          >
+            <Text variant="label" color={actionColor} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+              {actionLabel}
+            </Text>
+            <Icon name="chevron" size={14} color={actionColor} strokeWidth={2.2} />
+          </PressableScale>
         ) : null}
       </View>
-      {actionLabel && onAction ? (
-        <PressableScale
-          onPress={onAction}
-          hitSlop={HIT_SLOP}
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-          style={styles.action}
-        >
-          <Text variant="label" color={actionColor}>
-            {actionLabel}
-          </Text>
-          <Icon name="chevron" size={14} color={actionColor} strokeWidth={2.2} />
-        </PressableScale>
+      {subtitle ? (
+        <Text variant="caption" color="muted" numberOfLines={2} style={styles.subtitle}>
+          {subtitle}
+        </Text>
       ) : null}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: space.md,
-    gap: space.md,
-  },
-  texts: { flex: 1 },
+  container: { marginBottom: space.md },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md, minHeight: 28 },
+  title: { flex: 1 },
   subtitle: { marginTop: 2 },
-  action: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 28, paddingVertical: 2 },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 28, paddingStart: space.xs },
 });

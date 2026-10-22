@@ -1,20 +1,31 @@
-import { memo } from 'react';
-import { I18nManager, ScrollView, StyleSheet, View } from 'react-native';
+import { memo, useMemo } from 'react';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
-import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { SubjectIcon } from '@/components/icons';
-import { PressableScale, ProgressRing, Text } from '@/components/ui';
-import { subjects } from '@/data';
+import { PressableScale, ProgressBar, Text } from '@/components/ui';
+import { toSubject, useSubjects } from '@/api';
 import { useI18n } from '@/hooks/useI18n';
-import { useProgressStore } from '@/store';
 import { radius, SCREEN_PADDING, shadows, space, subjectColors, useTheme } from '@/theme';
 import type { Subject } from '@/types';
 import { withAlpha } from './color';
 
-const TILE_WIDTH = 124;
+const GAP = space.md;
+/** Cards visible per viewport — the fraction gives a "peek" of the next card. */
+const VISIBLE = 2.35;
 
-/** Horizontal carousel of subject progress rings. */
+/**
+ * Horizontal, snap-scrolling subject progress carousel. Card width is computed from the window width.
+ * Native RTL mirrors the horizontal ScrollView, so it starts at the right edge in Arabic without manual flipping.
+ */
 export const SubjectCarousel = memo(function SubjectCarousel() {
+  const { width } = useWindowDimensions();
+  const cardWidth = Math.round(
+    Math.min(172, Math.max(120, (width - SCREEN_PADDING * 2 - GAP * (Math.ceil(VISIBLE) - 1)) / VISIBLE)),
+  );
+  const { data } = useSubjects();
+  const subjects = useMemo(() => (data ?? []).map(toSubject), [data]);
+  const offsets = useMemo(() => subjects.map((_, i) => i * (cardWidth + GAP)), [cardWidth, subjects]);
+
   return (
     <ScrollView
       horizontal
@@ -22,23 +33,22 @@ export const SubjectCarousel = memo(function SubjectCarousel() {
       style={styles.scroll}
       contentContainerStyle={styles.content}
       decelerationRate="fast"
-      snapToInterval={TILE_WIDTH + space.md}
-      snapToAlignment="start"
+      snapToOffsets={offsets}
+      snapToEnd={false}
+      disableIntervalMomentum
     >
-      {subjects.map((s, i) => (
-        <Animated.View key={s.id} entering={(I18nManager.isRTL ? FadeInLeft : FadeInRight).duration(380).delay(120 + i * 60)}>
-          <SubjectTile subject={s} />
-        </Animated.View>
+      {subjects.map((s) => (
+        <SubjectTile key={s.id} subject={s} width={cardWidth} />
       ))}
     </ScrollView>
   );
 });
 
-const SubjectTile = memo(function SubjectTile({ subject }: { subject: Subject }) {
+const SubjectTile = memo(function SubjectTile({ subject, width }: { subject: Subject; width: number }) {
   const { colors, isDark } = useTheme();
   const { t, L } = useI18n('home');
-  const pct = useProgressStore((s) => s.subjectCompletion(subject.id));
-  const color = subjectColors[subject.id];
+  const pct = Math.round(subject.progressPct ?? 0);
+  const color = subjectColors[subject.id] ?? subject.color;
   const name = L(subject.name);
 
   return (
@@ -46,48 +56,56 @@ const SubjectTile = memo(function SubjectTile({ subject }: { subject: Subject })
       onPress={() => router.push({ pathname: '/subject/[id]', params: { id: subject.id } })}
       accessibilityRole="button"
       accessibilityLabel={t('subjects.a11y', { name, value: pct })}
-      style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }, !isDark && shadows.sm]}
+      style={[
+        styles.tile,
+        { width, backgroundColor: colors.surface, borderColor: colors.border },
+        !isDark && shadows.sm,
+      ]}
     >
-      <View style={[styles.corner, { backgroundColor: withAlpha(color, isDark ? 0.2 : 0.1) }]} />
-      <ProgressRing progress={pct} size={72} strokeWidth={7} color={color} trackColor={withAlpha(color, isDark ? 0.22 : 0.14)}>
-        <View style={styles.ringCenter}>
-          <SubjectIcon subjectId={subject.id} size={18} color={color} />
-          <Text variant="caption" tabular style={styles.pct}>
-            {`${pct}%`}
-          </Text>
+      <View style={styles.top}>
+        <View style={[styles.icon, { backgroundColor: withAlpha(color, isDark ? 0.24 : 0.12) }]}>
+          <SubjectIcon subjectId={subject.id} size={20} color={color} />
         </View>
-      </ProgressRing>
-      <Text variant="label" align="center" numberOfLines={1} style={styles.name}>
+        <Text variant="h3" display tabular numberOfLines={1} style={styles.pct}>
+          {`${pct}%`}
+        </Text>
+      </View>
+      <Text variant="bodyBold" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={styles.name}>
         {name}
       </Text>
-      <Text variant="caption" color="muted" align="center" numberOfLines={1}>
+      <Text variant="caption" color="muted" numberOfLines={1}>
         {t('subjects.lessons', { count: subject.lessonsCount })}
       </Text>
+      <View style={styles.bar}>
+        <ProgressBar progress={pct} height={5} color={color} trackColor={withAlpha(color, isDark ? 0.22 : 0.12)} />
+      </View>
     </PressableScale>
   );
 });
 
 const styles = StyleSheet.create({
   scroll: { marginHorizontal: -SCREEN_PADDING },
-  content: { paddingHorizontal: SCREEN_PADDING, gap: space.md, paddingVertical: space.xs },
+  content: { paddingHorizontal: SCREEN_PADDING, gap: GAP, paddingTop: space.xs, paddingBottom: space.sm },
   tile: {
-    width: TILE_WIDTH,
-    alignItems: 'center',
-    paddingVertical: space.lg,
-    paddingHorizontal: space.sm,
+    padding: space.lg,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
   },
-  corner: {
-    position: 'absolute',
-    top: -36,
-    end: -36,
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.sm,
+    marginBottom: space.md,
   },
-  ringCenter: { alignItems: 'center', justifyContent: 'center' },
-  pct: { marginTop: 1, fontSize: 11, lineHeight: 13 },
-  name: { marginTop: space.md },
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pct: { flexShrink: 1 },
+  name: { marginBottom: 2 },
+  bar: { marginTop: space.md },
 });

@@ -3,12 +3,14 @@ import { ArrowRight, CheckCircle2, Circle, Flame, Play } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar, Button, Modal, ProgressBar, ProgressRing, SmartImage, Stars } from '@/components/ui';
-import { getLesson } from '@/data';
+import { useSubjects } from '@/api/catalog';
+import { usePublicStats, useTestimonials } from '@/api/public';
 import { useLang } from '@/hooks/useLang';
 import { AVATARS, IMAGES } from '@/lib/images';
 import { cn } from '@/lib/utils';
 
-const DEMO_VIDEO = 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4';
+/** Marketing trailer shown in the "Watch the tour" modal. */
+const TOUR_VIDEO = 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const container: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.12, delayChildren: 0.15 } } };
@@ -21,6 +23,13 @@ export function Hero() {
   const { t } = useTranslation();
   const { fmtNumber } = useLang();
   const [demoOpen, setDemoOpen] = useState(false);
+  const { data: stats } = usePublicStats();
+  const { data: testimonials } = useTestimonials('landing');
+  const avatars = [
+    ...(testimonials ?? []).map((tm) => tm.avatar).filter((a): a is string => !!a),
+    ...AVATARS,
+  ].slice(0, 5);
+  const students = stats ? Math.floor(stats.students / 100) * 100 : null;
 
   return (
     <section className="relative isolate flex min-h-[100svh] items-center overflow-hidden bg-primary text-white">
@@ -84,24 +93,26 @@ export function Hero() {
 
           <motion.div variants={item} className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3">
             <div className="flex -space-x-3 rtl:space-x-reverse">
-              {AVATARS.slice(0, 5).map((src) => (
+              {avatars.map((src) => (
                 <Avatar key={src} src={src} alt={t('landing.hero.avatarAlt')} size={44} className="ring-2 ring-primary" />
               ))}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <Stars value={5} size={15} />
+                <Stars value={Math.round(stats?.rating ?? 5)} size={15} />
                 <span className="sr-only">{t('landing.hero.rating')}</span>
               </div>
               <p className="mt-1 text-sm text-white/70">
-                <strong className="num font-bold text-white">{t('landing.hero.students', { n: fmtNumber(12000) })}</strong>{' '}
+                <strong className="num font-bold text-white">
+                  {t('landing.hero.students', { n: stats?.displayOverrides.students ?? (students !== null ? fmtNumber(students) : '…') })}
+                </strong>{' '}
                 {t('landing.hero.studentsSub')}
               </p>
             </div>
           </motion.div>
         </motion.div>
 
-        <HeroMock />
+        <HeroPreview />
       </div>
 
       <a
@@ -125,7 +136,7 @@ export function Hero() {
         size="xl"
       >
         <video
-          src={DEMO_VIDEO}
+          src={TOUR_VIDEO}
           controls
           autoPlay
           playsInline
@@ -140,10 +151,11 @@ export function Hero() {
 }
 
 /** Layered glass "app preview" shown on large screens. Purely illustrative. */
-function HeroMock() {
+function HeroPreview() {
   const { t } = useTranslation();
   const { l } = useLang();
-  const lesson = getLesson('physics-l6');
+  const { data: subjects } = useSubjects();
+  const sample = subjects?.[0];
   const goals = [
     { key: 'lesson', done: true },
     { key: 'quiz', done: true },
@@ -157,14 +169,14 @@ function HeroMock() {
       transition={{ duration: 1, delay: 0.5, ease }}
       className="relative hidden h-[520px] lg:block"
       role="img"
-      aria-label={t('landing.hero.mock.label')}
+      aria-label={t('landing.hero.preview.label')}
     >
       {/* Main lesson player card */}
       <div className="absolute inset-x-6 top-10 animate-float motion-reduce:animate-none">
         <div className="glass rotate-[-2deg] rounded-3xl p-4 shadow-[0_40px_80px_-30px_rgba(0,0,0,0.6)] rtl:rotate-[2deg]">
           <div className="relative overflow-hidden rounded-2xl">
             <SmartImage
-              src={lesson?.thumbnail ?? IMAGES.physics}
+              src={sample?.image ?? IMAGES.physics}
               alt=""
               wrapperClassName="aspect-[16/9]"
               overlay="bg-gradient-to-t from-primary/80 via-primary/10 to-transparent"
@@ -175,18 +187,18 @@ function HeroMock() {
               </span>
             </span>
             <span className="absolute start-4 top-4 rounded-full bg-primary/70 px-3 py-1 text-[11px] font-semibold text-accent-light backdrop-blur">
-              {t('landing.hero.mock.nowPlaying')}
+              {t('landing.hero.preview.nowPlaying')}
             </span>
           </div>
           <div className="px-1 pb-1 pt-4">
-            <p className="text-xs font-semibold text-accent-light">{t('landing.hero.mock.subject')}</p>
-            <p className="mt-1 font-display text-xl font-bold text-white">{l(lesson?.title)}</p>
+            <p className="text-xs font-semibold text-accent-light">{sample ? l(sample.name) : t('landing.hero.preview.subject')}</p>
+            <p className="mt-1 font-display text-xl font-bold text-white">{l(sample?.tagline)}</p>
             <div className="mt-3 flex items-center gap-3">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15">
                 <div className="h-full w-[64%] rounded-full bg-gold-grad" />
               </div>
               <span className="num text-xs text-white/70" dir="ltr">
-                {t('landing.hero.mock.time')}
+                {t('landing.hero.preview.time')}
               </span>
             </div>
           </div>
@@ -200,11 +212,11 @@ function HeroMock() {
             <span className="num text-sm font-bold text-white">72%</span>
           </ProgressRing>
           <div>
-            <p className="text-sm font-bold text-white">{t('landing.hero.mock.overall')}</p>
-            <p className="text-xs text-white/60">{t('landing.hero.mock.overallSub')}</p>
+            <p className="text-sm font-bold text-white">{t('landing.hero.preview.overall')}</p>
+            <p className="text-xs text-white/60">{t('landing.hero.preview.overallSub')}</p>
             <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-accent-light">
               <Flame className="h-3.5 w-3.5" aria-hidden />
-              {t('landing.hero.mock.streak')}
+              {t('landing.hero.preview.streak')}
             </p>
           </div>
         </div>
@@ -214,9 +226,9 @@ function HeroMock() {
       <div className="absolute -top-2 end-0 animate-float motion-reduce:animate-none [animation-delay:-4s]">
         <div className="w-60 rotate-[4deg] rounded-2xl bg-white p-4 text-primary shadow-lift rtl:rotate-[-4deg]">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold">{t('landing.hero.mock.goalTitle')}</p>
+            <p className="text-sm font-bold">{t('landing.hero.preview.goalTitle')}</p>
             <span className="num rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-bold text-[#8A6A1F]" dir="ltr">
-              {t('landing.hero.mock.goalMeta')}
+              {t('landing.hero.preview.goalMeta')}
             </span>
           </div>
           <ProgressBar value={66} gold size="xs" className="mt-3" />
@@ -229,7 +241,7 @@ function HeroMock() {
                   <Circle className="h-4 w-4 shrink-0 text-primary/25" aria-hidden />
                 )}
                 <span className={cn(g.done ? 'text-muted line-through' : 'font-medium')}>
-                  {t(`landing.hero.mock.goals.${g.key}`)}
+                  {t(`landing.hero.preview.goals.${g.key}`)}
                 </span>
               </li>
             ))}

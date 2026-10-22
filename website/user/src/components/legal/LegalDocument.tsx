@@ -3,7 +3,9 @@ import { CalendarDays, ChevronDown, FileText, Mail, Printer } from 'lucide-react
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Button, Seo } from '@/components/ui';
+import { useLegalDocument } from '@/api/legal';
+import type { Localized } from '@/api/types';
+import { Button, ErrorState, Seo, Skeleton } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 
@@ -15,23 +17,40 @@ export interface LegalSection {
 }
 
 interface LegalDocumentProps {
-  /** Translation key under `pages.*` holding the document (`terms` | `privacy`). */
+  /** Published legal document to render (PUB-11 `GET /legal/:doc`). */
   doc: 'terms' | 'privacy';
-  updated: string;
+}
+
+/** API section body → paragraphs + "• " bullets (paragraphs are separated by a blank line). */
+function toSection(id: string, title: string, body: string): LegalSection {
+  const paragraphs: string[] = [];
+  const bullets: string[] = [];
+  for (const block of body.split(/\n\s*\n/)) {
+    const lines = block.split('\n').map((x) => x.trim()).filter(Boolean);
+    const bulletLines = lines.filter((x) => x.startsWith('•'));
+    bulletLines.forEach((b) => bullets.push(b.replace(/^•\s*/, '')));
+    const text = lines.filter((x) => !x.startsWith('•')).join(' ');
+    if (text) paragraphs.push(text);
+  }
+  return { id, title, paragraphs, bullets: bullets.length ? bullets : undefined };
 }
 
 /** Long-form legal page: header, sticky table of contents with scroll-spy, numbered sections. */
-export function LegalDocument({ doc, updated }: LegalDocumentProps) {
+export function LegalDocument({ doc }: LegalDocumentProps) {
   const { t } = useTranslation();
-  const { fmtDate } = useLang();
+  const { fmtDate, l } = useLang();
   const k = (key: string) => `pages.${doc}.${key}`;
-  const sections = t(k('sections'), { returnObjects: true }) as unknown as LegalSection[];
-  const [active, setActive] = useState(sections[0]?.id ?? '');
+  const { data, isLoading, isError, refetch } = useLegalDocument(doc);
+  const sections: LegalSection[] = (data?.sections ?? []).map((s) => toSection(s.id, l(s.title), l(s.body as Localized)));
+  const updated = data?.updatedAt ?? data?.publishedAt ?? '';
+  const [active, setActive] = useState('');
   const other = doc === 'terms' ? 'privacy' : 'terms';
 
   const ids = sections.map((s) => s.id).join('|');
 
   useEffect(() => {
+    const first = ids.split('|')[0];
+    if (first) setActive((a) => a || first);
     const els = ids
       .split('|')
       .map((id) => document.getElementById(id)).filter((x): x is HTMLElement => !!x);
@@ -81,16 +100,23 @@ export function LegalDocument({ doc, updated }: LegalDocumentProps) {
             <FileText className="h-3.5 w-3.5" aria-hidden />
             {t(k('eyebrow'))}
           </span>
-          <h1 className="mt-5 text-4xl font-bold text-primary md:text-5xl">{t(k('title'))}</h1>
-          <p className="mt-5 text-lg text-muted">{t(k('intro'))}</p>
+          <h1 className="mt-5 text-4xl font-bold text-primary md:text-5xl">{data ? l(data.title) : t(k('title'))}</h1>
+          {data ? <p className="mt-5 text-lg text-muted">{l(data.intro)}</p> : isLoading && <Skeleton className="mt-5 h-6 w-3/4" />}
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-muted shadow-soft">
-              <CalendarDays className="h-4 w-4 text-accent" aria-hidden />
-              {t('pages.legal.updated')}{' '}
-              <time dateTime={updated} className="font-semibold text-primary">
-                {fmtDate(updated, { day: 'numeric', month: 'long', year: 'numeric' })}
-              </time>
-            </span>
+            {updated && (
+              <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-muted shadow-soft">
+                <CalendarDays className="h-4 w-4 text-accent" aria-hidden />
+                {t('pages.legal.updated')}{' '}
+                <time dateTime={updated} className="font-semibold text-primary">
+                  {fmtDate(updated, { day: 'numeric', month: 'long', year: 'numeric' })}
+                </time>
+                {data?.version && (
+                  <span className="num text-xs text-muted" dir="ltr">
+                    · v{data.version}
+                  </span>
+                )}
+              </span>
+            )}
             <Button variant="ghost" size="sm" onClick={() => window.print()} leftIcon={<Printer className="h-4 w-4" aria-hidden />}>
               {t('pages.legal.print')}
             </Button>
@@ -116,6 +142,16 @@ export function LegalDocument({ doc, updated }: LegalDocumentProps) {
           </nav>
 
           <article className="max-w-[72ch]">
+            {isError && <ErrorState onRetry={() => void refetch()} />}
+            {isLoading &&
+              [0, 1, 2].map((i) => (
+                <div key={i} className="space-y-3 border-b border-primary/5 py-8 first:pt-0">
+                  <Skeleton className="h-7 w-1/2" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-11/12" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              ))}
             {sections.map((s, i) => (
               <section key={s.id} id={s.id} aria-labelledby={`${s.id}-h`} className="scroll-mt-28 border-b border-primary/5 py-8 first:pt-0 last:border-0">
                 <h2 id={`${s.id}-h`} className="flex items-baseline gap-3 text-2xl font-bold text-primary">

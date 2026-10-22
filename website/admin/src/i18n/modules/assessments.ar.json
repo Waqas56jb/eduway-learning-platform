@@ -59,7 +59,9 @@
     "removeOverrideTitle": "إزالة استثناء هذا الدرس؟",
     "removeOverrideBody": "سيعود الدرس إلى القاعدة الافتراضية لمادته.",
     "noOverrides": "لا توجد استثناءات",
-    "noOverridesHint": "جميع الدروس تستخدم القاعدة الافتراضية لمادتها."
+    "noOverridesHint": "جميع الدروس تستخدم القاعدة الافتراضية لمادتها.",
+    "cooldownMinutes": "فترة الانتظار",
+    "overrideExists": "لهذا الدرس تخصيص بالفعل."
   },
   "blueprints": {
     "title": "مخططات الامتحانات",
@@ -112,7 +114,11 @@
     "availabilityHint": "يحتسب الأسئلة المعتمدة والمنشورة في البنك لكل مستوى صعوبة.",
     "shortTitle": "النشر رغم نقص الأسئلة؟",
     "shortBody": "{{count}} صف لا يملك أسئلة معتمدة كافية، وقد يحصل الطلاب على أسئلة أقل من المخطط.",
-    "publishedToast": "تم نشر المخطط"
+    "publishedToast": "تم نشر المخطط",
+    "passMark": "درجة النجاح",
+    "passMarkHint": "أقل درجة لاجتياز هذا الامتحان",
+    "descriptionEn": "الوصف (إنجليزي)",
+    "descriptionAr": "الوصف (عربي)"
   },
   "attempts": {
     "title": "المحاولات",
@@ -123,7 +129,8 @@
     "time": "الوقت",
     "kind": {
       "quiz": "اختبار درس",
-      "exam": "امتحان"
+      "exam": "امتحان",
+      "practice": "تدريب"
     },
     "statTotal": "المحاولات",
     "statAvg": "متوسط الدرجات",
@@ -134,6 +141,7 @@
     "studentAnswer": "إجابة الطالب",
     "correctAnswer": "الإجابة الصحيحة",
     "notAnswered": "لم يُجب",
-    "removedQuestion": "تم حذف هذا السؤال من البنك."
+    "removedQuestion": "تم حذف هذا السؤال من البنك.",
+    "platform": "المنصة"
   }
 }

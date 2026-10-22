@@ -90,7 +90,8 @@
     "kpiTotal": "Total admins",
     "kpiActive": "Active",
     "kpiMfa": "MFA coverage",
-    "kpiPending": "Pending invites"
+    "kpiPending": "Pending invites",
+    "selectRole": "Select a role"
   },
   "audit": {
     "title": "Audit logs",
@@ -117,7 +118,9 @@
     "kpiTotal": "Entries in range",
     "kpiSensitive": "Sensitive actions",
     "allRange": "All time",
-    "metadata": "Metadata"
+    "metadata": "Metadata",
+    "sensitiveFilter": "Sensitive",
+    "sensitiveOnly": "Sensitive only"
   },
   "sessions": {
     "title": "Admin sessions",
@@ -181,6 +184,8 @@
     "reopen": "Reopen",
     "reopened": "Alert reopened",
     "noAlerts": "No alerts match these filters",
-    "noAlertsHint": "When detections fire they will appear here."
+    "noAlertsHint": "When detections fire they will appear here.",
+    "blockBodyAdmin": "The admin account will be deactivated and signed out of every session.",
+    "resolution": "Resolution"
   }
 }

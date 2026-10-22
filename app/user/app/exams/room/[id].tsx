@@ -1,19 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, ScrollView, StyleSheet, View } from 'react-native';
+import { isRTL } from '@/utils/rtl';
+import { AppState, BackHandler, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
-import { attemptsRemaining, examQuestions, scoreExam } from '@/components/exams/examUtils';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
+import { toQuestion } from '@/api/adapters';
+import { useConnectivity } from '@/api/connectivity';
+import { isLockedError, normalizeError, toastError, type ApiError } from '@/api/errors';
+import { flagExamQuestion, startExam } from '@/api/exams';
+import {
+  clearExamState,
+  getLocalExamState,
+  hasPendingSubmit,
+  onExamSync,
+  queueAutosave,
+  queueSubmit,
+} from '@/api/examQueue';
+import { qk } from '@/api/keys';
+import { openSubscription } from '@/api/locked';
+import { useAppConfig } from '@/api/public';
+import type { ExamAttemptState } from '@/api/types';
+import { toIndexMap, toOptionIdMap } from '@/components/exams/examUtils';
 import { OfflineBanner, SavedIndicator, SubmitSummary } from '@/components/exams/RoomParts';
-import { useMockConnection } from '@/components/exams/useMockConnection';
 import { Icon } from '@/components/icons';
 import { Header, Screen } from '@/components/layout';
 import { ExamTimer, QuestionNavigator, QuestionView } from '@/components/student';
 import { BottomSheet, Button, Dialog, EmptyState, IconButton, PressableScale, ProgressBar, Text, toast } from '@/components/ui';
-import { getExam } from '@/data';
 import { useI18n } from '@/hooks/useI18n';
-import { useMistakesStore, useProgressStore, type ExamDraft } from '@/store';
 import { HIT_SLOP, palette, radius, SCREEN_PADDING, space, useTheme } from '@/theme';
-import type { ExamBlueprint, Question } from '@/types';
+import type { Localized, Question } from '@/types';
 import { haptic } from '@/utils/haptics';
 
 const goToExams = () => {
@@ -21,24 +37,130 @@ const goToExams = () => {
   else router.replace('/exams');
 };
 
+const openResultRoute = (attemptId: string) =>
+  router.replace({ pathname: '/exams/result/[id]', params: { id: attemptId } });
+
+const FINAL_REASONS = new Set(['EXAM_ALREADY_SUBMITTED', 'EXAM_TIME_OVER']);
+
+interface RoomInit {
+  attempt: ExamAttemptState;
+  questions: Question[];
+  answers: Record<string, number>;
+  flagged: string[];
+  currentIndex: number;
+  /** Local deadline (epoch ms) corrected for server clock skew. */
+  endsAt: number;
+}
+
+type LoadState = { kind: 'loading' } | { kind: 'ready'; init: RoomInit } | { kind: 'error'; error: ApiError };
+
 export default function ExamRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useI18n('exams');
-  const exam = getExam(id);
-  const questions = useMemo(() => (exam ? examQuestions(exam) : []), [exam]);
+  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Resume an existing draft (remaining time continues from its absolute endsAt) or create a new one.
-  const [draft] = useState<ExamDraft | null>(() => {
-    if (!exam) return null;
-    const st = useProgressStore.getState();
-    const existing = st.examDrafts[exam.id];
-    if (existing) return existing;
-    if (attemptsRemaining(exam, st.examAttemptsUsed[exam.id]) <= 0) return null;
-    const now = Date.now();
-    return { examId: exam.id, answers: {}, flagged: [], startedAt: now, endsAt: now + exam.durationMin * 60_000, currentIndex: 0 };
-  });
+  // EXM-03: start a new attempt or resume the active one (idempotent on the server).
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    setState({ kind: 'loading' });
+    (async () => {
+      try {
+        const attempt = await startExam(id);
+        if (!alive) return;
+        if (attempt.status !== 'in_progress' || (await hasPendingSubmit(attempt.attemptId))) {
+          openResultRoute(attempt.attemptId);
+          return;
+        }
+        // Server-authoritative clock: skew = serverNow − device now.
+        const skew = new Date(attempt.serverNow).getTime() - Date.now();
+        const questions = attempt.questions.map(toQuestion);
+        let answers = attempt.answers;
+        let flagged = attempt.flagged;
+        let currentIndex = attempt.currentIndex;
+        // Prefer locally saved state that never reached the server (e.g. app killed while offline).
+        const local = await getLocalExamState(attempt.attemptId);
+        const serverSaved = attempt.lastSavedAt ? new Date(attempt.lastSavedAt).getTime() : 0;
+        if (local && new Date(local.clientSavedAt).getTime() + skew > serverSaved) {
+          answers = local.answers;
+          flagged = local.flagged;
+          currentIndex = local.currentIndex;
+        }
+        if (!alive) return;
+        setState({
+          kind: 'ready',
+          init: {
+            attempt,
+            questions,
+            answers: toIndexMap(questions, answers),
+            flagged,
+            currentIndex,
+            endsAt: new Date(attempt.endsAt).getTime() - skew,
+          },
+        });
+      } catch (err) {
+        if (!alive) return;
+        const e = normalizeError(err);
+        if (isLockedError(e)) {
+          toastError(e);
+          openSubscription(e.locked);
+        } else if (e.reason !== 'EXAM_ATTEMPTS_EXHAUSTED' && e.code !== 'NOT_FOUND') {
+          toastError(e);
+        }
+        setState({ kind: 'error', error: e });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id, reloadKey]);
 
-  if (!exam || !questions.length) {
+  if (state.kind === 'loading') {
+    return (
+      <Screen edges={['top', 'bottom']}>
+        <Header title={t('title')} />
+        <View style={styles.center}>
+          <EmptyState icon="exam" title={t('common:states.loading')} />
+        </View>
+      </Screen>
+    );
+  }
+  if (state.kind === 'error') {
+    const e = state.error;
+    if (e.reason === 'EXAM_ATTEMPTS_EXHAUSTED') {
+      return (
+        <Screen edges={['top', 'bottom']}>
+          <Header title={t('title')} />
+          <View style={styles.center}>
+            <EmptyState
+              icon="lock"
+              title={t('noAttemptsRoom.title')}
+              message={t('noAttemptsRoom.message')}
+              actionLabel={t('notFound.action')}
+              onAction={goToExams}
+            />
+          </View>
+        </Screen>
+      );
+    }
+    const network = e.isNetwork;
+    return (
+      <Screen edges={['top', 'bottom']}>
+        <Header title={t('title')} />
+        <View style={styles.center}>
+          <EmptyState
+            icon={network ? 'wifi-off' : 'exam'}
+            title={network ? t('common:states.error') : t('notFound.title')}
+            message={network ? t('common:states.offline') : t('notFound.message')}
+            actionLabel={network ? t('common:actions.retry') : t('notFound.action')}
+            onAction={network ? () => setReloadKey((k) => k + 1) : goToExams}
+          />
+        </View>
+      </Screen>
+    );
+  }
+  if (!state.init.questions.length) {
     return (
       <Screen edges={['top', 'bottom']}>
         <Header title={t('title')} />
@@ -48,66 +170,99 @@ export default function ExamRoomScreen() {
       </Screen>
     );
   }
-  if (!draft) {
-    return (
-      <Screen edges={['top', 'bottom']}>
-        <Header title={t('title')} />
-        <View style={styles.center}>
-          <EmptyState
-            icon="lock"
-            title={t('noAttemptsRoom.title')}
-            message={t('noAttemptsRoom.message')}
-            actionLabel={t('notFound.action')}
-            onAction={goToExams}
-          />
-        </View>
-      </Screen>
-    );
-  }
-  return <ExamRoom exam={exam} questions={questions} initial={draft} />;
+  return <ExamRoom init={state.init} />;
 }
 
-interface ExamRoomProps {
-  exam: ExamBlueprint;
-  questions: Question[];
-  initial: ExamDraft;
-}
-
-function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
+function ExamRoom({ init }: { init: RoomInit }) {
   const { colors, isDark } = useTheme();
-  const { t, L, isAr } = useI18n('exams');
-  const saveExamDraft = useProgressStore((s) => s.saveExamDraft);
-  const clearExamDraft = useProgressStore((s) => s.clearExamDraft);
-  const addAttempt = useProgressStore((s) => s.addAttempt);
-  const addMistake = useMistakesStore((s) => s.addMistake);
+  const { t, L } = useI18n('exams');
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const narrow = width < 360;
+  const qc = useQueryClient();
+  const { data: config } = useAppConfig();
+  const attemptId = init.attempt.attemptId;
+  const exam: { title: Localized } = init.attempt.exam;
+  const questions = init.questions;
+  const autosaveSeconds = init.attempt.autosaveSeconds || config?.learning.examAutosaveSeconds || 15;
 
   const total = questions.length;
-  const [answers, setAnswers] = useState<Record<string, number>>(initial.answers);
-  const [flagged, setFlagged] = useState<string[]>(initial.flagged);
-  const [index, setIndex] = useState(() => Math.min(Math.max(0, initial.currentIndex), total - 1));
+  const [answers, setAnswers] = useState<Record<string, number>>(init.answers);
+  const [flagged, setFlagged] = useState<string[]>(init.flagged);
+  const [index, setIndex] = useState(() => Math.min(Math.max(0, init.currentIndex), total - 1));
   const [dir, setDir] = useState<1 | -1>(1);
   const [savedKey, setSavedKey] = useState(0);
+  const [saving, setSaving] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const [timeUpAttemptId, setTimeUpAttemptId] = useState<string | null>(null);
+  /** Manual submit accepted locally but waiting for the connection. */
+  const [queuedManual, setQueuedManual] = useState(false);
 
   const submittedRef = useRef(false);
-  const answersRef = useRef(answers);
+  const stateRef = useRef({ answers, flagged, index });
   useEffect(() => {
-    answersRef.current = answers;
-  }, [answers]);
+    stateRef.current = { answers, flagged, index };
+  }, [answers, flagged, index]);
 
-  // Autosave every change (answers, flags, position) to the persisted draft.
-  useEffect(() => {
+  const save = useCallback(() => {
     if (submittedRef.current) return;
-    saveExamDraft({ ...initial, answers, flagged, currentIndex: index });
-  }, [answers, flagged, index, initial, saveExamDraft]);
+    const s = stateRef.current;
+    void queueAutosave(attemptId, {
+      answers: toOptionIdMap(questions, s.answers),
+      flagged: s.flagged,
+      currentIndex: s.index,
+    });
+  }, [attemptId, questions]);
 
-  const { online } = useMockConnection({
-    enabled: !timeUpAttemptId,
-    onReconnect: () => toast.show({ message: t('network.back'), tone: 'success', icon: 'check-circle' }),
-  });
+  // Sync indicator + navigation once a queued (offline) submit finally lands.
+  useEffect(
+    () =>
+      onExamSync((aid, st) => {
+        if (aid !== attemptId) return;
+        setSaving(st === 'saving');
+        if (st === 'saved') setSavedKey((k) => k + 1);
+        if (st === 'saved' && queuedManual) {
+          setQueuedManual(false);
+          openResultRoute(attemptId);
+        }
+      }),
+    [attemptId, queuedManual],
+  );
+
+  // Autosave every change (debounced) …
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const id = setTimeout(save, 800);
+    return () => clearTimeout(id);
+  }, [answers, flagged, index, save]);
+
+  // … plus a periodic save, and one whenever the app leaves the foreground or the room unmounts.
+  useEffect(() => {
+    const timer = setInterval(save, autosaveSeconds * 1000);
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st !== 'active') save();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+      save();
+    };
+  }, [save, autosaveSeconds]);
+
+  const online = useConnectivity((s) => s.online);
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (online && !wasOnline.current && !timeUpAttemptId) {
+      toast.show({ message: t('network.back'), tone: 'success', icon: 'check-circle' });
+    }
+    wasOnline.current = online;
+  }, [online, t, timeUpAttemptId]);
 
   const question = questions[index]!;
   const isFlagged = flagged.includes(question.id);
@@ -140,50 +295,74 @@ function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
 
   const toggleFlag = () => {
     haptic.selection();
-    setFlagged((prev) => (prev.includes(question.id) ? prev.filter((x) => x !== question.id) : [...prev, question.id]));
+    const next = !flagged.includes(question.id);
+    setFlagged((prev) => (next ? [...prev, question.id] : prev.filter((x) => x !== question.id)));
+    // EXM-06 — flags are also part of every autosave, so a failure here is harmless.
+    void flagExamQuestion(attemptId, question.id, next).catch(() => {});
   };
 
-  const submit = useCallback(
+  const finish = useCallback(
     (reason: 'manual' | 'timeout') => {
+      void qc.invalidateQueries({ queryKey: qk.exams.all });
+      void qc.invalidateQueries({ queryKey: qk.mistakes.all });
+      void qc.invalidateQueries({ queryKey: qk.progress.all });
+      if (reason === 'timeout') {
+        haptic.warning();
+        setTimeUpAttemptId(attemptId);
+      } else {
+        haptic.success();
+        openResultRoute(attemptId);
+      }
+    },
+    [qc, attemptId],
+  );
+
+  const submit = useCallback(
+    async (reason: 'manual' | 'timeout') => {
       if (submittedRef.current) return;
       submittedRef.current = true;
-      const scored = scoreExam(questions, answersRef.current);
-      const timeSpentSec = Math.max(1, Math.min(exam.durationMin * 60, Math.round((Date.now() - initial.startedAt) / 1000)));
-      const attempt = addAttempt({
-        kind: 'exam',
-        refId: exam.id,
-        subjectId: exam.subjectId,
-        answers: scored.answers,
-        score: scored.score,
-        correct: scored.correct,
-        total: scored.total,
-        timeSpentSec,
-      });
-      for (const a of scored.answers) {
-        if (a.chosenIndex >= 0 && !a.correct) addMistake(a.questionId, a.chosenIndex, 'exam');
-      }
-      clearExamDraft(exam.id);
       setGridOpen(false);
       setSubmitOpen(false);
       setExitOpen(false);
-      if (reason === 'timeout') {
-        haptic.warning();
-        setTimeUpAttemptId(attempt.id);
-      } else {
-        haptic.success();
-        router.replace({ pathname: '/exams/result/[id]', params: { id: attempt.id } });
+      const s = stateRef.current;
+      try {
+        const accepted = await queueSubmit(attemptId, {
+          reason,
+          answers: toOptionIdMap(questions, s.answers),
+          flagged: s.flagged,
+        });
+        if (accepted) {
+          await clearExamState(attemptId);
+          finish(reason);
+        } else if (reason === 'timeout') {
+          // Offline at time-up: the submit stays queued (the server also auto-submits at endsAt + grace).
+          haptic.warning();
+          setTimeUpAttemptId(attemptId);
+        } else {
+          setQueuedManual(true);
+          toast.show({ message: t('network.lost'), tone: 'info', icon: 'wifi-off' });
+        }
+      } catch (err) {
+        const e = normalizeError(err);
+        if (e.reason && FINAL_REASONS.has(e.reason)) {
+          await clearExamState(attemptId);
+          finish(reason);
+          return;
+        }
+        submittedRef.current = false;
+        toastError(e);
       }
     },
-    [questions, exam, initial.startedAt, addAttempt, addMistake, clearExamDraft],
+    [attemptId, questions, finish, t],
   );
 
-  const onExpire = useCallback(() => submit('timeout'), [submit]);
+  const onExpire = useCallback(() => void submit('timeout'), [submit]);
 
   const openResult = useCallback(() => {
     if (!timeUpAttemptId) return;
-    const attemptId = timeUpAttemptId;
+    const aid = timeUpAttemptId;
     setTimeUpAttemptId(null);
-    router.replace({ pathname: '/exams/result/[id]', params: { id: attemptId } });
+    openResultRoute(aid);
   }, [timeUpAttemptId]);
 
   // Android hardware back → exit confirmation (or straight to results after time-up).
@@ -217,18 +396,19 @@ function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
   };
 
   const isLast = index === total - 1;
-  const forwardFromEnd = (dir > 0) !== isAr;
+  // Forward = toward the reading end; under native RTL that is the left edge.
+  const forwardFromEnd = (dir > 0) !== isRTL();
   const entering = (forwardFromEnd ? FadeInRight : FadeInLeft).duration(240);
 
   return (
-    <Screen padded={false} edges={['top', 'bottom']} animated={false}>
+    <Screen padded={false} edges={['top']} animated={false}>
       <Stack.Screen options={{ gestureEnabled: false, animation: 'fade' }} />
 
       {/* Top bar */}
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
         <IconButton icon="close" variant="surface" onPress={() => setExitOpen(true)} accessibilityLabel={t('room.exit')} />
         <View style={styles.titleWrap}>
-          <Text variant="label" numberOfLines={1} align="center">
+          <Text variant="bodyBold" numberOfLines={1}>
             {L(exam.title)}
           </Text>
           <View style={styles.syncRow}>
@@ -238,7 +418,7 @@ function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
             </Text>
           </View>
         </View>
-        <ExamTimer endsAt={initial.endsAt} onExpire={onExpire} compact />
+        <ExamTimer endsAt={init.endsAt} onExpire={onExpire} compact />
       </View>
 
       {!online ? <OfflineBanner /> : null}
@@ -249,7 +429,7 @@ function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
           <Text variant="h3" tabular accessibilityLabel={t('room.questionOf', { current: index + 1, total })}>
             {t('room.counter', { current: index + 1, total })}
           </Text>
-          <SavedIndicator pulseKey={savedKey} />
+          <SavedIndicator pulseKey={savedKey} saving={saving} />
         </View>
         <PressableScale
           onPress={toggleFlag}
@@ -284,27 +464,50 @@ function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
         </Animated.View>
       </ScrollView>
 
-      {/* Bottom controls */}
-      <View style={[styles.bottomBar, { borderTopColor: colors.border, backgroundColor: isDark ? colors.surface : colors.background }]}>
+      {/* Bottom controls: Prev · grid · Next/Submit — all 52pt, equal side widths, above the home indicator */}
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            borderTopColor: colors.border,
+            backgroundColor: isDark ? colors.surface : colors.background,
+            paddingBottom: Math.max(insets.bottom, space.md),
+          },
+        ]}
+      >
         <Button
           title={t('room.prev')}
-          icon="back"
+          icon={narrow ? undefined : 'back'}
           variant="outline"
-          size="md"
+          size="lg"
           disabled={index === 0}
           onPress={() => goTo(index - 1)}
           style={styles.navBtn}
         />
-        <IconButton icon="grid" variant="surface" onPress={() => setGridOpen(true)} accessibilityLabel={t('room.grid')} badge={flagged.length || undefined} />
+        <IconButton
+          icon="grid"
+          size={52}
+          variant="surface"
+          onPress={() => setGridOpen(true)}
+          accessibilityLabel={t('room.grid')}
+          badge={flagged.length || undefined}
+        />
         {isLast ? (
-          <Button title={t('room.submit')} icon="check" variant="primary" size="md" onPress={() => setSubmitOpen(true)} style={styles.navBtn} />
+          <Button
+            title={t('room.submit')}
+            icon={narrow ? undefined : 'check'}
+            variant="primary"
+            size="lg"
+            onPress={() => setSubmitOpen(true)}
+            style={styles.navBtn}
+          />
         ) : (
           <Button
             title={t('room.next')}
-            icon="chevron"
+            icon={narrow ? undefined : 'chevron'}
             iconPosition="end"
             variant="secondary"
-            size="md"
+            size="lg"
             onPress={() => goTo(index + 1)}
             style={styles.navBtn}
           />
@@ -339,7 +542,7 @@ function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
         title={t('submitSheet.title')}
         footer={
           <View style={styles.sheetFooter}>
-            <Button title={t('submitSheet.confirm')} icon="check" fullWidth onPress={() => submit('manual')} />
+            <Button title={t('submitSheet.confirm')} icon="check" fullWidth onPress={() => void submit('manual')} />
             <Button title={t('submitSheet.keep')} variant="ghost" fullWidth onPress={() => setSubmitOpen(false)} />
           </View>
         }
@@ -348,7 +551,7 @@ function ExamRoom({ exam, questions, initial }: ExamRoomProps) {
           <Text variant="bodyMedium" color="muted">
             {t('submitSheet.timeLeft')}
           </Text>
-          <ExamTimer endsAt={initial.endsAt} onExpire={onExpire} compact />
+          <ExamTimer endsAt={init.endsAt} onExpire={onExpire} compact />
         </View>
         <SubmitSummary unanswered={unanswered} flaggedCount={flagged.length} onJump={jumpFromSheet} />
       </BottomSheet>
@@ -387,12 +590,13 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: SCREEN_PADDING - 4,
+    gap: space.md,
+    minHeight: 60,
+    paddingHorizontal: SCREEN_PADDING,
     paddingVertical: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  titleWrap: { flex: 1, alignItems: 'center' },
+  titleWrap: { flex: 1, alignItems: 'flex-start' },
   syncRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   syncDot: { width: 6, height: 6, borderRadius: 3 },
   statusRow: {
@@ -421,10 +625,9 @@ const styles = StyleSheet.create({
     gap: space.md,
     paddingHorizontal: SCREEN_PADDING,
     paddingTop: space.md,
-    paddingBottom: space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  navBtn: { flex: 1 },
+  navBtn: { flex: 1, paddingHorizontal: space.md },
   sheetFooter: { gap: space.sm },
   timeLeftRow: {
     flexDirection: 'row',

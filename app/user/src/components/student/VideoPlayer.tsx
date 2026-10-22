@@ -1,16 +1,17 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, I18nManager, Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { directionStyle, isRTL as getIsRTL } from '@/utils/rtl';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useEvent, useEventListener } from 'expo';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { GestureDetector, GestureHandlerRootView, useExclusiveGestures, useTapGesture } from 'react-native-gesture-handler';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '@/components/icons';
-import { captionAt, type Quality } from '@/components/lesson/player/captions';
+import { cueAt, parseVtt, type Cue, type Quality } from '@/components/lesson/player/captions';
 import { SeekBar } from '@/components/lesson/player/SeekBar';
 import { SeekRipple } from '@/components/lesson/player/SeekRipple';
 import { formatSpeed, SettingsMenu } from '@/components/lesson/player/SettingsMenu';
@@ -31,17 +32,27 @@ export interface VideoPlayerProps {
   title?: string;
   /** Optional back action shown in the top-start corner of the controls (inline mode). */
   onBack?: () => void;
+  /** Signed WebVTT tracks (StreamUrlDto.captions). */
+  captionTracks?: { lang: string; url: string }[];
+  /** Fixed-quality mp4 renditions (StreamUrlDto.renditions); 'auto' plays `uri`. */
+  renditions?: { quality: string; url: string }[];
+  /** Fired when playback starts/pauses (watch-progress sync). */
+  onPlayingChange?: (playing: boolean, sec: number, duration: number) => void;
+  /** Fired after a user seek (timeline or ±10 s). */
+  onSeek?: (sec: number, duration: number) => void;
 }
 
 const SEEK_STEP = 10;
-const AUTO_HIDE_MS = 3000;
+const AUTO_HIDE_MS = 3200;
+/** Short window keeps single taps feeling instant while still catching double taps. */
+const DOUBLE_TAP_DELAY_MS = 220;
 
 type Ripple = { side: 'start' | 'end'; key: number };
 
 /**
  * EDUWAY video player — expo-video surface with a fully custom, bilingual control layer:
  * tap to toggle, auto-hide, double-tap ±10s (RTL aware), draggable timeline with time bubble,
- * speed/quality popover, mock captions, landscape fullscreen and PiP-ready surface.
+ * speed/quality popover, server caption tracks (VTT), landscape fullscreen and PiP-ready surface.
  */
 export const VideoPlayer = memo(function VideoPlayer({
   uri,
@@ -51,12 +62,23 @@ export const VideoPlayer = memo(function VideoPlayer({
   onEnd,
   title,
   onBack,
+  captionTracks,
+  renditions,
+  onPlayingChange,
+  onSeek,
 }: VideoPlayerProps) {
-  const { t, L } = useI18n('lesson');
+  const { t, lang } = useI18n('lesson');
   const insets = useSafeAreaInsets();
-  const isRTL = I18nManager.isRTL;
+  const isRTL = getIsRTL();
 
-  const player = useVideoPlayer(uri, (p) => {
+  // The player is created once with the first (signed) URL; later refreshed URLs are used on retry / quality
+  // switches so a background URL refresh never restarts playback.
+  const [initialUri] = useState(uri);
+  const latestUriRef = useRef(uri);
+  latestUriRef.current = uri;
+  const pendingSeekRef = useRef<number | null>(null);
+
+  const player = useVideoPlayer(initialUri, (p) => {
     p.timeUpdateEventInterval = 1;
     p.loop = false;
     p.play();
@@ -86,8 +108,34 @@ export const VideoPlayer = memo(function VideoPlayer({
   const scrubbingRef = useRef(false);
   const onProgressRef = useRef(onProgress);
   const onEndRef = useRef(onEnd);
+  const onPlayingChangeRef = useRef(onPlayingChange);
+  const onSeekRef = useRef(onSeek);
   onProgressRef.current = onProgress;
   onEndRef.current = onEnd;
+  onPlayingChangeRef.current = onPlayingChange;
+  onSeekRef.current = onSeek;
+
+  useEventListener(player, 'playingChange', ({ isPlaying: playing }) => {
+    const d = player.duration;
+    onPlayingChangeRef.current?.(playing, player.currentTime, d > 0 ? d : 0);
+  });
+
+  // Real captions: fetch + parse the track for the UI language when captions are switched on.
+  const [cues, setCues] = useState<Cue[]>([]);
+  useEffect(() => {
+    if (!captions || !captionTracks?.length) return;
+    const track = captionTracks.find((c) => c.lang === lang) ?? captionTracks[0]!;
+    let cancelled = false;
+    fetch(track.url)
+      .then((r) => r.text())
+      .then((txt) => {
+        if (!cancelled) setCues(parseVtt(txt));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [captions, lang, captionTracks]);
 
   // ── Player events ────────────────────────────────────────────────────────────
   useEventListener(player, 'timeUpdate', ({ currentTime, bufferedPosition }) => {
@@ -111,6 +159,14 @@ export const VideoPlayer = memo(function VideoPlayer({
   });
 
   // Resume from the saved position once the source is ready.
+  // Restore the position after a quality switch / retry replaced the source.
+  useEffect(() => {
+    if (status !== 'readyToPlay' || pendingSeekRef.current === null) return;
+    player.currentTime = pendingSeekRef.current;
+    pendingSeekRef.current = null;
+    player.play();
+  }, [status, player]);
+
   useEffect(() => {
     if (status !== 'readyToPlay' || resumedRef.current) return;
     resumedRef.current = true;
@@ -158,9 +214,17 @@ export const VideoPlayer = memo(function VideoPlayer({
       player.seekBy(delta);
       setTime(next);
       if (delta < 0 && ended) setEnded(false);
+      onSeekRef.current?.(next, d > 0 ? d : 0);
     },
     [ended, player, poke],
   );
+
+  const rewind = useCallback(() => seekRelative(-SEEK_STEP), [seekRelative]);
+  const forward = useCallback(() => seekRelative(SEEK_STEP), [seekRelative]);
+  const toggleMenu = useCallback(() => {
+    setMenuOpen((m) => !m);
+    poke();
+  }, [poke]);
 
   const onScrubStart = useCallback(() => {
     scrubbingRef.current = true;
@@ -174,6 +238,8 @@ export const VideoPlayer = memo(function VideoPlayer({
       player.currentTime = sec;
       setTime(sec);
       if (ended && sec < player.duration - 1) setEnded(false);
+      const d = player.duration;
+      onSeekRef.current?.(sec, d > 0 ? d : 0);
       poke();
     },
     [ended, player, poke],
@@ -193,12 +259,19 @@ export const VideoPlayer = memo(function VideoPlayer({
     (q: Quality) => {
       setQuality(q);
       setMenuOpen(false);
-      // Mock adaptive switch: brief re-buffer for realism.
-      setQualitySwitching(true);
-      setTimeout(() => setQualitySwitching(false), 650);
+      const target = q === 'auto' ? latestUriRef.current : renditions?.find((r) => r.quality === q)?.url;
+      if (target) {
+        // Real switch to the selected rendition, keeping the position.
+        pendingSeekRef.current = player.currentTime;
+        player.replace(target);
+      } else {
+        // No dedicated rendition (adaptive HLS) — the stream adapts by itself; brief re-buffer feedback.
+        setQualitySwitching(true);
+        setTimeout(() => setQualitySwitching(false), 650);
+      }
       poke();
     },
-    [poke],
+    [poke, player, renditions],
   );
 
   const toggleCaptions = useCallback(() => {
@@ -229,10 +302,12 @@ export const VideoPlayer = memo(function VideoPlayer({
   );
 
   const retry = useCallback(() => {
-    resumedRef.current = false;
-    player.replace(uri);
+    const at = player.currentTime;
+    if (at > 1) pendingSeekRef.current = at;
+    else resumedRef.current = false;
+    player.replace(latestUriRef.current);
     player.play();
-  }, [player, uri]);
+  }, [player]);
 
   // ── Gestures: single tap toggles controls, double tap seeks ±10s per side ────
   const toggleControls = useCallback(() => {
@@ -262,16 +337,30 @@ export const VideoPlayer = memo(function VideoPlayer({
     return () => clearTimeout(id);
   }, [ripple]);
 
-  const doubleTap = useTapGesture({
-    numberOfTaps: 2,
-    runOnJS: true,
-    onActivate: (e) => onDoubleTap(e.x),
-  });
-  const singleTap = useTapGesture({
-    runOnJS: true,
-    onActivate: () => toggleControls(),
-  });
-  const taps = useExclusiveGestures(doubleTap, singleTap);
+  // Stable gesture objects (re-creating them every timeUpdate re-render makes taps flaky);
+  // the latest handlers are read through refs.
+  const toggleRef = useRef(toggleControls);
+  const doubleTapRef = useRef(onDoubleTap);
+  toggleRef.current = toggleControls;
+  doubleTapRef.current = onDoubleTap;
+
+  const taps = useMemo(() => {
+    const doubleTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDelay(DOUBLE_TAP_DELAY_MS)
+      .maxDistance(30)
+      .runOnJS(true)
+      .onEnd((e, success) => {
+        if (success) doubleTapRef.current(e.x);
+      });
+    const singleTap = Gesture.Tap()
+      .maxDistance(20)
+      .runOnJS(true)
+      .onEnd((_e, success) => {
+        if (success) toggleRef.current();
+      });
+    return Gesture.Exclusive(doubleTap, singleTap);
+  }, []);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     widthRef.current = e.nativeEvent.layout.width;
@@ -281,8 +370,10 @@ export const VideoPlayer = memo(function VideoPlayer({
   const buffering = status === 'loading' || qualitySwitching;
   const hasError = status === 'error';
   const sidePad = fullscreen ? Math.max(insets.left, insets.right, space.lg) : space.md;
-  const caption = captions ? L(captionAt(time)) : null;
-  const centerSize = fullscreen ? 76 : 60;
+  const caption = captions ? cueAt(cues, time) : null;
+  const centerSize = fullscreen ? 76 : 56;
+  /** Height reserved by the top / bottom bars so the transport never overlaps them. */
+  const barSpace = fullscreen ? 72 : 44;
   const tenSec = t('player.seconds', { count: SEEK_STEP });
 
   const surface = (
@@ -309,8 +400,9 @@ export const VideoPlayer = memo(function VideoPlayer({
         </Animated.View>
       ) : null}
 
+      {/* Tap layer sits UNDER the controls overlay so control buttons always receive their own touches. */}
       <GestureDetector gesture={taps}>
-        <View style={StyleSheet.absoluteFill} />
+        <View style={StyleSheet.absoluteFill} collapsable={false} />
       </GestureDetector>
 
       {ripple ? <SeekRipple key={ripple.key} side={ripple.side} label={`${ripple.side === 'start' ? '−' : '+'}${tenSec}`} /> : null}
@@ -353,13 +445,13 @@ export const VideoPlayer = memo(function VideoPlayer({
               onPress={fullscreen ? exitFullscreen : onBack}
             />
           ) : null}
-          {title ? (
-            <Text variant={fullscreen ? 'h3' : 'label'} color="#FFFFFF" numberOfLines={1} style={styles.title}>
-              {title}
-            </Text>
-          ) : (
-            <View style={styles.title} />
-          )}
+          <View style={styles.title} pointerEvents="none">
+            {title ? (
+              <Text variant={fullscreen ? 'h3' : 'label'} color="#FFFFFF" numberOfLines={1}>
+                {title}
+              </Text>
+            ) : null}
+          </View>
           <CtrlButton
             icon="captions"
             label={captions ? t('player.captionsOn') : t('player.captionsOff')}
@@ -369,9 +461,9 @@ export const VideoPlayer = memo(function VideoPlayer({
         </View>
 
         {/* Center transport */}
-        <View pointerEvents="box-none" style={styles.center}>
-          <View pointerEvents="box-none" style={styles.transport}>
-            <CtrlButton icon="rewind-10" label={t('player.rewind')} onPress={() => seekRelative(-SEEK_STEP)} size={fullscreen ? 52 : 44} />
+        <View pointerEvents="box-none" style={[styles.transportArea, { top: barSpace, bottom: barSpace + 12 }]}>
+          <View pointerEvents="box-none" style={[styles.transport, { gap: fullscreen ? space.huge : space.xxl }]}>
+            <CtrlButton icon="rewind-10" label={t('player.rewind')} onPress={rewind} size={fullscreen ? 52 : 44} />
             {buffering && !hasError ? (
               <View style={{ width: centerSize, height: centerSize }} />
             ) : (
@@ -390,7 +482,7 @@ export const VideoPlayer = memo(function VideoPlayer({
                 />
               </PressableScale>
             )}
-            <CtrlButton icon="forward-10" label={t('player.forward')} onPress={() => seekRelative(SEEK_STEP)} size={fullscreen ? 52 : 44} />
+            <CtrlButton icon="forward-10" label={t('player.forward')} onPress={forward} size={fullscreen ? 52 : 44} />
           </View>
         </View>
 
@@ -399,19 +491,17 @@ export const VideoPlayer = memo(function VideoPlayer({
           pointerEvents="box-none"
           style={[styles.bottomBar, { paddingStart: sidePad, paddingEnd: sidePad, paddingBottom: fullscreen ? Math.max(insets.bottom, space.md) : space.xs }]}
         >
-          <View style={styles.bottomRow}>
-            <Text variant="caption" color="#FFFFFF" tabular style={styles.time}>
-              {formatDuration(time)}
-              <Text variant="caption" color="rgba(255,255,255,0.65)" tabular style={styles.time}>
-                {`  /  ${formatDuration(duration)}`}
+          <View style={styles.bottomRow} pointerEvents="box-none">
+            <View style={styles.timeWrap} pointerEvents="none">
+              <Text variant="caption" color="#FFFFFF" tabular style={styles.time}>
+                {formatDuration(time)}
+                <Text variant="caption" color="rgba(255,255,255,0.65)" tabular style={styles.time}>
+                  {`  /  ${formatDuration(duration)}`}
+                </Text>
               </Text>
-            </Text>
-            <View style={styles.flex} />
+            </View>
             <PressableScale
-              onPress={() => {
-                setMenuOpen((m) => !m);
-                poke();
-              }}
+              onPress={toggleMenu}
               accessibilityRole="button"
               accessibilityLabel={`${t('player.speed')} ${formatSpeed(speed)}`}
               hitSlop={HIT_SLOP}
@@ -424,10 +514,7 @@ export const VideoPlayer = memo(function VideoPlayer({
             <CtrlButton
               icon="gear-quality"
               label={t('player.settings')}
-              onPress={() => {
-                setMenuOpen((m) => !m);
-                poke();
-              }}
+              onPress={toggleMenu}
               active={menuOpen}
               badge={quality !== 'auto' ? quality.replace('p', '') : undefined}
             />
@@ -490,7 +577,7 @@ export const VideoPlayer = memo(function VideoPlayer({
           navigationBarTranslucent
         >
           <StatusBar hidden />
-          <GestureHandlerRootView style={styles.fullscreenRoot}>{surface}</GestureHandlerRootView>
+          <GestureHandlerRootView style={[styles.fullscreenRoot, directionStyle(isRTL)]}>{surface}</GestureHandlerRootView>
         </Modal>
       </View>
     );
@@ -546,7 +633,9 @@ const styles = StyleSheet.create({
   topBar: { position: 'absolute', top: 0, start: 0, end: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm },
   title: { flex: 1 },
   center: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  transport: { flexDirection: 'row', alignItems: 'center', gap: space.xxl },
+  transportArea: { position: 'absolute', start: 0, end: 0, alignItems: 'center', justifyContent: 'center' },
+  transport: { flexDirection: 'row', alignItems: 'center' },
+  timeWrap: { flex: 1, justifyContent: 'center' },
   bigPlay: {
     alignItems: 'center',
     justifyContent: 'center',

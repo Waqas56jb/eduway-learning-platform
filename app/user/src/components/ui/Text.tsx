@@ -1,7 +1,7 @@
 import { memo } from 'react';
-import { Text as RNText, type TextProps as RNTextProps, type TextStyle } from 'react-native';
+import { StyleSheet, Text as RNText, type TextProps as RNTextProps, type TextStyle } from 'react-native';
 import { useLangStore } from '@/store/langStore';
-import { tabular as tabularStyle, textStyle, useTheme, type ThemeColors, type TypeVariant } from '@/theme';
+import { lineHeightFor, tabular as tabularStyle, textStyle, useTheme, type ThemeColors, type TypeVariant } from '@/theme';
 
 export interface TextProps extends RNTextProps {
   variant?: TypeVariant;
@@ -17,6 +17,11 @@ export interface TextProps extends RNTextProps {
 /**
  * Themed, language-aware text. Picks Inter/Playfair for English and Tajawal for Arabic,
  * and aligns to the reading direction ("start") by default.
+ *
+ * Alignment under native RTL: 'auto' (natural) + writingDirection follows the reading direction, and
+ * React Native swaps 'left'/'right' when the layout is RTL, so 'right' always means the END edge.
+ * If a caller overrides `fontSize` without a `lineHeight`, a matching line height is derived so
+ * glyphs (Arabic diacritics, descenders) never clip.
  */
 export const Text = memo(function Text({
   variant = 'body',
@@ -29,16 +34,26 @@ export const Text = memo(function Text({
 }: TextProps) {
   const { colors } = useTheme();
   const isAr = useLangStore((s) => s.isAr);
-  const base = textStyle(display ? (variant === 'display' ? 'display' : 'h1') : variant, isAr);
-  const sized: TextStyle = display ? { ...base, fontSize: textStyle(variant, isAr).fontSize, lineHeight: textStyle(variant, isAr).lineHeight } : base;
+  const own = textStyle(variant, isAr);
+  const base: TextStyle = display
+    ? { ...textStyle(variant === 'display' ? 'display' : 'h1', isAr), fontSize: own.fontSize, lineHeight: own.lineHeight }
+    : own;
   const resolvedColor = (colors as unknown as Record<string, string>)[color] ?? color;
-  // RN mirrors 'left'/'right' under native RTL, so 'right' == end; 'auto' follows the reading direction.
   const textAlign: TextStyle['textAlign'] = align === 'start' ? 'auto' : align === 'end' ? 'right' : align;
+
+  let fix: TextStyle | null = null;
+  if (style) {
+    const flat = StyleSheet.flatten(style);
+    if (flat && typeof flat.fontSize === 'number' && flat.lineHeight == null && flat.fontSize !== base.fontSize) {
+      fix = { lineHeight: lineHeightFor(flat.fontSize, isAr) };
+    }
+  }
+
   return (
     <RNText
       maxFontSizeMultiplier={1.4}
       {...rest}
-      style={[sized, { color: resolvedColor, textAlign, writingDirection: isAr ? 'rtl' : 'ltr' }, tabular && tabularStyle, style]}
+      style={[base, { color: resolvedColor, textAlign, writingDirection: isAr ? 'rtl' : 'ltr' }, tabular && tabularStyle, style, fix]}
     />
   );
 });

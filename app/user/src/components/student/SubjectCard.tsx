@@ -8,8 +8,8 @@ import { Icon, SubjectIcon } from '@/components/icons';
 import { PressableScale, ProgressBar, Text } from '@/components/ui';
 import { BLURHASH } from '@/constants/images';
 import { useI18n } from '@/hooks/useI18n';
-import { useAuthStore, useProgressStore } from '@/store';
-import { gradients, radius, shadows, space, subjectColors, useTheme } from '@/theme';
+import { useAuthStore } from '@/store';
+import { gradients, palette, radius, shadows, space, subjectColors, useTheme } from '@/theme';
 import type { Subject } from '@/types';
 
 export interface SubjectCardProps {
@@ -19,15 +19,16 @@ export interface SubjectCardProps {
   onPress?: () => void;
 }
 
-const COVER_H = 156;
-const STRIPE_W = 4;
+const enterDelay = (i: number) => Math.min(i * 60, 300);
 
-/** Subject card — `large` image card for the Subjects tab, `compact` horizontal card for carousels. */
+/** Subject card — `large` magazine image card for the Subjects tab, `compact` horizontal card for carousels. */
 export const SubjectCard = memo(function SubjectCard({ subject, index = 0, variant = 'large', onPress }: SubjectCardProps) {
   const { colors, isDark } = useTheme();
   const { t, L } = useI18n(['subjects', 'common']);
-  const unlocked = useAuthStore((s) => s.hasSubject(subject.id));
-  const progress = useProgressStore((s) => s.subjectCompletion(subject.id));
+  const entitled = useAuthStore((s) => s.hasSubject(subject.id));
+  // Server lock flag wins (null = unknown → fall back to the cached entitlements).
+  const unlocked = subject.locked === false || (subject.locked == null && entitled);
+  const progress = Math.round(subject.progressPct ?? 0);
   const color = subjectColors[subject.id] ?? subject.color;
   const locked = !unlocked;
 
@@ -41,18 +42,13 @@ export const SubjectCard = memo(function SubjectCard({ subject, index = 0, varia
 
   if (variant === 'compact') {
     return (
-      <Animated.View entering={FadeInDown.duration(260).delay(index * 60)}>
+      <Animated.View entering={FadeInDown.duration(350).delay(enterDelay(index))}>
         <PressableScale
           onPress={handlePress}
           accessibilityLabel={a11y}
-          style={[
-            styles.compact,
-            shadows.sm,
-            { backgroundColor: colors.surface, borderColor: colors.border, opacity: locked ? 0.72 : 1 },
-          ]}
+          style={[styles.compact, shadows.sm, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
-          <View style={[styles.compactStripe, { backgroundColor: color }]} />
-          <View style={styles.compactThumb}>
+          <View style={[styles.compactThumb, { backgroundColor: colors.surfaceMuted }]}>
             <Image
               source={{ uri: subject.image }}
               placeholder={{ blurhash: BLURHASH }}
@@ -61,8 +57,7 @@ export const SubjectCard = memo(function SubjectCard({ subject, index = 0, varia
               cachePolicy="memory-disk"
               style={StyleSheet.absoluteFill}
             />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: `${color}B3` }]} />
-            <View style={styles.compactIcon}>
+            <View style={[StyleSheet.absoluteFill, styles.center, { backgroundColor: `${color}B3` }]} pointerEvents="none">
               {locked ? <Icon name="lock" size={20} color="#FFFFFF" /> : <SubjectIcon subjectId={subject.id} size={24} color="#FFFFFF" />}
             </View>
           </View>
@@ -71,11 +66,16 @@ export const SubjectCard = memo(function SubjectCard({ subject, index = 0, varia
               {name}
             </Text>
             <Text variant="caption" color="muted" numberOfLines={1}>
-              {t('common:units.lessons', { count: subject.lessonsCount })}
-              {'  ·  '}
-              {locked ? t('common:premium.locked') : t('common:units.percent', { value: progress })}
+              {`${t('common:units.lessons', { count: subject.lessonsCount })} · ${
+                locked ? t('common:premium.locked') : t('common:units.percent', { value: progress })
+              }`}
             </Text>
-            <ProgressBar progress={locked ? 0 : progress} height={5} color={color} />
+            <ProgressBar
+              progress={locked ? 0 : progress}
+              height={4}
+              color={color}
+              trackColor={isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted}
+            />
           </View>
         </PressableScale>
       </Animated.View>
@@ -83,177 +83,173 @@ export const SubjectCard = memo(function SubjectCard({ subject, index = 0, varia
   }
 
   return (
-    <Animated.View entering={FadeInDown.duration(320).delay(index * 70)}>
+    <Animated.View entering={FadeInDown.duration(350).delay(enterDelay(index))}>
       <PressableScale
         onPress={handlePress}
         accessibilityLabel={a11y}
-        style={[styles.card, shadows.md, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[styles.card, shadows.md, { backgroundColor: palette.navy }]}
       >
-        <View style={styles.cover}>
-          <Image
-            source={{ uri: subject.image }}
-            placeholder={{ blurhash: BLURHASH }}
-            transition={300}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            style={[StyleSheet.absoluteFill, locked && styles.dim]}
-          />
-          <LinearGradient colors={gradients.imageOverlay} style={StyleSheet.absoluteFill} />
-          {locked ? <View style={[StyleSheet.absoluteFill, styles.lockShade]} /> : null}
+        <Image
+          source={{ uri: subject.image }}
+          placeholder={{ blurhash: BLURHASH }}
+          transition={300}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          style={[StyleSheet.absoluteFill, locked && styles.dim]}
+        />
+        <LinearGradient
+          colors={gradients.imageOverlay}
+          locations={[0.15, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={['rgba(7,20,38,0.45)', 'rgba(7,20,38,0)']}
+          style={styles.topScrim}
+          pointerEvents="none"
+        />
 
-          <View style={styles.coverTop}>
-            <View style={[styles.iconCircle, { backgroundColor: color }]}>
-              <SubjectIcon subjectId={subject.id} size={22} color="#FFFFFF" />
+        {/* Top: icon chip + status pill */}
+        <View style={styles.top} pointerEvents="none">
+          <View style={[styles.chip, { backgroundColor: color }]}>
+            <SubjectIcon subjectId={subject.id} size={20} color="#FFFFFF" />
+          </View>
+          {locked ? (
+            <View style={[styles.pill, styles.lockPill]}>
+              <Icon name="lock" size={12} color={palette.goldLight} />
+              <Text variant="label" color="#FFFFFF" numberOfLines={1}>
+                {t('common:premium.locked')}
+              </Text>
             </View>
-            {locked ? (
-              <View style={styles.lockBadge}>
-                <Icon name="lock" size={13} color="#FFFFFF" />
-                <Text variant="caption" color="#FFFFFF" style={styles.lockText}>
-                  {t('common:premium.locked')}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.percentBadge}>
-                <Text variant="label" color="#FFFFFF" tabular>
-                  {t('common:units.percent', { value: progress })}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.coverBottom}>
-            <Text variant="h2" display color="#FFFFFF" numberOfLines={1}>
-              {name}
-            </Text>
-            <Text variant="caption" color="rgba(255,255,255,0.85)" numberOfLines={1}>
-              {L(subject.tagline)}
-            </Text>
-          </View>
+          ) : progress >= 100 ? (
+            <View style={[styles.pill, styles.donePill]}>
+              <Icon name="check" size={12} color={palette.navy} strokeWidth={2.4} />
+              <Text variant="label" color={palette.navy} tabular>
+                {t('common:units.percent', { value: progress })}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
-        <View style={styles.body}>
+        {/* Bottom: name, meta, progress */}
+        <View style={styles.bottom} pointerEvents="none">
+          <Text
+            variant="h1"
+            display
+            color="#FFFFFF"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {name}
+          </Text>
+          <Text variant="caption" color="rgba(255,255,255,0.82)" numberOfLines={1}>
+            {L(subject.tagline)}
+          </Text>
+
           <View style={styles.metaRow}>
-            <Meta icon="lesson" label={t('common:units.lessons', { count: subject.lessonsCount })} color={colors.muted} />
-            <Meta icon="clock" label={t('common:units.hours', { count: subject.hours })} color={colors.muted} />
-            <Meta icon="question-bank" label={t('common:units.questions', { count: subject.questionsCount })} color={colors.muted} />
+            <View style={styles.meta}>
+              <Icon name="lesson" size={14} color={palette.goldLight} />
+              <Text variant="label" color="#FFFFFF" numberOfLines={1}>
+                {t('common:units.lessons', { count: subject.lessonsCount })}
+              </Text>
+            </View>
+            <View style={styles.metaDot} />
+            <View style={styles.meta}>
+              <Icon name="clock" size={14} color={palette.goldLight} />
+              <Text variant="label" color="#FFFFFF" numberOfLines={1}>
+                {t('common:units.hours', { count: subject.hours })}
+              </Text>
+            </View>
+            <View style={styles.flex} />
+            <View style={styles.go}>
+              <Icon name={locked ? 'crown' : 'chevron'} size={16} color={palette.navy} />
+            </View>
           </View>
 
-          <View style={styles.progressRow}>
-            <View style={styles.progressBar}>
-              <ProgressBar
-                progress={locked ? 0 : progress}
-                height={6}
-                color={color}
-                trackColor={isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted}
-              />
+          {locked ? null : (
+            <View style={styles.progressRow}>
+              <View style={styles.flex}>
+                <ProgressBar progress={progress} height={4} color={palette.gold} trackColor="rgba(255,255,255,0.22)" />
+              </View>
+              <Text variant="caption" color="rgba(255,255,255,0.9)" tabular align="end" style={styles.pct}>
+                {t('common:units.percent', { value: progress })}
+              </Text>
             </View>
-            <Text variant="label" color={locked ? 'muted' : color} tabular>
-              {t('common:units.percent', { value: locked ? 0 : progress })}
-            </Text>
-          </View>
-
-          <View style={[styles.teacherRow, { borderTopColor: colors.border }]}>
-            <View style={[styles.teacherDot, { backgroundColor: `${color}22` }]}>
-              <Icon name="user" size={14} color={color} />
-            </View>
-            <Text variant="caption" color="muted" numberOfLines={1} style={styles.flex}>
-              {L(subject.teacher)}
-            </Text>
-            <Icon name="chevron" size={18} color={colors.muted} />
-          </View>
+          )}
         </View>
-
-        <View style={[styles.stripe, { backgroundColor: color }]} />
       </PressableScale>
     </Animated.View>
   );
 });
 
-function Meta({ icon, label, color }: { icon: 'lesson' | 'clock' | 'question-bank'; label: string; color: string }) {
-  return (
-    <View style={styles.meta}>
-      <Icon name={icon} size={14} color={color} />
-      <Text variant="caption" color="muted" numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
+const GO = 30;
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  center: { alignItems: 'center', justifyContent: 'center' },
   card: {
+    width: '100%',
+    aspectRatio: 16 / 10,
+    minHeight: 200,
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+    justifyContent: 'space-between',
   },
-  stripe: { position: 'absolute', top: 0, bottom: 0, start: 0, width: STRIPE_W },
-  cover: { height: COVER_H, justifyContent: 'space-between' },
-  dim: { opacity: 0.6 },
-  lockShade: { backgroundColor: 'rgba(7,20,38,0.4)' },
-  coverTop: {
+  dim: { opacity: 0.55 },
+  topScrim: { position: 'absolute', top: 0, start: 0, end: 0, height: 80 },
+  top: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: space.md,
-    paddingStart: space.lg + STRIPE_W,
-    paddingEnd: space.md,
+    padding: space.lg,
   },
-  iconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  chip: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
-  lockBadge: {
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: space.sm + 2,
-    paddingVertical: 5,
+    gap: 6,
+    height: 28,
+    paddingHorizontal: space.md,
     borderRadius: radius.pill,
+  },
+  lockPill: {
     backgroundColor: 'rgba(7,20,38,0.72)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(201,162,74,0.7)',
+    borderColor: 'rgba(230,199,122,0.75)',
   },
-  lockText: { fontSize: 11 },
-  percentBadge: {
-    paddingHorizontal: space.sm + 2,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(7,20,38,0.55)',
-  },
-  coverBottom: { paddingStart: space.lg + STRIPE_W, paddingEnd: space.lg, paddingBottom: space.md, gap: 2 },
-  body: { paddingStart: space.lg + STRIPE_W, paddingEnd: space.lg, paddingTop: space.md, paddingBottom: space.sm, gap: space.md },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  progressBar: { flex: 1 },
-  teacherRow: {
-    flexDirection: 'row',
+  donePill: { backgroundColor: palette.goldLight },
+  bottom: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: 2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm, minHeight: GO },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.6)' },
+  go: {
+    width: GO,
+    height: GO,
+    borderRadius: GO / 2,
+    backgroundColor: palette.goldLight,
     alignItems: 'center',
-    gap: space.sm,
-    paddingTop: space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    minHeight: 40,
+    justifyContent: 'center',
   },
-  teacherDot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm },
+  pct: { minWidth: 34 },
   compact: {
     width: 264,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     padding: space.sm,
-    paddingStart: space.sm + STRIPE_W,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
   },
-  compactStripe: { position: 'absolute', top: 0, bottom: 0, start: 0, width: STRIPE_W },
   compactThumb: { width: 56, height: 56, borderRadius: radius.sm, overflow: 'hidden' },
-  compactIcon: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   compactBody: { flex: 1, gap: 5 },
 });

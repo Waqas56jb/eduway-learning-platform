@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { AccessibilityInfo, Platform, StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { GestureDetector, GestureHandlerRootView, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -102,13 +102,13 @@ const ToastView = memo(function ToastView({ item }: { item: ToastItem }) {
     };
   }, [dismiss, item, opacity, y]);
 
-  const pan = usePanGesture({
-    activeOffsetY: [-6, 6],
-    onUpdate: (e) => {
+  const pan = Gesture.Pan()
+    .activeOffsetY([-6, 6])
+    .onUpdate((e) => {
       'worklet';
       y.value = e.translationY < 0 ? e.translationY : e.translationY * 0.15;
-    },
-    onDeactivate: (e) => {
+    })
+    .onEnd((e) => {
       'worklet';
       if (e.translationY < -24 || e.velocityY < -500) {
         opacity.value = withTiming(0, { duration: 160 });
@@ -118,8 +118,7 @@ const ToastView = memo(function ToastView({ item }: { item: ToastItem }) {
       } else {
         y.value = withSpring(0, { damping: 18, stiffness: 220 });
       }
-    },
-  });
+    });
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -134,18 +133,20 @@ const ToastView = memo(function ToastView({ item }: { item: ToastItem }) {
 
   return (
     <View style={[styles.host, { top: insets.top + 8 }]} pointerEvents="box-none">
-      <GestureHandlerRootView style={styles.root}>
+      {/* box-none everywhere: only the pill itself captures touches, never the strip around it. */}
+      <GestureHandlerRootView style={styles.root} pointerEvents="box-none">
         <GestureDetector gesture={pan}>
           <Animated.View
-            style={[styles.shadow, shadows.lg, animStyle]}
+            style={[styles.shadow, shadows.md, animStyle]}
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
             <View style={[styles.pill, { borderColor: colors.border }]}>
             {isIOS ? (
-              <BlurView intensity={70} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+              <BlurView intensity={70} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} pointerEvents="none" />
             ) : null}
             <View
+              pointerEvents="none"
               style={[
                 StyleSheet.absoluteFill,
                 { backgroundColor: isIOS ? (isDark ? 'rgba(14,35,66,0.55)' : 'rgba(255,255,255,0.6)') : colors.surfaceElevated },
@@ -154,7 +155,7 @@ const ToastView = memo(function ToastView({ item }: { item: ToastItem }) {
             <View style={[styles.iconWrap, { backgroundColor: toneSoft }]}>
               <Icon name={item.icon ?? TONE_ICON[item.tone]} size={18} color={toneColor} />
             </View>
-            <Text variant="label" color="ink" style={styles.message} numberOfLines={3}>
+            <Text variant="label" color="ink" style={styles.message} numberOfLines={3} maxFontSizeMultiplier={1.2}>
               {item.message}
             </Text>
             </View>

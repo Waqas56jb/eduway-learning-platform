@@ -8,7 +8,7 @@ export const images = {
   onboardingStudents: u('photo-1523240795612-9a054b0db644'),
   onboardingLibrary: u('photo-1521587760476-6c12a4b040da'),
   onboardingLab: u('photo-1532094349884-543bc11b234d'),
-  graduation: u('photo-1523050854058-8df90110c9f1'),
+  graduation: u('photo-1541339907198-e08756dedf3f'),
   chemistryGlassware: u('photo-1603126857599-f6e157fa2fe6'),
   mathBoard: u('photo-1635070041078-e363dbe005cb'),
   physics: u('photo-1636466497217-26a8cbeaf0aa'),

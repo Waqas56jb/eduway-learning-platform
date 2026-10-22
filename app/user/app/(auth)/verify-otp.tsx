@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { AuthScaffold, DemoHint } from '@/components/auth';
+import { useAppConfig } from '@/api';
+import { AuthScaffold, DemoHint, StepIndicator } from '@/components/auth';
+import { SessionRow } from '@/components/settings/SessionRow';
 import { Icon } from '@/components/icons';
-import { Button, OtpInput, PressableScale, Text, toast } from '@/components/ui';
+import { BottomSheet, Button, OtpInput, PressableScale, Text, toast } from '@/components/ui';
+import { images } from '@/constants/images';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore } from '@/store';
-import { HIT_SLOP, radius, space, useTheme } from '@/theme';
+import { HIT_SLOP, radius, SCREEN_PADDING, shadows, space, useTheme } from '@/theme';
 import { formatDuration } from '@/utils/format';
 import { haptic } from '@/utils/haptics';
 
-const OTP_LENGTH = 6;
-const RESEND_SECONDS = 60;
+const DEFAULT_OTP_LENGTH = 6;
+const DEFAULT_RESEND_SECONDS = 60;
+const MAX_BOX = 56;
 /** Unicode LTR isolate so "+964 770 ••• 4567" never reorders inside Arabic text. */
 const ltr = (s: string) => `⁦${s}⁩`;
+
+const enter = (i: number) => FadeInDown.duration(350).delay(Math.min(80 + i * 60, 300));
 
 /** "+964 770 123 4567" → "+964 770 ••• 4567" */
 function maskMobile(mobile: string): string {
@@ -24,10 +30,27 @@ function maskMobile(mobile: string): string {
   return digits.length > 4 ? `${mobile.slice(0, -4).replace(/\d/g, '•')}${mobile.slice(-4)}` : mobile;
 }
 
+/** Six boxes sized from the window width: equal boxes, equal gaps, centered, fits 320pt screens. */
+function useOtpRowWidth(OTP_LENGTH: number): number {
+  const { width } = useWindowDimensions();
+  const available = width - SCREEN_PADDING * 2;
+  const gap = width < 360 ? 8 : 12;
+  const box = Math.min(MAX_BOX, Math.floor((available - gap * (OTP_LENGTH - 1)) / OTP_LENGTH));
+  return box * OTP_LENGTH + gap * (OTP_LENGTH - 1);
+}
+
 export default function VerifyOtpScreen() {
   const { t } = useI18n('auth');
   const { colors } = useTheme();
   const pendingMobile = useAuthStore((s) => s.pendingMobile);
+  const isRegistering = useAuthStore((s) => !!s.pendingRegistration);
+  const otpInfo = useAuthStore((s) => s.otp);
+  const deviceSessions = useAuthStore((s) => s.deviceLimitSessions);
+  const { data: config } = useAppConfig();
+  const OTP_LENGTH = otpInfo?.codeLength ?? config?.otp.codeLength ?? DEFAULT_OTP_LENGTH;
+  const RESEND_SECONDS = otpInfo?.resendInSeconds ?? config?.otp.resendCooldownSeconds ?? DEFAULT_RESEND_SECONDS;
+  const otpWidth = useOtpRowWidth(OTP_LENGTH);
+  const [revoking, setRevoking] = useState<string | null>(null);
 
   const [code, setCode] = useState('');
   const [error, setError] = useState(false);
@@ -37,6 +60,8 @@ export default function VerifyOtpScreen() {
   /** Set once a verification succeeds so clearing `pendingMobile` doesn't bounce us to login. */
   const verifiedRef = useRef(false);
   const verifyingRef = useRef(false);
+  /** Remember the step indicator while verifying (the store clears registration on success). */
+  const [showSteps] = useState(isRegistering);
 
   // No number awaiting verification → back to login.
   useEffect(() => {
@@ -68,28 +93,55 @@ export default function VerifyOtpScreen() {
         router.replace('/(tabs)/home');
       } else {
         verifiedRef.current = false;
-        haptic.error();
-        setError(true);
-        setCode('');
+        const { lastError } = useAuthStore.getState();
+        // Wrong/expired code: OtpInput shakes and fires haptic.error() when `error` flips on.
+        // Other failures (device limit, network…) keep the code and are explained by a toast/sheet.
+        if (lastError?.reason === 'OTP_INVALID' || lastError?.reason === 'OTP_EXPIRED') {
+          setError(true);
+          setCode('');
+        } else {
+          haptic.error();
+        }
       }
     },
-    [t],
+    [t, OTP_LENGTH],
   );
 
+  /** DEVICE_LIMIT_REACHED → sign out the chosen device and retry with the same code. */
+  const revokeAndRetry = useCallback(
+    async (sessionId: string) => {
+      if (revoking) return;
+      setRevoking(sessionId);
+      verifiedRef.current = true;
+      const ok = await useAuthStore.getState().verifyOtp(code, sessionId);
+      setRevoking(null);
+      if (ok) {
+        haptic.success();
+        toast.success(t('otp.success'));
+        router.replace('/(tabs)/home');
+      } else {
+        verifiedRef.current = false;
+      }
+    },
+    [code, revoking, t],
+  );
+  const closeDeviceSheet = useCallback(() => useAuthStore.setState({ deviceLimitSessions: null }), []);
+
   const resend = useCallback(async () => {
-    const { pendingRegistration, pendingMobile: mobile, requestOtp, startRegistration } = useAuthStore.getState();
+    const { pendingMobile: mobile, resendOtp } = useAuthStore.getState();
     if (!mobile || resending) return;
     setResending(true);
-    // Keep the registration details when re-sending during sign-up.
-    if (pendingRegistration) await startRegistration(pendingRegistration);
-    else await requestOtp(mobile);
+    // Keeps the registration details when re-sending during sign-up.
+    const sent = await resendOtp();
     setResending(false);
+    if (!sent) return;
+    const next = useAuthStore.getState().otp?.resendInSeconds;
     setCode('');
     setError(false);
-    setSeconds(RESEND_SECONDS);
+    setSeconds(next ?? RESEND_SECONDS);
     haptic.light();
     toast.success(t('otp.resent'));
-  }, [resending, t]);
+  }, [resending, t, RESEND_SECONDS]);
 
   const editNumber = () => {
     if (router.canGoBack()) router.back();
@@ -97,66 +149,25 @@ export default function VerifyOtpScreen() {
   };
 
   if (!pendingMobile && !verifiedRef.current) return null;
-  const masked = ltr(maskMobile(pendingMobile ?? ''));
+  const masked = ltr(otpInfo?.maskedPhone || maskMobile(pendingMobile ?? ''));
 
   return (
-    <AuthScaffold title={t('otp.title')} subtitle={t('otp.subtitle')} onBack={editNumber}>
-      <Animated.View
-        entering={FadeInDown.duration(300).delay(60)}
-        style={[styles.numberCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      >
-        <View style={[styles.numberIcon, { backgroundColor: colors.accentSoft }]}>
-          <Icon name="otp" size={20} color={colors.accent} />
-        </View>
-        <View style={styles.numberTexts}>
-          <Text variant="caption" color="muted">
-            {t('otp.sentTo')}
-          </Text>
-          <Text variant="bodyBold" tabular accessibilityLabel={t('otp.sentToA11y', { number: pendingMobile ?? '' })}>
-            {masked}
-          </Text>
-        </View>
-        <PressableScale
-          onPress={editNumber}
-          hitSlop={HIT_SLOP}
-          accessibilityRole="button"
-          accessibilityLabel={t('otp.editA11y')}
-          style={styles.editBtn}
-        >
-          <Icon name="edit" size={16} color={colors.accent} />
-          <Text variant="label" color="accent">
-            {t('otp.edit')}
-          </Text>
-        </PressableScale>
-      </Animated.View>
-
-      <Animated.View
-        entering={FadeInDown.duration(300).delay(120)}
-        style={styles.otpWrap}
-        accessibilityLabel={t('otp.a11y')}
-      >
-        <OtpInput
-          length={OTP_LENGTH}
-          value={code}
-          onChange={(v) => {
-            setCode(v);
-            if (error) setError(false);
-          }}
-          onComplete={(v) => void verify(v)}
-          error={error}
-          autoFocus
-        />
-        {error ? (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.errorRow}>
-            <Icon name="alert" size={16} color={colors.danger} />
-            <Text variant="caption" color="danger" accessibilityLiveRegion="assertive" style={styles.flex}>
-              {t('otp.wrongCode')}
-            </Text>
-          </Animated.View>
-        ) : null}
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.duration(300).delay(180)}>
+    <AuthScaffold
+      title={t('otp.title')}
+      subtitle={t('otp.subtitle', { count: OTP_LENGTH })}
+      onBack={editNumber}
+      image={images.studyDesk}
+      accessory={
+        showSteps ? (
+          <StepIndicator
+            current={2}
+            total={2}
+            label={t('register.step', { current: 2, total: 2 })}
+            caption={t('otp.stepCaption')}
+          />
+        ) : undefined
+      }
+      footer={
         <Button
           title={verifying ? t('otp.verifying') : t('otp.verify')}
           variant="primary"
@@ -168,15 +179,84 @@ export default function VerifyOtpScreen() {
           disabled={verifying || code.length !== OTP_LENGTH}
           onPress={() => void verify(code)}
         />
+      }
+    >
+      {/* Sent-to card */}
+      <Animated.View
+        entering={enter(0)}
+        style={[styles.numberCard, shadows.sm, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      >
+        <View style={[styles.numberIcon, { backgroundColor: colors.accentSoft }]}>
+          <Icon name="otp" size={20} color={colors.accent} />
+        </View>
+        <View style={styles.numberTexts}>
+          <Text variant="caption" color="muted">
+            {t('otp.sentTo')}
+          </Text>
+          <Text
+            variant="bodyBold"
+            tabular
+            numberOfLines={1}
+            accessibilityLabel={t('otp.sentToA11y', { number: pendingMobile ?? '' })}
+          >
+            {masked}
+          </Text>
+        </View>
+        <PressableScale
+          onPress={editNumber}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel={t('otp.editA11y')}
+          style={[styles.editBtn, { backgroundColor: colors.accentSoft }]}
+        >
+          <Icon name="edit" size={14} color={colors.accent} strokeWidth={2} />
+          <Text variant="label" color="accent">
+            {t('otp.edit')}
+          </Text>
+        </PressableScale>
       </Animated.View>
 
-      <View style={styles.resendRow}>
+      {/* Code boxes */}
+      <Animated.View entering={enter(1)} style={styles.otpBlock}>
+        <OtpInput
+          length={OTP_LENGTH}
+          value={code}
+          onChange={(v) => {
+            setCode(v);
+            if (error) setError(false);
+          }}
+          onComplete={(v) => void verify(v)}
+          error={error}
+          autoFocus
+          accessibilityLabel={t('otp.a11y', { count: OTP_LENGTH })}
+          style={[styles.otp, { width: otpWidth }]}
+        />
+        <View style={styles.errorSlot}>
+          {error ? (
+            <Animated.View entering={FadeIn.duration(200)} style={styles.errorRow}>
+              <Icon name="alert" size={16} color={colors.danger} />
+              <Text variant="caption" color="danger" align="center" accessibilityLiveRegion="assertive" style={styles.shrink}>
+                {t('otp.wrongCode')}
+              </Text>
+            </Animated.View>
+          ) : null}
+        </View>
+      </Animated.View>
+
+      {/* Resend */}
+      <Animated.View entering={enter(2)} style={styles.resend}>
         {seconds > 0 ? (
-          <Text variant="body" color="muted" align="center" tabular accessibilityLiveRegion="none">
-            {t('otp.resendIn', { time: formatDuration(seconds) })}
-          </Text>
+          <View style={styles.countdown} accessibilityLiveRegion="none">
+            <Icon name="clock" size={16} color={colors.muted} />
+            <Text variant="body" color="muted" align="center" tabular>
+              {`${t('otp.resendLabel')} `}
+              <Text variant="bodyBold" color="ink" tabular>
+                {ltr(formatDuration(seconds))}
+              </Text>
+            </Text>
+          </View>
         ) : (
-          <View style={styles.resendCol}>
+          <Animated.View entering={FadeIn.duration(250)} style={styles.resendCol}>
             <Text variant="caption" color="muted" align="center">
               {t('otp.didntGet')}
             </Text>
@@ -189,13 +269,26 @@ export default function VerifyOtpScreen() {
               disabled={resending}
               onPress={() => void resend()}
             />
-          </View>
+          </Animated.View>
         )}
-      </View>
+      </Animated.View>
 
-      <Animated.View entering={FadeInDown.duration(300).delay(240)}>
+      <Animated.View entering={enter(3)} style={styles.demo}>
         <DemoHint title={t('demo.title')} message={t('demo.code')} />
       </Animated.View>
+
+      <BottomSheet visible={!!deviceSessions?.length} onClose={closeDeviceSheet} title={t('deviceLimit.title')} snap="auto">
+        <Text variant="body" color="muted" style={styles.sheetMessage}>
+          {t('deviceLimit.message')}
+        </Text>
+        {(deviceSessions ?? []).map((s) => (
+          <SessionRow
+            key={s.id}
+            session={{ id: s.id, device: s.device, location: s.location, lastActive: s.lastActive, current: false }}
+            onLogout={() => void revokeAndRetry(s.id)}
+          />
+        ))}
+      </BottomSheet>
     </AuthScaffold>
   );
 }
@@ -206,23 +299,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
     padding: space.md,
+    paddingEnd: space.sm + 2,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  numberIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  numberIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   numberTexts: { flex: 1, gap: 2 },
   editBtn: {
-    minHeight: 44,
+    height: 36,
     minWidth: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space.xs,
-    paddingHorizontal: space.sm,
+    gap: space.xs + 2,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
   },
-  otpWrap: { gap: space.md, alignItems: 'stretch', paddingVertical: space.sm },
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, justifyContent: 'center' },
-  flex: { flexShrink: 1 },
-  resendRow: { minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  otpBlock: { marginTop: space.xxxl, alignItems: 'center' },
+  otp: { alignSelf: 'center' },
+  errorSlot: { minHeight: 36, justifyContent: 'center', alignSelf: 'stretch' },
+  errorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.xs + 2 },
+  shrink: { flexShrink: 1 },
+  resend: { minHeight: 76, alignItems: 'center', justifyContent: 'center' },
+  countdown: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
   resendCol: { alignItems: 'center', gap: space.xxs },
+  demo: { marginTop: space.lg },
+  sheetMessage: { marginBottom: space.md },
 });

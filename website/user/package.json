@@ -12,8 +12,12 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.62.7",
+    "@tanstack/react-query-devtools": "5.62.7",
+    "axios": "1.7.9",
     "canvas-confetti": "1.9.3",
     "framer-motion": "11.11.17",
+    "hls.js": "1.5.17",
     "i18next": "23.16.8",
     "katex": "0.16.11",
     "lucide-react": "0.460.0",

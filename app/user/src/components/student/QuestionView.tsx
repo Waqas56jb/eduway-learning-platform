@@ -66,7 +66,7 @@ export const QuestionView = memo(function QuestionView({
       <View style={styles.meta}>
         <View style={styles.metaStart}>
           <Text variant="overline" color="accent" numberOfLines={1} style={styles.topic}>
-            {L(question.topic).toUpperCase()}
+            {L(question.topic)}
           </Text>
           <Badge
             label={t(`common:difficulty.${question.difficulty}`)}
@@ -78,9 +78,9 @@ export const QuestionView = memo(function QuestionView({
       </View>
 
       {questionText.includes('$') ? (
-        <MathText text={questionText} size={18} color={colors.ink} />
+        <MathText text={questionText} size={19} color={colors.ink} />
       ) : (
-        <Text variant="h3" accessibilityRole="header">
+        <Text variant="h3" accessibilityRole="header" style={styles.questionText}>
           {questionText}
         </Text>
       )}
@@ -139,7 +139,8 @@ export const QuestionView = memo(function QuestionView({
 });
 
 const styles = StyleSheet.create({
-  container: { gap: space.lg },
+  container: { gap: space.xl },
+  questionText: { fontSize: 19, lineHeight: 28 },
   meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, minHeight: 32 },
   metaStart: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1 },
   topic: { flexShrink: 1 },
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     alignItems: 'center',
   },
-  options: { gap: space.md },
+  options: { gap: space.md, marginTop: -space.xs },
   explanation: {
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,

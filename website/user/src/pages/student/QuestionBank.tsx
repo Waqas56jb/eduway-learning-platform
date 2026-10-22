@@ -1,47 +1,75 @@
 import { Info, Layers, Play, Search, SearchX, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useLearningSettings } from '@/api/appSettings';
+import { useSubjects } from '@/api/catalog';
+import { useBankFacets, useBankQuestions, useStartPractice } from '@/api/practice';
+import type { BankFilters as ApiBankFilters, PracticeStartBody, PracticeStartDto, QuestionPublic } from '@/api/types';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { BankFilters, activeFilterCount, emptyFilters, type BankFilterState } from '@/components/student/practice/BankFilters';
 import { QuestionPreviewCard } from '@/components/student/practice/QuestionPreviewCard';
 import { PracticeSession } from '@/components/student/PracticeSession';
-import { Button, EmptyState, Input, Modal, PageHeader, Seo, Skeleton, SubjectIcon, useMockLoading } from '@/components/ui';
-import { getSubject, questions, subjects } from '@/data';
+import { Button, EmptyState, ErrorState, Input, Modal, PageHeader, Seo, Skeleton, SubjectIcon } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
-import { cn, shuffle } from '@/lib/utils';
-import type { Question, SubjectId } from '@/types';
+import { cn } from '@/lib/utils';
+import type { SubjectId } from '@/types';
 
-const COUNTS = [10, 20, 50] as const;
 const PAGE = 12;
-
-const isSubjectId = (v: string | null): v is SubjectId => !!v && subjects.some((s) => s.id === v);
 
 export default function QuestionBank() {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
-  const { bookmarks, isBookmarked } = useStudent();
   const [params, setParams] = useSearchParams();
-  const ready = useMockLoading(600);
+  const { data: subjects = [] } = useSubjects();
+  // Session sizes come from settings.learning.practiceSessionSizes (PUB-01).
+  const { practiceSessionSizes } = useLearningSettings();
+  const COUNTS = practiceSessionSizes.length ? practiceSessionSizes : [10, 20, 50];
 
   const paramSubject = params.get('subject');
-  const urlSubject: SubjectId | 'all' = isSubjectId(paramSubject) ? paramSubject : 'all';
+  const urlSubject: SubjectId | 'all' = paramSubject || 'all';
   const [filters, setFilters] = useState<BankFilterState>(() => emptyFilters(urlSubject));
-  const [count, setCount] = useState<(typeof COUNTS)[number]>(10);
-  const [visible, setVisible] = useState(PAGE);
+  const [count, setCount] = useState<number>(COUNTS[0]);
   const [drawer, setDrawer] = useState(false);
-  const [session, setSession] = useState<{ key: number; qs: Question[] } | null>(null);
+  const [session, setSession] = useState<{ key: number; data: PracticeStartDto; body: PracticeStartBody } | null>(null);
+  const [tryingId, setTryingId] = useState<string | null>(null);
+  const startPractice = useStartPractice();
 
   const patch = useCallback((p: Partial<BankFilterState>) => {
     setFilters((f) => ({ ...f, ...p }));
-    setVisible(PAGE);
   }, []);
+
+  // Debounce the free-text search before it hits the API.
+  const [search, setSearch] = useState(filters.search);
+  useEffect(() => {
+    const id = window.setTimeout(() => setSearch(filters.search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [filters.search]);
+
+  /** UI filter state → BNK-01/BNK-02/PRA-01 query. */
+  const apiFilters = useMemo<ApiBankFilters>(
+    () => ({
+      subjectId: filters.subject === 'all' ? undefined : filters.subject,
+      unitId: filters.unit || undefined,
+      topicId: filters.topic || undefined,
+      difficulty: filters.difficulties.length ? filters.difficulties : undefined,
+      tags: filters.tags.length ? filters.tags : undefined,
+      bookmarked: filters.bookmarkedOnly || undefined,
+      q: search || undefined,
+    }),
+    [filters.subject, filters.unit, filters.topic, filters.difficulties, filters.tags, filters.bookmarkedOnly, search],
+  );
+  const facetsQ = useBankFacets(apiFilters);
+  const listQ = useBankQuestions(apiFilters, PAGE);
+  const facets = facetsQ.data;
+  const items: QuestionPublic[] = useMemo(() => listQ.data?.pages.flatMap((p) => p.items) ?? [], [listQ.data]);
+  const matchCount = facets?.matchCount ?? listQ.data?.pages[0]?.meta.total ?? 0;
+  const bookmarkCount = facets?.bookmarkedCount ?? listQ.data?.pages[0]?.meta.bookmarkedCount ?? 0;
+  const ready = !listQ.isLoading;
 
   // ?subject= is the source of truth for the subject, so links into the bank (e.g. from a
   // subject page or the top-bar search) re-scope the view even while it is already mounted.
   useEffect(() => {
     setFilters((f) => (f.subject === urlSubject ? f : { ...f, subject: urlSubject, unit: '', topic: '', tags: [] }));
-    setVisible(PAGE);
     setSession(null);
   }, [urlSubject]);
 
@@ -53,38 +81,35 @@ export default function QuestionBank() {
     setParams(next, { replace: true });
   };
 
-  const scope = useMemo(
-    () => questions.filter((q) => filters.subject === 'all' || q.subjectId === filters.subject),
-    [filters.subject],
+  const units = useMemo(
+    () => [...(facets?.units ?? [])].sort((a, b) => a.order - b.order).map((u) => ({ id: u.unitId, title: u.title, count: u.count })),
+    [facets?.units],
   );
-
-  const topics = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const q of scope) if (!filters.unit || q.unitId === filters.unit) seen.set(q.topic.en, l(q.topic));
-    return [...seen].map(([key, label]) => ({ key, label }));
-  }, [scope, filters.unit, l]);
-
-  const tags = useMemo(() => [...new Set(scope.flatMap((q) => q.tags))], [scope]);
-
-  const filtered = useMemo(() => {
-    const term = filters.search.trim().toLowerCase();
-    return scope.filter(
-      (q) =>
-        (!filters.unit || q.unitId === filters.unit) &&
-        (!filters.topic || q.topic.en === filters.topic) &&
-        (!filters.difficulties.length || filters.difficulties.includes(q.difficulty)) &&
-        (!filters.tags.length || filters.tags.some((tg) => q.tags.includes(tg))) &&
-        (!filters.bookmarkedOnly || isBookmarked(q.id)) &&
-        (!term || l(q.text).toLowerCase().includes(term) || l(q.topic).toLowerCase().includes(term)),
-    );
-  }, [scope, filters, isBookmarked, l]);
+  const topics = useMemo(() => (facets?.topics ?? []).map((tp) => ({ key: tp.topicId, label: l(tp.label) })), [facets?.topics, l]);
+  const tags = facets?.tags ?? [];
 
   const active = activeFilterCount(filters);
-  const sessionSize = Math.min(count, filtered.length);
+  const sessionSize = Math.min(count, matchCount);
 
-  const startSession = (pool: Question[], size: number) => {
-    setSession({ key: Date.now(), qs: shuffle(pool).slice(0, size) });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  // PRA-01 — the server samples, shuffles and caps by matches.
+  const startSession = (body: PracticeStartBody, onDone?: () => void) => {
+    startPractice.mutate(body, {
+      onSuccess: (data) => {
+        setSession({ key: Date.now(), data, body });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
+      onSettled: onDone,
+    });
+  };
+  const startFiltered = () =>
+    startSession({
+      mode: filters.bookmarkedOnly ? 'bookmarks' : 'filters',
+      filters: { ...apiFilters, difficulty: apiFilters.difficulty ?? 'all' },
+      count,
+    });
+  const tryOne = (q: QuestionPublic) => {
+    setTryingId(q.id);
+    startSession({ mode: 'filters', questionIds: [q.id], includeQuestionId: q.id, count: 1 }, () => setTryingId(null));
   };
 
   const clearAll = () => {
@@ -100,20 +125,16 @@ export default function QuestionBank() {
         {seo}
         <PracticeSession
           key={session.key}
-          questions={session.qs}
+          session={session.data}
           onExit={() => setSession(null)}
-          onRestart={() =>
-            session.qs.length === 1
-              ? setSession({ key: Date.now(), qs: session.qs })
-              : startSession(filtered.length ? filtered : session.qs, session.qs.length)
-          }
+          onRestart={() => startSession(session.body)}
         />
       </>
     );
   }
 
   const filterPanel = (
-    <BankFilters value={filters} onChange={patch} topics={topics} tags={tags} bookmarkCount={bookmarks.length} />
+    <BankFilters value={filters} onChange={patch} units={units} topics={topics} tags={tags} bookmarkCount={bookmarkCount} />
   );
 
   const practicePanel = (
@@ -147,18 +168,19 @@ export default function QuestionBank() {
         </div>
         <p className="mt-3 flex items-start gap-2 text-xs text-white/70" aria-live="polite">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-light" aria-hidden />
-          {filtered.length === 0
+          {matchCount === 0
             ? t('practice.start.none')
-            : filtered.length < count
-              ? t('practice.start.capped', { count: filtered.length })
-              : t('practice.start.available', { count: filtered.length })}
+            : matchCount < count
+              ? t('practice.start.capped', { count: matchCount })
+              : t('practice.start.available', { count: matchCount })}
         </p>
         <Button
           variant="gold"
           fullWidth
           className="mt-4"
-          disabled={filtered.length === 0}
-          onClick={() => startSession(filtered, sessionSize)}
+          disabled={matchCount === 0}
+          loading={startPractice.isPending && !tryingId}
+          onClick={startFiltered}
           leftIcon={<Play className="h-4 w-4 rtl:-scale-x-100" />}
         >
           {t('practice.start.cta', { count: sessionSize })}
@@ -173,9 +195,9 @@ export default function QuestionBank() {
       <PageHeader
         title={t('practice.bank.title')}
         subtitle={t('practice.bank.subtitle', {
-          total: fmtNumber(questions.length),
+          total: fmtNumber(facets?.total ?? 0),
           subjects: subjects.length,
-          bookmarked: bookmarks.length,
+          bookmarked: bookmarkCount,
         })}
       />
 
@@ -184,18 +206,18 @@ export default function QuestionBank() {
         <SubjectChip active={filters.subject === 'all'} onClick={() => selectSubject('all')}>
           <Layers className="h-4 w-4" aria-hidden />
           {t('practice.bank.allSubjects')}
-          <span className="num opacity-70">{questions.length}</span>
+          <span className="num opacity-70">{facets?.total ?? '…'}</span>
         </SubjectChip>
         {subjects.map((s) => (
           <SubjectChip
             key={s.id}
-            active={filters.subject === s.id}
+            active={filters.subject === s.slug}
             color={s.color}
-            onClick={() => selectSubject(s.id)}
+            onClick={() => selectSubject(s.slug)}
           >
-            <SubjectIcon id={s.id} className="h-4 w-4" />
+            <SubjectIcon id={s.slug} icon={s.icon} className="h-4 w-4" />
             {l(s.name)}
-            <span className="num opacity-70">{questions.filter((q) => q.subjectId === s.id).length}</span>
+            <span className="num opacity-70">{facets?.subjects.find((x) => x.slug === s.slug)?.count ?? s.questionsCount}</span>
           </SubjectChip>
         ))}
       </div>
@@ -248,7 +270,7 @@ export default function QuestionBank() {
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted" aria-live="polite">
-              {t('practice.bank.resultsCount', { count: filtered.length })}
+              {t('practice.bank.resultsCount', { count: matchCount })}
             </p>
             {active > 0 && (
               <button
@@ -262,7 +284,9 @@ export default function QuestionBank() {
             )}
           </div>
 
-          {!ready ? (
+          {listQ.isError ? (
+            <ErrorState className="mt-4" onRetry={() => void listQ.refetch()} />
+          ) : !ready ? (
             <div className="mt-4 grid gap-4 xl:grid-cols-2" aria-busy="true">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="card space-y-4 p-5">
@@ -279,12 +303,12 @@ export default function QuestionBank() {
                 </div>
               ))}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : items.length === 0 ? (
             <EmptyState
               className="mt-4"
               icon={<SearchX className="h-7 w-7" />}
               title={t('practice.bank.empty.title')}
-              body={filters.bookmarkedOnly && !bookmarks.length ? t('practice.bank.empty.noBookmarks') : t('practice.bank.empty.body')}
+              body={filters.bookmarkedOnly && !bookmarkCount ? t('practice.bank.empty.noBookmarks') : t('practice.bank.empty.body')}
               action={
                 <Button variant="outline" onClick={clearAll}>
                   {t('common.clearFilters')}
@@ -294,14 +318,14 @@ export default function QuestionBank() {
           ) : (
             <>
               <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                {filtered.slice(0, visible).map((q) => (
-                  <QuestionPreviewCard key={q.id} question={q} onPractice={(qq) => startSession([qq], 1)} />
+                {items.map((q) => (
+                  <QuestionPreviewCard key={q.id} question={q} onPractice={tryOne} busy={tryingId === q.id} />
                 ))}
               </div>
-              {visible < filtered.length && (
+              {listQ.hasNextPage && (
                 <div className="mt-6 text-center">
-                  <Button variant="subtle" onClick={() => setVisible((v) => v + PAGE)}>
-                    {t('practice.bank.showMore', { count: filtered.length - visible })}
+                  <Button variant="subtle" loading={listQ.isFetchingNextPage} onClick={() => void listQ.fetchNextPage()}>
+                    {t('practice.bank.showMore', { count: Math.max(0, matchCount - items.length) })}
                   </Button>
                 </div>
               )}
@@ -314,13 +338,13 @@ export default function QuestionBank() {
         open={drawer}
         onClose={() => setDrawer(false)}
         title={t('common.filters')}
-        description={filters.subject !== 'all' ? l(getSubject(filters.subject)?.name) : undefined}
+        description={filters.subject !== 'all' ? l(subjects.find((s) => s.slug === filters.subject)?.name) : undefined}
         footer={
           <>
             <Button variant="subtle" onClick={clearAll} disabled={active === 0}>
               {t('common.clearFilters')}
             </Button>
-            <Button onClick={() => setDrawer(false)}>{t('practice.bank.showResults', { count: filtered.length })}</Button>
+            <Button onClick={() => setDrawer(false)}>{t('practice.bank.showResults', { count: matchCount })}</Button>
           </>
         }
       >

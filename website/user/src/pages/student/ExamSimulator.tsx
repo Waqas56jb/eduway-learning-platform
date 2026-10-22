@@ -16,15 +16,11 @@ import {
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
+import { useLearningSettings } from '@/api/appSettings';
+import { useSubjectLookup } from '@/api/catalog';
+import { useAvailableExams, useExamAttempts } from '@/api/exams';
 import {
-  DEMO_PREFIX,
-  attemptsLeftFor,
-  bestScoreFor,
-  buildDemoAttempt,
-  readExamSession,
-  scoreAttempt,
-} from '@/components/student/exam/examUtils';
-import {
+  ErrorState,
   Badge,
   Button,
   fadeUp,
@@ -37,11 +33,8 @@ import {
   SkeletonList,
   SmartImage,
   SubjectBadgeIcon,
-  useMockLoading,
 } from '@/components/ui';
-import { exams, getExam, getSubject } from '@/data';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { IMAGES } from '@/lib/images';
 import { cn, formatClock } from '@/lib/utils';
 import type { ExamBlueprint } from '@/types';
@@ -57,25 +50,25 @@ export default function ExamSimulator() {
   const { t } = useTranslation();
   const { l, fmtDate } = useLang();
   const navigate = useNavigate();
-  const { attempts } = useStudent();
-  const ready = useMockLoading(600);
+  // EXM-01 available papers (+ per-user attempts/best/active attempt), EXM-09 history, PUB-01 default pass mark.
+  const examsQ = useAvailableExams();
+  const attemptsQ = useExamAttempts();
+  const { examDefaultPassMark } = useLearningSettings();
+  const subjectOf = useSubjectLookup();
+  const exams = useMemo(() => examsQ.data ?? [], [examsQ.data]);
+  const ready = !examsQ.isLoading;
   const [confirm, setConfirm] = useState<ExamBlueprint | null>(null);
 
-  const history = useMemo(() => {
-    const real = attempts
-      .filter((a) => getExam(a.examId))
-      .map((a) => ({ id: a.id, examId: a.examId, date: a.finishedAt, pct: scoreAttempt(a).pct, demo: false }));
-    if (real.length) return real.sort((a, b) => b.date.localeCompare(a.date));
-    // No attempts yet: surface the seeded best scores as past results.
-    return exams
-      .filter((e) => typeof e.bestScore === 'number')
-      .map((e) => {
-        const demo = buildDemoAttempt(e);
-        return { id: demo.id, examId: e.id, date: demo.finishedAt, pct: scoreAttempt(demo).pct, demo: true };
-      });
-  }, [attempts]);
+  const history = useMemo(
+    () =>
+      (attemptsQ.data?.items ?? [])
+        .filter((a) => a.status !== 'in_progress')
+        .map((a) => ({ id: a.id, examId: a.examId, title: a.title, subjectSlug: a.subjectSlug, date: a.date, pct: Math.round(a.score), passed: a.passed }))
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [attemptsQ.data],
+  );
 
-  const totalQuestions = exams.reduce((n, e) => n + e.questionIds.length, 0);
+  const totalQuestions = exams.reduce((n, e) => n + e.questionCount, 0);
 
   return (
     <>
@@ -117,7 +110,7 @@ export default function ExamSimulator() {
                 </div>
                 <div>
                   <dt className="text-xs text-white/55">{t('practice.exams.hero.passMark')}</dt>
-                  <dd className="text-2xl font-bold text-accent-light num">50%</dd>
+                  <dd className="text-2xl font-bold text-accent-light num">{examDefaultPassMark}%</dd>
                 </div>
               </dl>
             </div>
@@ -143,10 +136,12 @@ export default function ExamSimulator() {
           {t('practice.exams.blueprints')}
         </h2>
         <p className="mt-1 text-sm text-muted">{t('practice.exams.blueprintsSub')}</p>
-        {!ready ? (
+        {examsQ.isError ? (
+          <ErrorState className="mt-6" onRetry={() => void examsQ.refetch()} />
+        ) : !ready ? (
           <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3" aria-busy="true">
-            {exams.map((e) => (
-              <div key={e.id} className="card space-y-4 p-6">
+            {[0, 1, 2].map((e) => (
+              <div key={e} className="card space-y-4 p-6">
                 <div className="flex gap-3">
                   <Skeleton className="h-12 w-12" />
                   <div className="flex-1 space-y-2">
@@ -167,8 +162,8 @@ export default function ExamSimulator() {
               <BlueprintCard
                 key={e.id}
                 exam={e}
-                attemptsLeft={attemptsLeftFor(e, attempts)}
-                best={bestScoreFor(e, attempts)}
+                attemptsLeft={e.attemptsLeft}
+                best={e.bestScore ?? undefined}
                 onStart={() => setConfirm(e)}
                 onResume={() => navigate(`/student/exams/${e.id}/room`)}
               />
@@ -181,25 +176,26 @@ export default function ExamSimulator() {
         <div className="flex items-center gap-2">
           <History className="h-5 w-5 text-accent" aria-hidden />
           <h2 id="recent-title" className="text-2xl font-bold text-primary">
-            {history.some((h) => !h.demo) ? t('practice.exams.recent') : t('practice.exams.pastResults')}
+            {t('practice.exams.recent')}
           </h2>
         </div>
-        {!ready ? (
+        {attemptsQ.isLoading ? (
           <SkeletonList rows={3} className="mt-5" />
+        ) : history.length === 0 ? (
+          <p className="card mt-5 p-6 text-center text-sm text-muted">{t('practice.exams.noHistory')}</p>
         ) : (
           <ul className="mt-5 space-y-3">
             {history.map((h) => {
-              const exam = getExam(h.examId);
-              const subject = getSubject(exam?.subjectId);
-              if (!exam || !subject) return null;
-              const pass = h.pct >= exam.passMark;
+              const subject = subjectOf(h.subjectSlug);
+              const exam = { title: h.title };
+              const pass = h.passed;
               return (
                 <li key={h.id}>
                   <Link
-                    to={`/student/exams/result/${h.demo ? `${DEMO_PREFIX}${exam.id}` : h.id}`}
+                    to={`/student/exams/result/${h.id}`}
                     className="card group flex items-center gap-4 p-4 transition hover:-translate-y-0.5 hover:shadow-lift sm:p-5"
                   >
-                    <SubjectBadgeIcon id={subject.id} color={subject.color} size={44} />
+                    <SubjectBadgeIcon id={h.subjectSlug} color={subject?.color ?? '#0B1F3A'} size={44} />
                     <span className="min-w-0 flex-1">
                       <span className="line-clamp-2 font-semibold text-primary sm:line-clamp-1">{l(exam.title)}</span>
                       <span className="text-xs text-muted">{fmtDate(h.date, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
@@ -245,7 +241,7 @@ export default function ExamSimulator() {
             <dl className="grid grid-cols-3 gap-3 text-center">
               <div className="rounded-2xl bg-primary/5 p-3">
                 <dt className="text-xs text-muted">{t('practice.exams.card.questions')}</dt>
-                <dd className="text-xl font-bold text-primary num">{confirm.questionIds.length}</dd>
+                <dd className="text-xl font-bold text-primary num">{confirm.questionCount}</dd>
               </div>
               <div className="rounded-2xl bg-primary/5 p-3">
                 <dt className="text-xs text-muted">{t('practice.exams.card.duration')}</dt>
@@ -286,19 +282,20 @@ function BlueprintCard({
   onResume: () => void;
 }) {
   const { t } = useTranslation();
-  const { l } = useLang();
-  const subject = getSubject(exam.subjectId);
-  const inProgress = readExamSession(exam);
-  const remaining = inProgress ? Math.max(0, Math.round((inProgress.endAt - Date.now()) / 1000)) : 0;
-  const locked = attemptsLeft === 0 && !inProgress;
-  if (!subject) return null;
+  const { l, fmtDate } = useLang();
+  const subject = useSubjectLookup()(exam.subjectSlug) ?? { id: exam.subjectSlug, color: '#0B1F3A', name: { en: '', ar: '' } };
+  const inProgress = exam.activeAttempt;
+  const remaining = inProgress ? Math.max(0, Math.round((new Date(inProgress.endsAt).getTime() - Date.now()) / 1000)) : 0;
+  const noAttempts = attemptsLeft === 0 && !inProgress;
+  const notOpen = !exam.available && !inProgress;
+  const locked = noAttempts || notOpen || exam.locked;
 
   return (
     <HoverCard variants={fadeUp} className="flex h-full flex-col overflow-hidden p-0">
       <div className="h-1.5" style={{ backgroundColor: subject.color }} aria-hidden />
       <div className="flex flex-1 flex-col p-6">
         <div className="flex items-start gap-3">
-          <SubjectBadgeIcon id={subject.id} color={subject.color} size={48} />
+          <SubjectBadgeIcon id={exam.subjectSlug} color={subject.color} size={48} />
           <div className="min-w-0">
             <h3 className="font-sans text-lg font-bold leading-snug tracking-normal text-primary">{l(exam.title)}</h3>
             <p className="text-xs font-semibold" style={{ color: subject.color }}>
@@ -311,7 +308,7 @@ function BlueprintCard({
         <dl className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-cream p-3 text-center">
           <div>
             <dt className="text-[11px] text-muted">{t('practice.exams.card.questions')}</dt>
-            <dd className="font-bold text-primary num">{exam.questionIds.length}</dd>
+            <dd className="font-bold text-primary num">{exam.questionCount}</dd>
           </div>
           <div>
             <dt className="text-[11px] text-muted">{t('practice.exams.card.duration')}</dt>
@@ -358,6 +355,10 @@ function BlueprintCard({
             <Button variant="gold" fullWidth onClick={onResume} leftIcon={<RotateCcw className="h-4 w-4" />}>
               {t('practice.exams.card.resume', { time: formatClock(remaining) })}
             </Button>
+          ) : exam.locked ? (
+            <Button fullWidth variant="outline" to="/student/subscription" leftIcon={<Lock className="h-4 w-4" />}>
+              {t('learn.subject.upgrade')}
+            </Button>
           ) : (
             <Button
               fullWidth
@@ -365,7 +366,11 @@ function BlueprintCard({
               disabled={locked}
               leftIcon={locked ? <Lock className="h-4 w-4" /> : <Play className="h-4 w-4 rtl:-scale-x-100" />}
             >
-              {locked ? t('practice.exams.card.noAttempts') : t('practice.exams.card.start')}
+              {notOpen
+                ? t('practice.exams.card.opensOn', { date: fmtDate(exam.availableFrom, { day: 'numeric', month: 'short' }) })
+                : noAttempts
+                  ? t('practice.exams.card.noAttempts')
+                  : t('practice.exams.card.start')}
             </Button>
           )}
         </div>

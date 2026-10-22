@@ -1,5 +1,6 @@
 import { memo, useId } from 'react';
-import { I18nManager, type StyleProp, type ViewStyle } from 'react-native';
+import { isRTL } from '@/utils/rtl';
+import { type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { G } from 'react-native-svg';
 import { useTheme } from '@/theme';
 import { useLangStore } from '@/store/langStore';
@@ -40,7 +41,7 @@ function IconBase({
   const id = `ic${rawId.replace(/[^a-zA-Z0-9]/g, '')}`;
   const c = color ?? colors.ink;
   const render = glyphs[name];
-  const shouldMirror = (mirrorInRTL ?? DIRECTIONAL_ICONS.has(name)) && (I18nManager.isRTL || isAr);
+  const shouldMirror = (mirrorInRTL ?? DIRECTIONAL_ICONS.has(name)) && (isRTL() || isAr);
 
   return (
     <Svg

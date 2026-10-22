@@ -9,6 +9,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { palette, radius, space, subjectColors } from '@/theme';
 import type { Lesson, Subject } from '@/types';
 import { UnitAccordion } from './UnitAccordion';
+import { openSubscription } from '@/api/locked';
 
 export interface LessonsTabProps {
   subject: Subject;
@@ -19,7 +20,7 @@ export interface LessonsTabProps {
 }
 
 export function LessonsTab({ subject, lessons, locked, activeUnitId }: LessonsTabProps) {
-  const color = subjectColors[subject.id];
+  const color = subjectColors[subject.id] ?? subject.color;
   const byUnit = useMemo(() => {
     const map: Record<string, Lesson[]> = {};
     for (const l of lessons) (map[l.unitId] ??= []).push(l);
@@ -30,7 +31,7 @@ export function LessonsTab({ subject, lessons, locked, activeUnitId }: LessonsTa
     <View style={styles.wrap}>
       {locked ? <UpsellCard subject={subject} /> : null}
       {subject.units.map((unit, i) => (
-        <Animated.View key={unit.id} entering={FadeInDown.duration(260).delay(i * 60)}>
+        <Animated.View key={unit.id} entering={FadeInDown.duration(350).delay(Math.min(i * 60, 300))}>
           <UnitAccordion
             unit={unit}
             index={i}
@@ -69,7 +70,7 @@ export function UpsellCard({ subject }: { subject: Subject }) {
         size="md"
         icon="crown"
         fullWidth
-        onPress={() => router.push('/subscription')}
+        onPress={() => openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug: subject.id })}
       />
     </Animated.View>
   );

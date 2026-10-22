@@ -38,6 +38,14 @@ export function Navbar({ overHero = false }: { overHero?: boolean }) {
 
   useEffect(() => setOpen(false), [location.pathname, location.hash]);
 
+  // The mobile menu only exists below lg - close it if the viewport grows past that.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => mq.matches && setOpen(false);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
     return () => {
@@ -52,16 +60,18 @@ export function Navbar({ overHero = false }: { overHero?: boolean }) {
       <header
         className={cn(
           'fixed inset-x-0 top-0 z-50 transition-all duration-300',
-          transparent
+          open
+            ? 'border-b border-white/10 bg-primary py-3 lg:border-primary/5 lg:bg-cream/95'
+            : transparent
             ? 'bg-transparent py-5'
-            : 'border-b border-primary/5 bg-cream/90 py-3 shadow-[0_8px_30px_-20px_rgba(11,31,58,0.35)] backdrop-blur-xl backdrop-saturate-150',
+            : 'border-b border-primary/5 bg-cream/95 py-3 shadow-[0_8px_30px_-20px_rgba(11,31,58,0.35)] backdrop-blur-xl backdrop-saturate-150',
         )}
       >
         <nav
           aria-label={t('nav.mainNav')}
           className="container flex items-center justify-between gap-6"
         >
-          <Logo light={transparent} />
+          <Logo light={transparent || open} />
 
           <ul className="hidden items-center gap-1 lg:flex">
             {LINKS.map((l) => (
@@ -114,7 +124,7 @@ export function Navbar({ overHero = false }: { overHero?: boolean }) {
 
           <button
             type="button"
-            className={cn('rounded-xl p-2 lg:hidden', transparent ? 'text-white' : 'text-primary')}
+            className={cn('rounded-xl p-2 lg:hidden', transparent || open ? 'text-white' : 'text-primary')}
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls="mobile-menu"

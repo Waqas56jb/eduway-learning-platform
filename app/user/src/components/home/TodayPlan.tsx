@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import Animated, {
@@ -13,11 +13,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Icon, type IconName } from '@/components/icons';
 import { PressableScale, ProgressBar, Text } from '@/components/ui';
-import { todayPlan, type PlanItem, type PlanKind } from '@/data/home';
+import { useTodayPlan, useTogglePlanItem } from '@/api';
+import type { PlanItemDto } from '@/api/types';
 import { useI18n } from '@/hooks/useI18n';
 import { HIT_SLOP, palette, radius, shadows, space, subjectColors, useTheme } from '@/theme';
 import { haptic } from '@/utils/haptics';
 import { withAlpha } from './color';
+
+type PlanItem = PlanItemDto;
+type PlanKind = PlanItemDto['kind'];
 
 const KIND_ICON: Record<PlanKind, IconName> = {
   lesson: 'play',
@@ -26,27 +30,31 @@ const KIND_ICON: Record<PlanKind, IconName> = {
   exam: 'exam',
 };
 
-/** "Today's plan" checklist with animated checkboxes (local state). */
+/** "Today's plan" checklist with animated checkboxes (GET/PATCH /progress/today-plan, optimistic). */
 export const TodayPlan = memo(function TodayPlan() {
   const { colors, isDark } = useTheme();
   const { t } = useI18n('home');
-  const [done, setDone] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(todayPlan.map((p) => [p.id, p.done])),
-  );
-  const doneCount = todayPlan.filter((p) => done[p.id]).length;
+  const { data } = useTodayPlan();
+  const { mutate } = useTogglePlanItem();
+  const todayPlan = data ?? [];
+  const doneCount = todayPlan.filter((p) => p.done).length;
   const total = todayPlan.length;
-  const allDone = doneCount === total;
+  const allDone = total > 0 && doneCount === total;
 
   const toggle = useCallback(
     (id: string) => {
-      const next = { ...done, [id]: !done[id] };
-      if (todayPlan.every((p) => next[p.id])) haptic.success();
-      else if (next[id]) haptic.light();
+      const item = todayPlan.find((p) => p.id === id);
+      if (!item) return;
+      const nextDone = !item.done;
+      if (todayPlan.every((p) => (p.id === id ? nextDone : p.done))) haptic.success();
+      else if (nextDone) haptic.light();
       else haptic.selection();
-      setDone(next);
+      mutate({ id, done: nextDone });
     },
-    [done],
+    [todayPlan, mutate],
   );
+
+  if (total === 0) return null;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, !isDark && shadows.sm]}>
@@ -69,7 +77,7 @@ export const TodayPlan = memo(function TodayPlan() {
       ) : null}
 
       {todayPlan.map((item, i) => (
-        <PlanRow key={item.id} item={item} checked={!!done[item.id]} onToggle={toggle} last={i === total - 1} />
+        <PlanRow key={item.id} item={item} checked={item.done} onToggle={toggle} last={i === total - 1} />
       ))}
     </View>
   );
@@ -85,7 +93,7 @@ interface PlanRowProps {
 const PlanRow = memo(function PlanRow({ item, checked, onToggle, last }: PlanRowProps) {
   const { colors, isDark } = useTheme();
   const { t, L } = useI18n('home');
-  const color = subjectColors[item.subjectId];
+  const color = (item.subjectSlug ? subjectColors[item.subjectSlug as keyof typeof subjectColors] : undefined) ?? palette.gold;
   const title = L(item.title);
 
   const progress = useSharedValue(checked ? 1 : 0);
@@ -110,7 +118,7 @@ const PlanRow = memo(function PlanRow({ item, checked, onToggle, last }: PlanRow
     onToggle(item.id);
   };
 
-  const open = () => router.push(item.target as Href);
+  const open = () => router.push({ pathname: item.target.pathname, params: item.target.params } as Href);
 
   return (
     <View style={[styles.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
@@ -173,6 +181,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.lg,
     paddingBottom: space.xs,
+    overflow: 'hidden',
   },
   head: {
     flexDirection: 'row',
@@ -192,12 +201,14 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: space.md,
+    paddingVertical: space.sm + 2,
     gap: space.md,
   },
   boxHit: {
-    width: 32,
+    width: 44,
     height: 44,
+    marginStart: -9,
+    marginEnd: -space.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -214,6 +225,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
+    minHeight: 44,
   },
   metaRow: {
     flexDirection: 'row',

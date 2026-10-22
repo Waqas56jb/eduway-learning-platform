@@ -6,15 +6,14 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { KeyRound, MailPlus, MoreHorizontal, Send, ShieldCheck, ShieldOff, UserCheck, UserCog, UserX, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { AdminUser } from '@/types';
-import { useAdminUsers, useRoles } from '@/store/core';
 import { useAuth, useCan } from '@/store/auth';
-import { useAdminSessions } from '@/store/security';
-import { logAudit } from '@/store/audit';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
-import { uid } from '@/utils/id';
 import { fmtDateTime, fmtNumber, fmtPercent, fmtRelative } from '@/utils/format';
+import { exportRequest, useApiMutation, useExport, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { toastError, type ApiError } from '@/api/client';
+import { securityApi, type AdminsMeta, type AdminUserVM } from '@/api/security';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
   Avatar,
@@ -35,19 +34,16 @@ import {
   useConfirm,
 } from '@/components/ui';
 
+type AdminUser = AdminUserVM;
+
 export default function AdminUsers() {
   const { t } = useTranslation();
   const L = useLocalize();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const admins = useAdminUsers((s) => s.items);
-  const addAdmin = useAdminUsers((s) => s.add);
-  const updateAdmin = useAdminUsers((s) => s.update);
-  const roles = useRoles((s) => s.items);
+  const lookups = useLookups();
+  const roles = lookups.roles;
   const meId = useAuth((s) => s.adminId);
-  const sessions = useAdminSessions((s) => s.items);
-  const removeSessions = useAdminSessions((s) => s.removeMany);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<AdminUser | null>(null);
@@ -55,13 +51,47 @@ export default function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const roleName = (id: string) => {
-    const r = roles.find((x) => x.id === id);
-    return r ? L(r, 'name') : '—';
+  const list = usePagedList({
+    key: qk.admins.list,
+    fetcher: securityApi.admins,
+    filters: { roleId: roleFilter, status: statusFilter },
+    initialSort: '-lastLogin',
+  });
+  const admins = list.items;
+  const stats = (list.meta as AdminsMeta).stats;
+  const loading = list.isLoading;
+  const exp = useExport('/admin/admins/export', 'admin-users');
+
+  const roleName = (a: AdminUser) => {
+    const r = roles.find((x) => x.id === a.roleId);
+    if (r) return L(r, 'name');
+    return L({ n_en: a.roleName_en, n_ar: a.roleName_ar }, 'n');
   };
 
   const roleOptions = roles.map((r) => ({ value: r.id, label: L(r, 'name') }));
   const canEdit = can('security', 'edit');
+
+  const inv = [qk.admins.all, qk.roles.all, qk.lookups, qk.adminSessions.all];
+  const deactivateM = useApiMutation((v: { id: string; reason: string }) => securityApi.deactivate(v.id, v.reason), { invalidate: inv, success: 'security.admins.deactivated' });
+  const activateM = useApiMutation((id: string) => securityApi.activate(id), { invalidate: inv, success: 'security.admins.reactivated' });
+  const resetMfaM = useApiMutation((id: string) => securityApi.resetMfa(id), { invalidate: [qk.admins.all], success: 'security.admins.mfaReset' });
+  const resendM = useApiMutation((a: AdminUser) => securityApi.resendInvite(a.id), {
+    success: (_d, a) => t('security.admins.inviteResent', { email: a.email }),
+  });
+  const changeRoleM = useApiMutation((v: { id: string; roleId: string }) => securityApi.changeRole(v.id, v.roleId), {
+    invalidate: [qk.admins.all, qk.roles.all],
+    success: 'security.admins.roleChanged',
+    onSuccess: () => setRoleTarget(null),
+  });
+  const inviteM = useApiMutation(
+    (v: InviteValues) =>
+      securityApi.invite({ name: { en: v.name.trim(), ar: v.name_ar.trim() || v.name.trim() }, email: v.email.trim().toLowerCase(), roleId: v.roleId }),
+    {
+      invalidate: [qk.admins.all, qk.roles.all, qk.lookups],
+      success: (a) => t('security.admins.invited', { email: a.email }),
+      silentError: true,
+    },
+  );
 
   const deactivate = async (a: AdminUser) => {
     if (a.id === meId) {
@@ -75,28 +105,18 @@ export default function AdminUsers() {
       reason: true,
     });
     if (!ok) return;
-    updateAdmin(a.id, { status: 'deactivated' }, { action: 'admin.deactivate', summary: `Deactivated ${a.email} — ${ok.reason}` });
-    const ids = sessions.filter((s) => s.adminId === a.id).map((s) => s.id);
-    if (ids.length) removeSessions(ids, { silent: true });
-    toast.success(t('security.admins.deactivated'));
+    deactivateM.mutate({ id: a.id, reason: ok.reason });
   };
 
-  const reactivate = (a: AdminUser) => {
-    updateAdmin(a.id, { status: 'active' }, { action: 'admin.reactivate', summary: `Reactivated ${a.email}` });
-    toast.success(t('security.admins.reactivated'));
-  };
+  const reactivate = (a: AdminUser) => activateM.mutate(a.id);
 
   const resetMfa = async (a: AdminUser) => {
     const ok = await confirm({ title: t('security.admins.resetMfaTitle', { name: a.name }), body: t('security.admins.resetMfaBody'), tone: 'warning', confirmText: t('security.admins.resetMfa') });
     if (!ok) return;
-    updateAdmin(a.id, { mfaEnabled: false }, { action: 'admin.reset_mfa', summary: `Reset MFA for ${a.email}` });
-    toast.success(t('security.admins.mfaReset'));
+    resetMfaM.mutate(a.id);
   };
 
-  const resend = (a: AdminUser) => {
-    logAudit({ action: 'admin.resend_invite', entity: 'admin_user', entityId: a.id, summary: `Re-sent invitation to ${a.email}` });
-    toast.success(t('security.admins.inviteResent', { email: a.email }));
-  };
+  const resend = (a: AdminUser) => resendM.mutate(a);
 
   const columns = useMemo<ColumnDef<AdminUser, unknown>[]>(
     () => [
@@ -122,7 +142,8 @@ export default function AdminUsers() {
       },
       {
         id: 'role',
-        accessorFn: (a) => roleName(a.roleId),
+        accessorFn: (a) => roleName(a),
+        enableSorting: false,
         header: t('security.admins.role'),
         meta: { label: t('security.admins.role') },
         cell: ({ getValue }) => <Badge tone="navy">{String(getValue())}</Badge>,
@@ -130,6 +151,7 @@ export default function AdminUsers() {
       {
         id: 'mfa',
         accessorFn: (a) => (a.mfaEnabled ? 'on' : 'off'),
+        enableSorting: false,
         header: t('security.admins.mfa'),
         meta: { label: t('security.admins.mfa') },
         cell: ({ row: { original: a } }) =>
@@ -220,12 +242,13 @@ export default function AdminUsers() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, L, roles, meId, canEdit, sessions],
+    [t, L, roles, meId, canEdit],
   );
 
-  const filtered = admins.filter((a) => (!roleFilter || a.roleId === roleFilter) && (!statusFilter || a.status === statusFilter));
-  const active = admins.filter((a) => a.status === 'active');
-  const mfaPct = active.length ? (active.filter((a) => a.mfaEnabled).length / active.length) * 100 : 0;
+  const total = stats?.total ?? list.meta.total;
+  const activeCount = stats?.active ?? admins.filter((a) => a.status === 'active').length;
+  const mfaPct = stats?.mfaPct ?? (activeCount ? (admins.filter((a) => a.status === 'active' && a.mfaEnabled).length / activeCount) * 100 : 0);
+  const invitedCount = stats?.invited ?? admins.filter((a) => a.status === 'invited').length;
 
   return (
     <>
@@ -242,19 +265,21 @@ export default function AdminUsers() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('security.admins.kpiTotal')} value={fmtNumber(admins.length)} icon={<Users />} color="#0B1F3A" />
-        <StatCard loading={loading} label={t('security.admins.kpiActive')} value={fmtNumber(active.length)} icon={<UserCheck />} color="#16A34A" />
+        <StatCard loading={loading} label={t('security.admins.kpiTotal')} value={fmtNumber(total)} icon={<Users />} color="#0B1F3A" />
+        <StatCard loading={loading} label={t('security.admins.kpiActive')} value={fmtNumber(activeCount)} icon={<UserCheck />} color="#16A34A" />
         <StatCard loading={loading} label={t('security.admins.kpiMfa')} value={fmtPercent(mfaPct)} icon={<ShieldCheck />} color="#C9A24A" />
-        <StatCard loading={loading} label={t('security.admins.kpiPending')} value={fmtNumber(admins.filter((a) => a.status === 'invited').length)} icon={<Send />} color="#2563EB" />
+        <StatCard loading={loading} label={t('security.admins.kpiPending')} value={fmtNumber(invitedCount)} icon={<Send />} color="#2563EB" />
       </div>
 
       <DataTable
-        data={filtered}
+        data={admins}
         columns={columns}
         loading={loading}
-        exportName={can('security', 'export') ? 'admin-users' : undefined}
-        searchText={(a) => `${a.name} ${a.name_ar} ${a.email} ${a.mobile}`}
-        initialSort={[{ id: 'lastLogin', desc: true }]}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
+        onExport={can('security', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         toolbar={
           <>
             <FilterSelect label={t('security.admins.role')} value={roleFilter} onChange={setRoleFilter} options={roleOptions} />
@@ -272,25 +297,15 @@ export default function AdminUsers() {
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
         roleOptions={roleOptions}
-        existingEmails={admins.map((a) => a.email.toLowerCase())}
-        onInvite={(v) => {
-          const admin: AdminUser = {
-            id: uid('adm'),
-            name: v.name,
-            name_ar: v.name_ar || v.name,
-            email: v.email.toLowerCase(),
-            mobile: '',
-            roleId: v.roleId,
-            avatar: '',
-            mfaEnabled: false,
-            status: 'invited',
-            lastLogin: null,
-            createdAt: new Date().toISOString(),
-          };
-          addAdmin(admin, { action: 'admin.invite', summary: `Invited ${admin.email} as ${roleName(v.roleId)}` });
-          toast.success(t('security.admins.invited', { email: admin.email }));
-          setInviteOpen(false);
-        }}
+        onInvite={(v) =>
+          inviteM.mutateAsync(v).then(
+            () => {
+              setInviteOpen(false);
+              return null;
+            },
+            (err: ApiError) => err,
+          )
+        }
       />
 
       <Modal
@@ -305,11 +320,10 @@ export default function AdminUsers() {
             </Button>
             <Button
               disabled={!roleTarget || newRoleId === roleTarget.roleId}
+              loading={changeRoleM.isPending}
               onClick={() => {
                 if (!roleTarget) return;
-                updateAdmin(roleTarget.id, { roleId: newRoleId }, { action: 'admin.change_role', summary: `Changed ${roleTarget.email} role: ${roleName(roleTarget.roleId)} → ${roleName(newRoleId)}` });
-                toast.success(t('security.admins.roleChanged'));
-                setRoleTarget(null);
+                changeRoleM.mutate({ id: roleTarget.id, roleId: newRoleId });
               }}
             >
               {t('actions.saveChanges')}
@@ -337,31 +351,27 @@ function InviteDrawer({
   onClose,
   onInvite,
   roleOptions,
-  existingEmails,
 }: {
   open: boolean;
   onClose: () => void;
-  onInvite: (v: InviteValues) => void;
+  /** Resolves to `null` on success or the API error. */
+  onInvite: (v: InviteValues) => Promise<ApiError | null>;
   roleOptions: { value: string; label: string }[];
-  existingEmails: string[];
 }) {
   const { t } = useTranslation();
   const schema = z.object({
     name: z.string().trim().min(2, t('errors.required')),
     name_ar: z.string().trim(),
-    email: z
-      .string()
-      .trim()
-      .email(t('errors.invalidEmail'))
-      .refine((e) => !existingEmails.includes(e.toLowerCase()), t('security.admins.emailTaken')),
+    email: z.string().trim().email(t('errors.invalidEmail')),
     roleId: z.string().min(1, t('errors.required')),
   });
   const {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting },
-  } = useForm<InviteValues>({ resolver: zodResolver(schema), defaultValues: { name: '', name_ar: '', email: '', roleId: 'role_teacher' } });
+  } = useForm<InviteValues>({ resolver: zodResolver(schema), defaultValues: { name: '', name_ar: '', email: '', roleId: '' } });
 
   const close = () => {
     reset();
@@ -391,9 +401,16 @@ function InviteDrawer({
         noValidate
         className="space-y-4"
         onSubmit={handleSubmit(async (v) => {
-          await new Promise((r) => setTimeout(r, 400));
-          onInvite(v);
-          reset();
+          const err = await onInvite(v);
+          if (!err) {
+            reset();
+            return;
+          }
+          if (err.code === 'CONFLICT') setError('email', { message: t('security.admins.emailTaken') });
+          else if (err.fields.email) setError('email', { message: err.fields.email });
+          else if (err.fields.roleId) setError('roleId', { message: err.fields.roleId });
+          else if (err.fields['name.en']) setError('name', { message: err.fields['name.en'] });
+          else toastError(err);
         })}
       >
         <Field label={t('security.admins.fullName')} error={errors.name?.message} required htmlFor="inv-name">
@@ -406,7 +423,7 @@ function InviteDrawer({
           <Input id="inv-email" type="email" dir="ltr" invalid={!!errors.email} placeholder="name@eduway.iq" {...register('email')} />
         </Field>
         <Field label={t('security.admins.role')} error={errors.roleId?.message} required htmlFor="inv-role">
-          <Select id="inv-role" options={roleOptions} invalid={!!errors.roleId} {...register('roleId')} />
+          <Select id="inv-role" options={[{ value: '', label: t('security.admins.selectRole') }, ...roleOptions]} invalid={!!errors.roleId} {...register('roleId')} />
         </Field>
       </form>
     </Drawer>

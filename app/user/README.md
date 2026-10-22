@@ -3,32 +3,45 @@
 Premium bilingual (English + Arabic RTL) e-learning app for Iraqi 6th Scientific Grade students —
 Mathematics, Physics, Chemistry, Biology and English.
 
-> **Mock frontend.** There is no backend. All data comes from static bilingual JSON in `src/data`, and every
-> action (login, progress, quizzes, mistakes, exams, AI tutor, checkout) is handled by local Zustand stores
-> persisted to AsyncStorage / SecureStore.
+> **Connected to the EDUWAY API** (`server/`, contract in `docs/API_CONTRACT.md`). All data is server state
+> fetched through `src/api` (axios + @tanstack/react-query); zustand only keeps client prefs (theme, language,
+> onboarding) and the auth session. Tokens live in expo-secure-store.
+
+## Pointing the app at the API
+
+1. Start the server (`cd server && npm run migrate && npm run seed && npm run dev`, port 4000).
+2. `cp .env.example .env` and set `EXPO_PUBLIC_API_URL`:
+   - simulator on the same computer: `http://localhost:4000/api/v1`
+   - Android emulator: `http://10.0.2.2:4000/api/v1`
+   - **real phone (Expo Go)**: `localhost` is the phone itself — use your computer's LAN IP
+     (`http://192.168.x.x:4000/api/v1`, same Wi-Fi, port 4000 allowed through the firewall) or an HTTPS
+     tunnel URL (ngrok / cloudflared / a deployed server) ending in `/api/v1`.
+3. Restart Expo with a cleared cache so the env var is inlined: `npx expo start -c`.
+
+Every request sends `Accept-Language`, `Authorization`, `X-Request-Id`, `X-Client-Platform` (`ios`/`android`),
+`X-Device-Id` (per install, secure-store) and `X-App-Version` (from app.json). Maintenance mode and
+"force update" (app version below the configured minimum) come from `/public/app-config` and block the UI.
 
 ## Demo credentials
 
 | Step | Value |
 | --- | --- |
-| Mobile | any valid Iraqi number, e.g. `770 123 4567` (+964 prefix is fixed) |
-| OTP | `123456` (any other code shows the error/shake state) |
-| Promo code (checkout) | `EDU20` → 20% off |
-
-The demo student is **Ahmed Al-Baghdadi** (Baghdad, Full Access package, 23 days left, 7-day streak, 73/100 AI questions left).
+| Mobile | the seeded demo student (`770 123 4567`, +964 prefix is fixed) |
+| OTP | in non-production the server accepts its `otp.devBypassCode` (`123456`) for the seeded demo student; other codes are logged by the server's MockSmsProvider |
+| Checkout | non-production uses the MockGateway (PAY-07 confirm); promo codes are managed in the admin portal |
 
 ## Stack
 
 | Concern | Library |
 | --- | --- |
-| Runtime | Expo SDK 58 · React Native 0.88 · React 19 · TypeScript (strict) |
+| Runtime | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript (strict) |
 | Navigation | Expo Router (file-based, `app/`) |
 | Styling | Theme tokens (`src/theme`) + `StyleSheet`, light & dark themes |
 | Animation | react-native-reanimated 4 · react-native-gesture-handler 3 · expo-haptics |
 | Video | expo-video (custom controls, speed, captions, fullscreen landscape, PiP-ready) |
 | Images | expo-image with blurhash placeholders + memory/disk cache |
-| i18n | i18next + react-i18next, `I18nManager` RTL, expo-localization detection |
-| State | Zustand (+ `persist` → AsyncStorage), expo-secure-store for the mock token |
+| i18n | i18next + react-i18next, root-view RTL (`@/utils/rtl`), expo-localization detection |
+| State | @tanstack/react-query (server state) + Zustand (client prefs, auth session), expo-secure-store for tokens |
 | Forms | react-hook-form + zod (localized messages) |
 | Charts | Custom `react-native-svg` charts (area, line, bar list, progress rings) |
 | Math | KaTeX rendered in an auto-sized WebView (`MathText`, `Formula`) |
@@ -79,8 +92,9 @@ Bundle identifiers: `com.eduway.student` (iOS and Android).
 
 - First launch picks the device language (Arabic for anything other than English); **Arabic is the default**.
 - Switch from **Welcome** (EN | ع toggle) or **Profile → Settings → Language**.
-- On change the app persists the choice, calls `I18nManager.allowRTL(true)` + `forceRTL(isArabic)` and reloads
-  (`expo-updates` `reloadAsync`, or a dev reload in development) so the native layout direction flips.
+- Switching is instant, with no restart: the root view sets Yoga's `direction` (`rtl`/`ltr`) from the language,
+  so the whole app flips immediately and identically in Expo Go and store builds (`src/utils/rtl.ts`).
+  Native `I18nManager` RTL is deliberately kept off; use `isRTL()` from `@/utils/rtl` for any geometry.
 - All styles use `start`/`end`; directional icons (back, chevrons, arrows) mirror automatically; charts,
   progress bars and pagers follow the reading direction.
 - Strings live in `src/i18n/locales/{en,ar}/<namespace>.json`; mock content carries `{ en, ar }` fields.

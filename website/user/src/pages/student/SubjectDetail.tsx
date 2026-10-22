@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { LessonList } from '@/components/student/LessonList';
-import { teacherAvatar, useSubjectAccess } from '@/components/student/lesson/access';
+import { teacherAvatar } from '@/components/student/lesson/access';
 import { ExamsPanel, QuestionBankPanel } from '@/components/student/lesson/SubjectPanels';
 import {
   Avatar,
   Button,
   EmptyState,
+  ErrorState,
   ProgressRing,
   Seo,
   Skeleton,
@@ -16,11 +17,10 @@ import {
   SmartImage,
   SubjectIcon,
   Tabs,
-  useMockLoading,
 } from '@/components/ui';
-import { exams, getSubject, lessonsBySubject } from '@/data';
+import { useSubject } from '@/api/catalog';
+import { isApiError } from '@/api/client';
 import { useLang } from '@/hooks/useLang';
-import { useProgress } from '@/hooks/useProgress';
 
 type Tab = 'lessons' | 'bank' | 'exams';
 
@@ -28,11 +28,25 @@ export default function SubjectDetail() {
   const { subjectId } = useParams();
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
-  const ready = useMockLoading();
-  const { bySubject, getLessonProgress } = useProgress();
-  const { isUnlocked } = useSubjectAccess();
   const [tab, setTab] = useState<Tab>('lessons');
-  const subject = getSubject(subjectId);
+  // CAT-02: units/chapters, ordered lessons with progress + lock, next lesson.
+  const { data: subject, isLoading, isError, error, refetch } = useSubject(subjectId);
+  const ready = !isLoading;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-80 rounded-3xl" />
+        <Skeleton className="h-12 w-80 rounded-2xl" />
+        <SkeletonList rows={4} />
+      </div>
+    );
+  }
+
+  if (isError && !(isApiError(error) && error.status === 404)) {
+    return <ErrorState className="mt-10" onRetry={() => void refetch()} />;
+  }
 
   if (!subject) {
     return (
@@ -53,13 +67,16 @@ export default function SubjectDetail() {
     );
   }
 
-  const locked = !isUnlocked(subject.id);
-  const progress = bySubject[subject.id];
-  const subjectLessons = lessonsBySubject(subject.id);
-  const nextLesson =
-    subjectLessons.find((x) => getLessonProgress(x.id).status === 'in-progress') ??
-    subjectLessons.find((x) => getLessonProgress(x.id).status === 'not-started');
-  const examCount = exams.filter((e) => e.subjectId === subject.id).length;
+  const locked = !!subject.locked;
+  const subjectLessons = subject.lessons;
+  const progress = subject.progress ?? {
+    completed: subjectLessons.filter((x) => x.status === 'completed').length,
+    total: subjectLessons.length,
+    pct: 0,
+    avgPct: 0,
+  };
+  const nextLesson = subjectLessons.find((x) => x.id === subject.nextLessonId);
+  const examCount = subject.examsCount;
 
   const stats = [
     { icon: BookOpen, value: fmtNumber(subject.lessonsCount), label: t('learn.subject.stats.lessons') },
@@ -102,7 +119,7 @@ export default function SubjectDetail() {
                 className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-soft"
                 style={{ color: subject.color }}
               >
-                <SubjectIcon id={subject.id} className="h-7 w-7" />
+                <SubjectIcon id={subject.slug} icon={subject.icon} className="h-7 w-7" />
               </span>
               {locked ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold ring-1 ring-white/25">
@@ -120,7 +137,7 @@ export default function SubjectDetail() {
             <p className="mt-3 max-w-2xl leading-relaxed text-white/75">{l(subject.description)}</p>
 
             <div className="mt-6 flex items-center gap-3">
-              <Avatar src={teacherAvatar(subject.id)} alt={l(subject.teacher)} size={44} ring />
+              <Avatar src={teacherAvatar(subject.slug, subject.teacherRef)} alt={l(subject.teacher)} size={44} ring />
               <div>
                 <p className="text-xs text-white/60">{t('learn.subject.teacher')}</p>
                 <p className="font-semibold">{l(subject.teacher)}</p>
@@ -162,7 +179,7 @@ export default function SubjectDetail() {
                     className="mt-3"
                     leftIcon={<PlayCircle className="h-4 w-4" />}
                   >
-                    {getLessonProgress(nextLesson.id).status === 'in-progress' ? t('common.resume') : t('learn.subject.startNext')}
+                    {nextLesson.status === 'in-progress' ? t('common.resume') : t('learn.subject.startNext')}
                   </Button>
                 )
               )}

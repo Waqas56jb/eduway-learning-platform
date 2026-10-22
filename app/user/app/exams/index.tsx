@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { asSubjectId, toExam } from '@/api/adapters';
+import { useAvailableExams, useExamAttempts } from '@/api/exams';
+import { openSubscription } from '@/api/locked';
 import { ExamCard } from '@/components/exams/ExamCard';
-import { attemptsRemaining } from '@/components/exams/examUtils';
 import { Icon, SubjectIcon, type IconName } from '@/components/icons';
 import { Header, Screen } from '@/components/layout';
-import { BottomSheet, Button, Card, EmptyState, SectionHeader, Text } from '@/components/ui';
-import { exams, getExam } from '@/data';
+import { BottomSheet, Button, Card, EmptyState, SectionHeader, SkeletonCard, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { useProgressStore } from '@/store';
-import { gradients, palette, radius, shadows, space, subjectColors, useTheme } from '@/theme';
-import type { ExamBlueprint } from '@/types';
+import { SCREEN_PADDING, gradients, palette, radius, shadows, space, subjectColors, useTheme } from '@/theme';
 import { formatDate } from '@/utils/format';
 
 const INTRO_BULLETS: { key: string; icon: IconName }[] = [
@@ -22,34 +21,46 @@ const INTRO_BULLETS: { key: string; icon: IconName }[] = [
   { key: 'analysis', icon: 'chart' },
 ];
 
+type Exam = ReturnType<typeof toExam>;
+
 export default function ExamsScreen() {
   const { colors } = useTheme();
   const { t, L, lang } = useI18n('exams');
-  const attempts = useProgressStore((s) => s.attempts);
-  const drafts = useProgressStore((s) => s.examDrafts);
-  const used = useProgressStore((s) => s.examAttemptsUsed);
-  const [selected, setSelected] = useState<ExamBlueprint | null>(null);
+  const examsQuery = useAvailableExams();
+  const attemptsQuery = useExamAttempts();
+  const exams = useMemo(() => (examsQuery.data ?? []).map(toExam), [examsQuery.data]);
+  const [selected, setSelected] = useState<Exam | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  // Keep "x left" on resume cards fresh.
+  // In-progress attempts (server `activeAttempt`) as resume "drafts" keyed by exam id.
+  const drafts = useMemo(() => {
+    const out: Record<string, { endsAt: number }> = {};
+    for (const e of exams) if (e.activeAttempt) out[e.id] = { endsAt: new Date(e.activeAttempt.endsAt).getTime() };
+    return out;
+  }, [exams]);
+  const examById = useMemo(() => new Map(exams.map((e) => [e.id, e])), [exams]);
+
+  // Keep "x left" on resume cards fresh — only tick while a paper is in progress.
+  const hasDraft = Object.keys(drafts).length > 0;
   useEffect(() => {
+    if (!hasDraft) return;
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [hasDraft]);
 
-  const examAttempts = useMemo(() => attempts.filter((a) => a.kind === 'exam'), [attempts]);
-
-  const bestFor = useCallback(
-    (exam: ExamBlueprint) => {
-      const scores = examAttempts.filter((a) => a.refId === exam.id).map((a) => a.score);
-      if (exam.bestScore !== undefined) scores.push(exam.bestScore);
-      return scores.length ? Math.max(...scores) : undefined;
-    },
-    [examAttempts],
+  const examAttempts = useMemo(
+    () => (attemptsQuery.data ?? []).filter((a) => a.status !== 'in_progress'),
+    [attemptsQuery.data],
   );
 
+  const onStart = useCallback((exam: Exam) => {
+    if (exam.locked) openSubscription({ reason: 'SUBJECT_NOT_IN_PACKAGE', subjectSlug: exam.subjectId });
+    else setSelected(exam);
+  }, []);
+
   const selectedDraft = selected ? drafts[selected.id] : undefined;
-  const selectedLeft = selected ? attemptsRemaining(selected, used[selected.id]) : 0;
+  const selectedLeft = selected ? selected.attemptsLeft : 0;
 
   const begin = () => {
     if (!selected) return;
@@ -59,12 +70,12 @@ export default function ExamsScreen() {
   };
 
   return (
-    <Screen scroll padded edges={['top', 'bottom']}>
+    <Screen padded={false} edges={['top']}>
       <Header title={t('title')} subtitle={t('subtitle')} />
-
-      <Animated.View entering={FadeInDown.duration(320)}>
-        <LinearGradient colors={gradients.navy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.intro, shadows.lg]}>
-          <View style={[styles.introGlow, { backgroundColor: palette.gold }]} />
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <Animated.View entering={FadeInDown.duration(350)} style={[styles.introShadow, shadows.lg]}>
+        <LinearGradient colors={gradients.navy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.intro}>
+          <View style={[styles.introGlow, { backgroundColor: palette.gold }]} pointerEvents="none" />
           <View style={styles.introHead}>
             <View style={styles.introBadge}>
               <Icon name="exam" size={22} color={palette.navy} />
@@ -98,30 +109,45 @@ export default function ExamsScreen() {
 
       <SectionHeader title={t('blueprints')} subtitle={t('blueprintsSub')} style={styles.section} />
       <View style={styles.list}>
-        {exams.map((exam, i) => (
-          <ExamCard
-            key={exam.id}
-            exam={exam}
-            index={i}
-            now={now}
-            draft={drafts[exam.id]}
-            attemptsLeft={attemptsRemaining(exam, used[exam.id])}
-            bestScore={bestFor(exam)}
-            onStart={() => setSelected(exam)}
+        {examsQuery.isPending ? (
+          <>
+            <SkeletonCard lines={4} />
+            <SkeletonCard lines={4} />
+          </>
+        ) : exams.length ? (
+          exams.map((exam, i) => (
+            <ExamCard
+              key={exam.id}
+              exam={exam}
+              index={i}
+              now={now}
+              draft={drafts[exam.id]}
+              attemptsLeft={exam.attemptsLeft}
+              bestScore={exam.bestScore}
+              onStart={() => onStart(exam)}
+            />
+          ))
+        ) : (
+          <EmptyState
+            icon="exam"
+            title={examsQuery.isError ? t('common:states.error') : t('notFound.title')}
+            message={examsQuery.isError ? undefined : t('notFound.message')}
+            actionLabel={examsQuery.isError ? t('common:actions.retry') : undefined}
+            onAction={examsQuery.isError ? () => void examsQuery.refetch() : undefined}
           />
-        ))}
+        )}
       </View>
 
       <SectionHeader title={t('previous')} subtitle={examAttempts.length ? t('previousSub') : undefined} style={styles.section} />
       {examAttempts.length ? (
         <View style={styles.list}>
           {examAttempts.map((a, i) => {
-            const exam = getExam(a.refId);
-            const sid = exam?.subjectId ?? a.subjectId ?? 'math';
-            const color = subjectColors[sid];
-            const passed = a.score >= (exam?.passMark ?? 50);
+            const exam = examById.get(a.examId);
+            const sid = asSubjectId(a.subjectSlug);
+            const color = subjectColors[sid] ?? colors.accent;
+            const passed = a.passed;
             return (
-              <Animated.View key={a.id} entering={FadeInDown.duration(260).delay(i * 40)}>
+              <Animated.View key={a.id} entering={FadeInDown.duration(350).delay(Math.min(i * 60, 300))}>
                 <Card
                   onPress={() => router.push({ pathname: '/exams/result/[id]', params: { id: a.id } })}
                   accessibilityRole="button"
@@ -132,7 +158,7 @@ export default function ExamsScreen() {
                   </View>
                   <View style={styles.flex}>
                     <Text variant="bodyBold" numberOfLines={1}>
-                      {exam ? L(exam.title) : t(`common:subjects.${sid}`)}
+                      {a.title ? L(a.title) : exam ? L(exam.title) : t(`common:subjects.${sid}`)}
                     </Text>
                     <Text variant="caption" color="muted">
                       {t('attemptMeta', {
@@ -156,7 +182,7 @@ export default function ExamsScreen() {
         <EmptyState icon="history" title={t('noPrevious')} message={t('noPreviousMsg')} />
       )}
 
-      <View style={styles.bottomSpace} />
+      </ScrollView>
 
       <BottomSheet
         visible={!!selected}
@@ -216,10 +242,11 @@ export default function ExamsScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  content: { paddingHorizontal: SCREEN_PADDING, paddingTop: space.sm, paddingBottom: space.huge },
+  introShadow: { borderRadius: radius.lg, backgroundColor: palette.navy },
   intro: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     padding: space.xl,
-    marginTop: space.sm,
     overflow: 'hidden',
   },
   introGlow: {
@@ -253,10 +280,9 @@ const styles = StyleSheet.create({
   },
   section: { marginTop: space.xxl, marginBottom: space.md },
   list: { gap: space.md },
-  attempt: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
-  attemptIcon: { width: 40, height: 40, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
-  scorePill: { paddingHorizontal: space.sm + 2, paddingVertical: space.xs, borderRadius: radius.pill },
-  bottomSpace: { height: space.xxxl },
+  attempt: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 76, paddingVertical: space.md },
+  attemptIcon: { width: 44, height: 44, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  scorePill: { minWidth: 52, height: 28, paddingHorizontal: space.sm + 2, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   sheetBody: { gap: space.sm },
   note: {
     flexDirection: 'row',

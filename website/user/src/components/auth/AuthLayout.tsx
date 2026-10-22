@@ -5,7 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { Avatar, Logo, SmartImage, Stars } from '@/components/ui';
+import { usePublicStats, useTestimonials } from '@/api/public';
+import { useLang } from '@/hooks/useLang';
 import { AVATARS } from '@/lib/images';
+import { compactCount } from '@/lib/utils';
 
 export type AuthVariant = 'login' | 'register' | 'verify';
 
@@ -14,6 +17,7 @@ const AVATAR_FOR: Record<AuthVariant, string> = {
   register: AVATARS[2],
   verify: AVATARS[5],
 };
+const QUOTE_INDEX: Record<AuthVariant, number> = { login: 0, register: 1, verify: 2 };
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -28,11 +32,24 @@ interface AuthLayoutProps {
 /** Full-screen split layout for the guest-only auth pages: inspirational image panel + form card. */
 export function AuthLayout({ variant, image, children, above }: AuthLayoutProps) {
   const { t } = useTranslation();
-  const q = (k: string) => t(`auth.layout.quotes.${variant}.${k}`);
+  const { l, fmtNumber } = useLang();
+  // PUB-06 ?placement=auth (CMS quotes) with the bundled copy as fallback; PUB-05 for the stat pills.
+  const { data: quotes } = useTestimonials('auth');
+  const { data: pub } = usePublicStats();
+  const tm = quotes?.length ? quotes[QUOTE_INDEX[variant] % quotes.length] : undefined;
+  const q = (k: 'text' | 'short' | 'name' | 'role') => {
+    if (tm) return k === 'name' ? l(tm.name) : k === 'role' ? l(tm.role) : l(tm.quote);
+    return t(`auth.layout.quotes.${variant}.${k}`);
+  };
+  const avatar = tm?.avatar || AVATAR_FOR[variant];
   const stats = [
-    { icon: Users, value: t('auth.layout.stats.students'), label: t('auth.layout.stats.studentsLabel') },
-    { icon: Star, value: t('auth.layout.stats.rating'), label: t('auth.layout.stats.ratingLabel') },
-    { icon: Award, value: t('auth.layout.stats.pass'), label: t('auth.layout.stats.passLabel') },
+    {
+      icon: Users,
+      value: pub ? (pub.displayOverrides.students ?? compactCount(pub.students, fmtNumber)) : t('auth.layout.stats.students'),
+      label: t('auth.layout.stats.studentsLabel'),
+    },
+    { icon: Star, value: pub ? `${pub.rating} / 5` : t('auth.layout.stats.rating'), label: t('auth.layout.stats.ratingLabel') },
+    { icon: Award, value: pub ? `${pub.passRatePct}%` : t('auth.layout.stats.pass'), label: t('auth.layout.stats.passLabel') },
   ];
 
   return (
@@ -72,11 +89,11 @@ export function AuthLayout({ variant, image, children, above }: AuthLayoutProps)
               {q('text')}
             </blockquote>
             <figcaption className="mt-8 flex items-center gap-4">
-              <Avatar src={AVATAR_FOR[variant]} alt={q('name')} size={52} ring />
+              <Avatar src={avatar} alt={q('name')} size={52} ring />
               <div>
                 <p className="font-semibold text-white">{q('name')}</p>
                 <p className="text-sm text-white/70">{q('role')}</p>
-                <Stars value={5} size={14} className="mt-1" />
+                <Stars value={tm?.rating ?? 5} size={14} className="mt-1" />
               </div>
             </figcaption>
           </motion.figure>
@@ -133,7 +150,7 @@ export function AuthLayout({ variant, image, children, above }: AuthLayoutProps)
             overlay="bg-gradient-to-r from-primary/95 to-primary/60 rtl:bg-gradient-to-l"
           />
           <div className="relative flex items-center gap-3 p-4">
-            <Avatar src={AVATAR_FOR[variant]} alt={q('name')} size={40} ring />
+            <Avatar src={avatar} alt={q('name')} size={40} ring />
             <p className="min-w-0 text-sm leading-snug text-white/90">
               <span className="line-clamp-2">{q('short')}</span>
               <span className="mt-0.5 block text-xs font-semibold text-accent-light">{q('name')}</span>
@@ -176,9 +193,13 @@ export function AuthLayout({ variant, image, children, above }: AuthLayoutProps)
   );
 }
 
-/** "Demo" helper box shown under auth forms. */
+/** Seeded demo student hints are only useful against non-production servers. */
+const SHOW_DEMO_HINTS = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_HINTS === 'true';
+
+/** "Demo" helper box shown under auth forms (development / staging builds). */
 export function DemoHint({ children, action }: { children: ReactNode; action?: ReactNode }) {
   const { t } = useTranslation();
+  if (!SHOW_DEMO_HINTS) return null;
   return (
     <div className="mt-6 rounded-xl border border-dashed border-accent/50 bg-accent/5 p-4 text-sm">
       <p className="flex items-start gap-2 text-primary">

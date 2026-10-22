@@ -1,6 +1,6 @@
 # EDUWAY Student App — Build Contract (internal, for parallel builders)
 
-Expo SDK **58** (React Native 0.88, React 19.3, TypeScript 6, Reanimated **4** + react-native-worklets, Gesture Handler **3**, expo-router 58, expo-video (expo-av no longer exists), expo-image, zustand 5, i18next 26, zod 4).
+Expo SDK **57** (React Native **0.86**, React 19.2, TypeScript 6, Reanimated 4.5 + react-native-worklets 0.10, Gesture Handler **2.32** (use the `Gesture.Pan()/Gesture.Tap()` builder API + `GestureDetector`; there are NO `usePanGesture`/`useTapGesture` hooks), expo-router 57 (`Tabs` tab bar props are `{ state, descriptors, navigation, insets }`), expo-video (expo-av no longer exists), expo-image, zustand 5, i18next 26, zod 4). The app is tested in **Expo Go SDK 57 on a real iPhone** — only Expo Go–bundled native modules work. `ScrollViewInstance`/`TextInputInstance` types do NOT exist: use `useRef<ScrollView>(null)` / `useRef<TextInput>(null)`.
 **APIs changed vs. your training data.** Before using an unfamiliar API, check the type definitions in `node_modules/<pkg>/` (e.g. `node_modules/react-native-gesture-handler/lib/typescript/...`, `node_modules/expo-video/build/*.d.ts`, `node_modules/expo-router/build/*.d.ts`). Never guess.
 
 ## Golden rules
@@ -24,16 +24,11 @@ Expo SDK **58** (React Native 0.88, React 19.3, TypeScript 6, Reanimated **4** +
 ## Existing foundation (already written — read before coding)
 - `src/theme/*` — colors (light/dark), typography (`fonts`, `textStyle`, `fontFor`), spacing, shadows, `useTheme()`.
 - `src/types/index.ts` — Subject, Lesson, Question, Mistake, ExamBlueprint, Package, AppNotification, User, Session, Localized, Lang, SubjectId, Difficulty, LessonStatus.
-- `src/data/index.ts` — `subjects, lessons, questions, mistakes, exams, packages, notifications, demoUser, governorates, getSubject, getLesson, getQuestion, getExam, getPackage, lessonsBySubject, questionsBySubject, getGovernorate, weeklyStudy, quizTrend, weakTopics, activityHeatmap, recentActivity, upcomingExams, tutorAnswers, tutorFallback, tutorSuggestions`. You may add new mock modules under `src/data/<yourfeature>.ts` (bilingual `{en, ar}`), don't change the JSON files.
-- `src/store/*` (import from `@/store`):
-  - `useAuthStore`: `user, isAuthenticated, pendingMobile, requestOtp(mobile), startRegistration(payload), verifyOtp(code)→Promise<boolean> (only "123456"), logout(), updateProfile({name,governorate,school}), removeSession(id), consumeAi()→boolean, subscribe(packageId, 'monthly'|'yearly'), hasSubject(subjectId)`. `MOCK_OTP`.
-  - `useLangStore`: `lang, isAr, ready, init(), setLanguage(lang)` (persists + forceRTL + reload).
-  - `usePrefsStore`: `themeMode ('system'|'light'|'dark'), setThemeMode, onboardingSeen, setOnboardingSeen, notificationPrefs, setNotificationPref, hydrated`.
-  - `useProgressStore`: `lessonProgress[lessonId] {progress, positionSec, status}, getLesson, savePosition(lessonId, sec, durationSec), markComplete, attempts: Attempt[], addAttempt({kind:'quiz'|'practice'|'exam', refId, subjectId?, answers:[{questionId, chosenIndex, correct}], score, correct, total, timeSpentSec})→Attempt, getAttempt(id), notes, setNote, bookmarks, toggleBookmark, isBookmarked, examDrafts, saveExamDraft, clearExamDraft, examAttemptsUsed, subjectCompletion(subjectId?), completedCount(), quizAverage()`.
-  - `useMistakesStore`: `mistakes: MistakeEntry[] (Mistake + history[]), addMistake(questionId, chosenIndex, source), setStatus, recordRetry(id, chosenIndex, correct), getById, filtered('unresolved'|'reviewed'|'mastered'|'repeated'), unresolvedCount()`.
-  - `useTutorStore`: `conversations, activeId, typing, newConversation(subjectId)→id, setActive, setSubject, send(text, lang, imageUri?)→Promise<'ok'|'limit'>, deleteConversation`.
-  - `useNotificationsStore`: `items, markRead, markAllRead, remove, add, unreadCount()`.
-  - Zustand selector tip: select primitives/stable refs (`useStore(s => s.user)`); calling derived functions like `s.unresolvedCount()` inside a selector is fine since it returns a primitive. Never return a new array/object from a selector (causes infinite re-render) — select the raw array and `useMemo`.
+- `src/api/*` — real API integration (docs/API_CONTRACT.md): axios client (`client.ts`: tokens, single-flight refresh, headers, error normalizer → localized toast), react-query keys (`keys.ts`), DTOs (`types.ts`), DTO→app adapters (`adapters.ts`: `toSubject` (id = slug), `toLesson`, `toQuestion` (`optionIds`, `correctIndex` −1 until revealed), `toExam`, `toPackage`, `toUser`…), one module per domain with typed functions + hooks, `examQueue.ts` (offline exam autosave/submit queue), `tutor.ts` (SSE via `expo/fetch` + polling fallback), `boot.ts` (app-config maintenance/force-update, push token). There is no mock data; `src/data` was deleted.
+- `src/store/*` (import from `@/store`) — client state only:
+  - `useAuthStore`: `user, me (MeStudentDto), isAuthenticated, pendingMobile, pendingRegistration, otp, lastError, deviceLimitSessions, bootstrap(), requestOtp(mobile)→bool, startRegistration(payload)→bool, resendOtp(), verifyOtp(code, revokeSessionId?)→bool, refreshMe(), logout(), hasSubject(slug|uuid)`.
+  - `useLangStore`: `lang, isAr, ready, init(), setLanguage(lang)`. `usePrefsStore`: `themeMode, setThemeMode, onboardingSeen, setOnboardingSeen, hydrated`.
+  - Everything else (progress, attempts, bookmarks, mistakes, exams, tutor, notifications, notification prefs) is server state via `@/api` hooks.
 - `src/hooks/useI18n.ts`: `const { t, L, lang, isAr } = useI18n('home')`.
 - `src/utils/format.ts`: `formatNumber, formatDuration(sec)→"04:32", formatMinutes, formatPrice(amount, lang), formatDate(iso, lang, opts), timeAgo(iso, lang), formatIraqiMobile, isValidIraqiMobile, shuffle`.
 - `src/utils/haptics.ts`: `haptic.light|medium|selection|success|error|warning()`.

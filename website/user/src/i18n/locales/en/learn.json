@@ -46,11 +46,15 @@
     },
     "activity": {
       "title": "Recent activity",
-      "subtitle": "Your latest lessons, quizzes and questions"
+      "subtitle": "Your latest lessons, quizzes and questions",
+      "empty": "Your lessons, quizzes and exams will appear here."
     },
     "exams": {
       "title": "Upcoming exams",
-      "subtitle": "Scheduled mock exams"
+      "subtitle": "Scheduled mock exams",
+      "empty": "No exams scheduled right now.",
+      "opens": "Opens",
+      "closes": "Closes"
     },
     "goal": {
       "title": "Today's goal",
@@ -202,7 +206,8 @@
     "addedToMistakes_other": "{{count}} questions added to My Mistakes",
     "reviewMistakes": "Review mistakes",
     "retry": "Retry quiz",
-    "nextLesson": "Next lesson"
+    "nextLesson": "Next lesson",
+    "failTitleLow": "Keep practising — you can do this!"
   },
   "tabs": {
     "dashboard": "Home",

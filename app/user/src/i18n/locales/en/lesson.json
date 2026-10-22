@@ -27,7 +27,7 @@
   "teacher": {
     "subjectTeacher": "{{subject}} teacher",
     "rating": "{{rating}} rating",
-    "students": "{{count}} students",
+    "students": "{{value}} students",
     "verified": "Verified teacher"
   },
   "resources": {
@@ -35,7 +35,7 @@
     "pdf": "PDF",
     "openA11y": "Open {{title}}",
     "openingTitle": "Opening…",
-    "openingMessage": "Preparing “{{title}}” for offline reading.",
+    "openingMessage": "Preparing “{{title}}” for reading.",
     "downloaded": "Downloaded — available offline",
     "empty": "No resources for this lesson yet."
   },
@@ -43,7 +43,7 @@
     "placeholder": "Write key ideas, formulas or questions to review later…",
     "saving": "Saving…",
     "saved": "Saved",
-    "hint": "Notes are private and saved on this device.",
+    "hint": "Notes are private and synced to your account.",
     "chars": "{{count}} characters"
   },
   "actions": {

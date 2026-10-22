@@ -63,10 +63,10 @@ export const IconButton = memo(function IconButton({
       break;
   }
 
-  const iconSize = Math.round(size * 0.47);
+  const iconSize = Math.max(16, Math.min(26, Math.round(size * 0.48)));
   const showCount = typeof badge === 'number' && badge > 0;
   const showDot = badge === true;
-  const extraSlop = Math.max(0, (44 - size) / 2);
+  const extraSlop = Math.max(0, Math.ceil((44 - size) / 2));
 
   return (
     <PressableScale
@@ -86,14 +86,20 @@ export const IconButton = memo(function IconButton({
     >
       <Icon name={icon} size={iconSize} color={iconColor} filled={filled} />
       {showCount ? (
-        <View style={[styles.count, { backgroundColor: colors.danger, borderColor: variant === 'glass' ? 'transparent' : colors.background }]}>
+        <View pointerEvents="none" style={[styles.count, { backgroundColor: colors.danger, borderColor: variant === 'glass' ? 'transparent' : colors.background }]}>
           <Text variant="caption" color="#FFFFFF" style={styles.countText} tabular>
             {badge > 99 ? '99+' : formatNumber(badge, lang)}
           </Text>
         </View>
       ) : null}
       {showDot ? (
-        <View style={[styles.dot, { backgroundColor: colors.accent, borderColor: variant === 'glass' ? 'transparent' : colors.surface }]} />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.dot,
+            { top: Math.round(size * 0.18), end: Math.round(size * 0.2), backgroundColor: colors.accent, borderColor: variant === 'glass' ? 'transparent' : colors.surface },
+          ]}
+        />
       ) : null}
     </PressableScale>
   );
@@ -116,8 +122,6 @@ const styles = StyleSheet.create({
   countText: { fontSize: 10, lineHeight: 12, fontFamily: fonts.bold },
   dot: {
     position: 'absolute',
-    top: 8,
-    end: 9,
     width: 10,
     height: 10,
     borderRadius: 5,

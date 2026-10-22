@@ -17,7 +17,8 @@
     "subscription": "Subscription",
     "lastActive": "Last active",
     "created": "Registered",
-    "source": "Source"
+    "source": "Source",
+    "platforms": "Platforms"
   },
   "filters": {
     "status": "Status",
@@ -27,7 +28,8 @@
     "source": "Source",
     "locked": "Locked",
     "noPackage": "No package",
-    "noSchool": "No school"
+    "noSchool": "No school",
+    "platform": "Platform"
   },
   "source": {
     "organic": "Organic",
@@ -57,7 +59,8 @@
     "avgScore": "Average score",
     "aiUsed": "AI questions used",
     "lifetime": "Lifetime paid",
-    "ofAllowance": "of {{n}} this month"
+    "ofAllowance": "of {{n}} this month",
+    "aiDisabled": "AI tutor disabled for this student"
   },
   "tabs": {
     "overview": "Overview",
@@ -89,7 +92,21 @@
     "revoke": "Revoke",
     "revokeTitle": "Revoke manual access to {{subject}}?",
     "revokeBody": "The student loses access to this subject immediately. Package entitlements are not affected.",
-    "revoked": "Manual access revoked"
+    "revoked": "Manual access revoked",
+    "entitlementLog": "Access history",
+    "noEntitlementLog": "No access changes yet",
+    "logAction": {
+      "grant": "Granted",
+      "revoke": "Revoked",
+      "extend": "Extended",
+      "expire": "Expired"
+    },
+    "logSource": {
+      "package": "Package",
+      "manual": "Manual",
+      "payment": "Payment",
+      "refund": "Refund"
+    }
   },
   "activity": {
     "watch": "Watch history",
@@ -164,6 +181,8 @@
     "attrConfirm": "Change attribution for {{name}}?",
     "attrBody": "Future settlements will credit the new school/referral. Provide a reason for the audit log.",
     "attrDone": "Attribution updated",
-    "reasonRequired": "Please provide a reason (at least 5 characters)"
+    "reasonRequired": "Please provide a reason (at least 5 characters)",
+    "otpFailures": "Failed OTP attempts: {{count}}",
+    "otpLocked": "OTP locked"
   }
 }

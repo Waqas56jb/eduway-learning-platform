@@ -1,25 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { format, subMonths } from 'date-fns';
 import { ArrowLeft, Award, BarChart3, Check, Mail, MapPin, Pencil, Phone, Plus, School as SchoolIcon, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { governorateById } from '@/data';
-import { useMarketers, useSchools, useTransactions } from '@/store/core';
-import { useMilestoneRules } from '@/store/partners';
+import { useApiMutation } from '@/api/hooks';
+import { useLookups } from '@/api/lookups';
+import { marketersApi, partnerKeys, useMarketer, useMarketerPerformance } from '@/api/partners';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
-import { MOCK_NOW } from '@/utils/random';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { MarketerForm } from '@/components/forms/MarketerForm';
 import { BarChart } from '@/components/charts';
-import { Avatar, Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, ProgressBar, Select, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
+import { Avatar, Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, ProgressBar, Select, SkeletonCard, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
+import { QueryError } from '@/components/ui/QueryError';
 import { SettlementsTable } from '@/pages/schools/SettlementsTable';
 import { TierBadge } from '@/pages/schools/TierBadge';
-import { reassignSchool } from './attribution';
+import { useAttributionGuard } from './attribution';
 
 export default function MarketerDetail() {
   const { id } = useParams();
@@ -28,25 +26,39 @@ export default function MarketerDetail() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const can = useCan();
-  const loading = useMockLoading();
-  const marketer = useMarketers((s) => s.items.find((m) => m.id === id));
-  const marketers = useMarketers((s) => s.items);
-  const schools = useSchools((s) => s.items);
-  const txns = useTransactions((s) => s.items);
-  const milestones = useMilestoneRules((s) => s.items);
+  const lookups = useLookups();
+  const guard = useAttributionGuard();
+  const detailQ = useMarketer(id);
+  const perfQ = useMarketerPerformance(id);
+  const marketer = detailQ.data?.marketer;
+  const marketers = lookups.marketers;
+  const schools = lookups.schools;
+  const monthly = perfQ.data ?? [];
+  const loading = detailQ.isLoading;
   const [pick, setPick] = useState('');
+  const [assigning, setAssigning] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
-  const monthly = useMemo(() => {
-    const months = Array.from({ length: 12 }, (_, i) => format(subMonths(MOCK_NOW, 11 - i), 'yyyy-MM'));
-    const counts = new Map(months.map((m) => [m, new Set<string>()]));
-    txns
-      .filter((x) => x.marketerId === id && (x.status === 'paid' || x.status === 'partially_refunded'))
-      .forEach((x) => counts.get(x.createdAt.slice(0, 7))?.add(x.studentId));
-    return months.map((m) => ({ month: m, students: counts.get(m)?.size ?? 0 }));
-  }, [txns, id]);
+  const unassignM = useApiMutation((schoolId: string) => marketersApi.unassignSchool(id!, schoolId), {
+    invalidate: [...partnerKeys],
+    success: 'marketers.detail.unassigned',
+  });
+
+  if (detailQ.isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <StatCard key={i} loading label="" value="" />
+          ))}
+        </div>
+        <SkeletonCard lines={8} />
+      </div>
+    );
+  }
 
   if (!marketer) {
+    if (detailQ.error && detailQ.error.code !== 'NOT_FOUND') return <QueryError error={detailQ.error} onRetry={() => detailQ.refetch()} />;
     return (
       <Card>
         <EmptyState title={t('marketers.detail.notFound')} action={<ButtonLink to="/marketers" variant="secondary" icon={<ArrowLeft className="h-4 w-4 flip-rtl" />}>{t('marketers.detail.back')}</ButtonLink>} />
@@ -55,42 +67,38 @@ export default function MarketerDetail() {
   }
 
   const canEdit = can('marketers', 'edit');
-  const assigned = schools.filter((s) => s.marketerId === marketer.id);
+  const assigned = detailQ.data?.schools ?? [];
   const available = schools.filter((s) => s.marketerId !== marketer.id);
-  const active = milestones.filter((m) => m.status === 'active').sort((a, b) => a.threshold - b.threshold);
+  const ms = detailQ.data?.milestones;
+  const active = ms?.set?.items ?? [];
   const paid = marketer.paidStudents;
-  const next = active.find((m) => m.threshold > paid);
-  const prevThreshold = [...active].reverse().find((m) => m.threshold <= paid)?.threshold ?? 0;
+  const next = ms?.next ?? null;
+  const progressPct = ms?.progressPct ?? 0;
+  const toNext = ms?.toNext ?? (next ? next.threshold - paid : 0);
 
   const assign = async () => {
     const school = schools.find((s) => s.id === pick);
     if (!school) return;
-    if (school.marketerId && school.marketerId !== marketer.id) {
-      const cur = marketers.find((m) => m.id === school.marketerId);
-      const r = await confirm({
-        title: t('marketers.detail.doubleTitle'),
-        body: t('marketers.detail.doubleBody', { school: L(school, 'name'), marketer: cur ? L(cur, 'name') : '—' }),
-        tone: 'warning',
-        confirmText: t('marketers.detail.override'),
-        reason: { label: t('marketers.detail.overrideReason'), placeholder: t('marketers.detail.overridePlaceholder') },
-      });
-      if (!r) return;
-      reassignSchool(school.id, marketer.id, r.reason);
-      toast.success(t('marketers.detail.overridden'));
-    } else {
-      reassignSchool(school.id, marketer.id);
-      toast.success(t('marketers.detail.assignedToast'));
-    }
+    const cur = marketers.find((m) => m.id === school.marketerId);
+    setAssigning(true);
+    const r = await guard({
+      schoolName: L(school, 'name'),
+      currentMarketerName: cur ? L(cur, 'name') : null,
+      needsReason: !!school.marketerId && school.marketerId !== marketer.id,
+      run: (overrideReason) => marketersApi.assignSchool(marketer.id, school.id, overrideReason),
+    });
+    setAssigning(false);
+    if (!r) return;
+    toast.success(r.overridden ? t('marketers.detail.overridden') : t('marketers.detail.assignedToast'));
     setPick('');
   };
 
   const unassign = async (schoolId: string) => {
-    const school = schools.find((s) => s.id === schoolId);
+    const school = assigned.find((s) => s.id === schoolId);
     if (!school) return;
     const ok = await confirm({ title: t('marketers.detail.unassignTitle', { school: L(school, 'name') }), body: t('marketers.detail.unassignBody'), confirmText: t('actions.unassign') });
     if (!ok) return;
-    reassignSchool(schoolId, null);
-    toast.success(t('marketers.detail.unassigned'));
+    unassignM.mutate(schoolId);
   };
 
   return (
@@ -122,7 +130,7 @@ export default function MarketerDetail() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard loading={loading} label={t('marketers.fields.schools')} value={fmtNumber(assigned.length)} icon={<SchoolIcon />} color="#7C3AED" />
-        <StatCard loading={loading} label={t('marketers.fields.paid')} value={fmtNumber(paid)} icon={<Check />} color="#2563EB" trend={monthly.map((m) => m.students)} />
+        <StatCard loading={loading} label={t('marketers.fields.paid')} value={fmtNumber(paid)} icon={<Check />} color="#2563EB" trend={monthly.length ? monthly.map((m) => m.students) : undefined} />
         <StatCard loading={loading} label={t('marketers.fields.milestones')} value={`${fmtNumber(marketer.milestonesHit)} / ${fmtNumber(active.length)}`} icon={<Award />} color="#C9A24A" />
         <StatCard loading={loading} label={t('marketers.fields.pendingReward')} value={fmtMoney(marketer.pendingReward, 'IQD', true)} icon={<BarChart3 />} color="#16A34A" />
       </div>
@@ -132,15 +140,19 @@ export default function MarketerDetail() {
           <Card>
             <CardHeader icon={<BarChart3 className="h-4 w-4" />} title={t('marketers.detail.performance')} subtitle={t('marketers.detail.performanceSub')} />
             <CardBody>
-              <BarChart
-                data={monthly}
-                xKey="month"
-                xFormat={(v) => fmtDate(`${v}-01T00:00:00`, 'MMM')}
-                valueFormat={(v) => fmtNumber(v)}
-                series={[{ key: 'students', label: t('marketers.fields.paid'), color: '#C9A24A' }]}
-                loading={loading}
-                height={240}
-              />
+              {perfQ.error ? (
+                <QueryError compact error={perfQ.error} onRetry={() => perfQ.refetch()} />
+              ) : (
+                <BarChart
+                  data={monthly}
+                  xKey="month"
+                  xFormat={(v) => fmtDate(`${v}-01T00:00:00`, 'MMM')}
+                  valueFormat={(v) => fmtNumber(v)}
+                  series={[{ key: 'students', label: t('marketers.fields.paid'), color: '#C9A24A' }]}
+                  loading={perfQ.isLoading}
+                  height={240}
+                />
+              )}
             </CardBody>
           </Card>
 
@@ -160,7 +172,7 @@ export default function MarketerDetail() {
                       return { value: s.id, label: cur ? `${L(s, 'name')} — ${t('marketers.detail.assignedTo', { name: L(cur, 'name') })}` : L(s, 'name') };
                     })}
                   />
-                  <Button icon={<Plus className="h-4 w-4" />} disabled={!pick} onClick={assign}>
+                  <Button icon={<Plus className="h-4 w-4" />} disabled={!pick} loading={assigning} onClick={assign}>
                     {t('marketers.detail.assignSchool')}
                   </Button>
                 </div>
@@ -182,11 +194,18 @@ export default function MarketerDetail() {
                           {L(s, 'city')} · {fmtNumber(s.verifiedPaidStudents)} {t('marketers.detail.students')}
                         </div>
                       </div>
-                      <TierBadge tier={s.tier} />
+                      {s.tier && <TierBadge tier={s.tier} />}
                       <StatusBadge status={s.status} className="hidden sm:inline-flex" />
                       {canEdit && (
                         <Tooltip content={t('actions.unassign')}>
-                          <Button size="icon-sm" variant="ghost" className="hover:bg-danger/10 hover:text-danger" aria-label={t('actions.unassign')} onClick={() => unassign(s.id)}>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="hover:bg-danger/10 hover:text-danger"
+                            aria-label={t('actions.unassign')}
+                            loading={unassignM.isPending && unassignM.variables === s.id}
+                            onClick={() => unassign(s.id)}
+                          >
                             <X className="h-4 w-4" />
                           </Button>
                         </Tooltip>
@@ -224,7 +243,7 @@ export default function MarketerDetail() {
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin className="h-4 w-4 shrink-0 text-muted" />
-                  <span>{L(governorateById(marketer.governorateId), 'name')}</span>
+                  <span>{L(marketer, 'governorateName')}</span>
                 </div>
               </div>
             </CardBody>
@@ -234,12 +253,15 @@ export default function MarketerDetail() {
             <CardHeader icon={<Award className="h-4 w-4" />} title={t('marketers.detail.milestones')} />
             <CardBody className="space-y-4">
               <div>
-                <ProgressBar value={next ? ((paid - prevThreshold) / Math.max(1, next.threshold - prevThreshold)) * 100 : 100} size="md" label={t('marketers.detail.milestones')} />
+                <ProgressBar value={next ? progressPct : 100} size="md" label={t('marketers.detail.milestones')} />
                 <p className="mt-2 text-xs text-muted">
-                  {next
-                    ? t('marketers.detail.nextMilestone', { count: next.threshold - paid, label: L(next, 'label'), reward: fmtMoney(next.reward) })
-                    : t('marketers.detail.allMilestones')}
+                  {!ms?.set
+                    ? t('marketers.detail.noMilestoneSet')
+                    : next
+                      ? t('marketers.detail.nextMilestone', { count: toNext, label: L(next, 'label'), reward: fmtMoney(next.reward) })
+                      : t('marketers.detail.allMilestones')}
                 </p>
+
               </div>
               <ol className="space-y-2">
                 {active.map((m) => {

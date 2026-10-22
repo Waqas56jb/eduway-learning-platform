@@ -1,6 +1,6 @@
-import { forwardRef, useEffect, useState, type ReactNode } from 'react';
+import { forwardRef, useEffect, useState, type ComponentRef, type ReactNode } from 'react';
+import { isRTL } from '@/utils/rtl';
 import {
-  I18nManager,
   StyleSheet,
   TextInput,
   View,
@@ -30,7 +30,7 @@ export interface InputProps extends TextInputProps {
 const LTR_KEYBOARDS = new Set<TextInputProps['keyboardType']>(['phone-pad', 'number-pad', 'decimal-pad', 'numeric', 'email-address', 'url']);
 
 /** Text field with label, gold focus ring, prefix segment and inline error. */
-export const Input = forwardRef<TextInput, InputProps>(function Input(
+export const Input = forwardRef<ComponentRef<typeof TextInput>, InputProps>(function Input(
   {
     label,
     error,
@@ -74,7 +74,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   // Let text fields follow the natural (layout) direction; force LTR for numbers/phones/emails.
   let textAlign: TextStyle['textAlign'];
   if (isLtrField) textAlign = 'left';
-  else if (isAr && !I18nManager.isRTL) textAlign = 'right';
+  else if (isAr && !isRTL()) textAlign = 'right';
 
   const handleFocus = (e: Parameters<NonNullable<TextInputProps['onFocus']>>[0]) => {
     setFocused(true);
@@ -163,7 +163,9 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 
       {hasError ? (
         <Animated.View entering={FadeInDown.duration(200)} exiting={FadeOut.duration(150)} style={styles.message}>
-          <Icon name="alert" size={14} color={colors.danger} strokeWidth={2} />
+          <View style={styles.messageIcon}>
+            <Icon name="alert" size={14} color={colors.danger} strokeWidth={2} />
+          </View>
           <Text variant="caption" color={colors.danger} style={styles.messageText}>
             {error}
           </Text>
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
   wrapper: { gap: 0 },
   label: { marginBottom: space.sm },
   ring: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
     top: -4,
     bottom: -4,
     start: -4,
@@ -194,14 +196,14 @@ const styles = StyleSheet.create({
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 52,
+    minHeight: 54,
     borderRadius: radius.md,
     borderWidth: 1.25,
-    paddingHorizontal: space.md + 2,
+    paddingHorizontal: space.lg - 2,
     gap: space.sm + 2,
   },
   fieldMultiline: { minHeight: 112, alignItems: 'flex-start', paddingVertical: space.md },
-  iconSlot: { alignItems: 'center', justifyContent: 'center' },
+  iconSlot: { width: 22, alignItems: 'center', justifyContent: 'center' },
   iconTop: { paddingTop: 2 },
   prefix: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, direction: 'ltr' },
   prefixText: { letterSpacing: 0.3 },
@@ -209,12 +211,13 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    minHeight: 48,
+    minHeight: 50,
     paddingVertical: 0,
     paddingHorizontal: 0,
   },
   inputMultiline: { minHeight: 84, paddingTop: 2, textAlignVertical: 'top' },
   right: { alignItems: 'center', justifyContent: 'center' },
-  message: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.sm - 2 },
+  message: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: space.sm - 2 },
   messageText: { flex: 1 },
+  messageIcon: { height: 18, justifyContent: 'center' },
 });

@@ -17,10 +17,14 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { useAppConfig } from '@/api/appSettings';
+import { errorMessage, isApiError } from '@/api/client';
+import { useContactMutation } from '@/api/public';
+import type { ContactSubject } from '@/api/types';
 import { isIraqiMobile } from '@/components/auth/mobile';
 import { Button, Input, Reveal, Select, Seo, SmartImage, Textarea, useToast } from '@/components/ui';
+import { useLang } from '@/hooks/useLang';
 import { IMAGES } from '@/lib/images';
-import { sleep } from '@/lib/utils';
 
 interface ContactForm {
   name: string;
@@ -32,31 +36,59 @@ interface ContactForm {
 const SUBJECTS = ['general', 'support', 'billing', 'partnerships', 'schools'] as const;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-const CHANNELS = [
-  { key: 'phone', icon: Phone, value: '+964 770 555 0142', href: 'tel:+9647705550142', ltr: true },
-  { key: 'whatsapp', icon: MessageCircle, value: '+964 780 555 0187', href: 'https://wa.me/9647805550187', ltr: true },
-  { key: 'email', icon: Mail, value: 'support@eduway.iq', href: 'mailto:support@eduway.iq', ltr: true },
-  { key: 'office', icon: MapPin, value: null, href: null, ltr: false },
-] as const;
+const digits = (s: string) => s.replace(/[^\d+]/g, '');
 
 export default function Contact() {
   const { t } = useTranslation();
   const toast = useToast();
+  const { l, lang } = useLang();
   const [ticket, setTicket] = useState<string | null>(null);
+  const contactMutation = useContactMutation();
+  // Support contacts come from PUB-01 (admin → settings → support).
+  const { data: config } = useAppConfig();
+  const support = config?.support;
+  const CHANNELS = [
+    { key: 'phone', icon: Phone, value: support?.phone ?? null, href: support?.phone ? `tel:${digits(support.phone)}` : null, ltr: true },
+    {
+      key: 'whatsapp',
+      icon: MessageCircle,
+      value: support?.whatsapp ?? null,
+      href: support?.whatsapp ? `https://wa.me/${digits(support.whatsapp).replace(/^\+/, '')}` : null,
+      ltr: true,
+    },
+    { key: 'email', icon: Mail, value: support?.email ?? null, href: support?.email ? `mailto:${support.email}` : null, ltr: true },
+    { key: 'office', icon: MapPin, value: support?.address ? l(support.address) || null : null, href: null, ltr: false },
+  ] as const;
 
   const {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<ContactForm>({ defaultValues: { name: '', contact: '', subject: 'general', message: '' } });
 
-  const onSubmit = async () => {
-    await sleep(1100);
-    const id = `EW-T-${Math.floor(40000 + Math.random() * 9999)}`;
-    setTicket(id);
-    toast.success(t('pages.contact.form.successToast'), t('pages.contact.form.ticketLabel', { id }));
-    reset();
+  // PUB-10 → support ticket id (EW-T-NNNNN).
+  const onSubmit = async (v: ContactForm) => {
+    try {
+      const res = await contactMutation.mutateAsync({
+        name: v.name.trim(),
+        contact: v.contact.trim(),
+        subject: v.subject as ContactSubject,
+        message: v.message.trim(),
+        locale: lang,
+      });
+      setTicket(res.ticketId);
+      toast.success(t('pages.contact.form.successToast'), t('pages.contact.form.ticketLabel', { id: res.ticketId }));
+      reset();
+    } catch (e) {
+      const fields = isApiError(e) ? (e.details.fields as Partial<Record<keyof ContactForm, string>> | undefined) : undefined;
+      if (fields) {
+        (Object.keys(fields) as (keyof ContactForm)[]).forEach((k) => setError(k, { type: 'server', message: fields[k] }));
+      } else {
+        toast.error(errorMessage(e));
+      }
+    }
   };
 
   return (

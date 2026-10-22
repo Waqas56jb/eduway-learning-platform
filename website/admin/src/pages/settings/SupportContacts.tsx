@@ -1,34 +1,32 @@
 import { useState } from 'react';
 import { Clock, Globe, Headset, Mail, MapPin, MessageCircle, Phone, Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useSupportContacts } from '@/store/settings';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useSaveSettings, useSettingsSection, type SupportContacts as Contacts } from '@/api/settings';
 import { useLang } from '@/hooks/useLocale';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Field, Input, Segmented, SkeletonCard, Textarea } from '@/components/ui';
-import type { SupportContacts as Contacts } from '@/data/settings';
-import { mockSave, ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
+import { QueryError } from '@/components/ui/QueryError';
+import { ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
 
-const SOCIAL: (keyof Contacts)[] = ['facebook', 'instagram', 'telegram', 'youtube'];
+const SOCIAL: (keyof Contacts)[] = ['facebook', 'instagram', 'telegram', 'youtube', 'tiktok'];
+const EMPTY: Contacts = { phone: '', whatsapp: '', email: '', hours_en: '', hours_ar: '', address_en: '', address_ar: '', facebook: '', instagram: '', telegram: '', youtube: '', tiktok: '' };
 const emailOk = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 export default function SupportContacts() {
   const { t } = useTranslation();
   const lang = useLang();
-  const loading = useMockLoading();
-  const value = useSupportContacts((s) => s.value);
-  const save = useSupportContacts((s) => s.save);
+  const q = useSettingsSection('support');
+  const save = useSaveSettings('support');
+  const loading = q.isLoading;
+  const value = q.data ?? EMPTY;
   const { draft, set, dirty, reset } = useDraft(value);
   const editable = useCanEditSettings();
-  const [saving, setSaving] = useState(false);
   const [previewLang, setPreviewLang] = useState<'en' | 'ar'>(lang);
 
   const invalidEmail = !emailOk(draft.email);
-  const onSave = async () => {
+  const onSave = () => {
     if (invalidEmail || !draft.phone.trim()) return;
-    setSaving(true);
-    await mockSave(() => save(draft), t);
-    setSaving(false);
+    save.mutate(draft);
   };
 
   const text = (k: keyof Contacts) => ({ value: draft[k], onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => set(k, e.target.value) });
@@ -37,7 +35,9 @@ export default function SupportContacts() {
     <div>
       <PageHeader title={t('settings.support.title')} subtitle={t('settings.support.subtitle')} />
       {!editable && <ReadOnlyNotice />}
-      {loading ? (
+      {q.error && !q.data ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : loading ? (
         <div className="grid gap-6 xl:grid-cols-3">
           <SkeletonCard lines={6} className="xl:col-span-2" />
           <SkeletonCard lines={5} />
@@ -120,7 +120,7 @@ export default function SupportContacts() {
           </Section>
         </fieldset>
       )}
-      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={saving} />}
+      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={save.isPending} />}
     </div>
   );
 }

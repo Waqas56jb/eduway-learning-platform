@@ -7,10 +7,11 @@
     "reviewed": "تمت مراجعتها",
     "mastered": "أتقنتها",
     "masteryLabel": "الإتقان",
-    "total": "الأخطاء المسجلة: {{count}}"
+    "total": "الأخطاء المسجلة: {{count}}",
+    "totalLabel": "إجمالي الأخطاء المسجّلة"
   },
   "filters": {
-    "unresolved": "غير محلولة",
+    "unresolved": "للحل",
     "reviewed": "مُراجَعة",
     "mastered": "متقنة",
     "repeated": "متكررة"

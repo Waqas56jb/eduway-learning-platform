@@ -1,25 +1,71 @@
-import { useMarketers, useSchools } from '@/store/core';
+import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { isApiError, toastError } from '@/api/client';
+import { partnerKeys } from '@/api/partners';
+import type { Localized } from '@/api/types';
+import { useLang } from '@/hooks/useLocale';
+import { useConfirm } from '@/components/ui';
+
+interface GuardOptions<T> {
+  /** School display name (for the dialog). */
+  schoolName: string;
+  /** Current marketer display name, when the school is already attributed. */
+  currentMarketerName: string | null;
+  /** Ask for an override reason up front (school attributed to a different marketer). */
+  needsReason: boolean;
+  /** The server call; receives the override reason when one was collected. */
+  run: (overrideReason?: string) => Promise<T>;
+}
 
 /**
- * Move a school's attribution to another marketer (or none), keeping both sides in sync.
- * When `reason` is given the change is logged as an admin override.
+ * Double-attribution guard (contract ADM-SCH-09 / ADM-MKT-09): moving a school that already belongs to another
+ * marketer requires an override reason. The reason is asked up front when we know about the conflict, and again if
+ * the server answers 409 `DOUBLE_ATTRIBUTION` (stale data). Resolves `{ result, overridden }` or `null` (cancelled / failed).
  */
-export function reassignSchool(schoolId: string, toId: string | null, reason?: string) {
-  const schools = useSchools.getState();
-  const mk = useMarketers.getState();
-  const school = schools.get(schoolId);
-  if (!school || school.marketerId === toId) return;
-  const fromId = school.marketerId;
-  const from = mk.get(fromId);
-  const to = mk.get(toId);
+export function useAttributionGuard() {
+  const { t } = useTranslation();
+  const lang = useLang();
+  const confirm = useConfirm();
+  const qc = useQueryClient();
 
-  if (fromId) mk.update(fromId, (m) => ({ schoolIds: m.schoolIds.filter((x) => x !== schoolId) }), { silent: true });
-  if (toId) mk.update(toId, (m) => ({ schoolIds: [...new Set([...m.schoolIds, schoolId])] }), { silent: true });
+  const ask = async (school: string, marketer: string | null) => {
+    const r = await confirm({
+      title: t('marketers.detail.doubleTitle'),
+      body: t('marketers.detail.doubleBody', { school, marketer: marketer ?? '—' }),
+      tone: 'warning',
+      confirmText: t('marketers.detail.override'),
+      reason: { label: t('marketers.detail.overrideReason'), placeholder: t('marketers.detail.overridePlaceholder') },
+    });
+    return r?.reason ?? null;
+  };
 
-  const summary = reason
-    ? `Admin override: reassigned ${school.name_en} from ${from?.name_en ?? '—'} to ${to?.name_en ?? '—'}. Reason: ${reason}`
-    : toId
-      ? `Assigned ${school.name_en} to ${to?.name_en}`
-      : `Unassigned ${school.name_en} from ${from?.name_en ?? '—'}`;
-  schools.update(schoolId, { marketerId: toId }, { action: reason ? 'school.attribution_override' : toId ? 'school.assign_marketer' : 'school.unassign_marketer', summary });
+  return async function guarded<T>({ schoolName, currentMarketerName, needsReason, run }: GuardOptions<T>): Promise<{ result: T; overridden: boolean } | null> {
+    let reason: string | undefined;
+    if (needsReason) {
+      const r = await ask(schoolName, currentMarketerName);
+      if (!r) return null;
+      reason = r;
+    }
+    try {
+      const result = await run(reason);
+      await Promise.all(partnerKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+      return { result, overridden: !!reason };
+    } catch (e) {
+      if (isApiError(e) && e.reason === 'DOUBLE_ATTRIBUTION' && !reason) {
+        const cur = e.details.currentMarketer as { name?: Localized } | undefined;
+        const r = await ask(schoolName, cur?.name ? cur.name[lang] || cur.name.en : currentMarketerName);
+        if (!r) return null;
+        try {
+          const result = await run(r);
+          await Promise.all(partnerKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+          return { result, overridden: true };
+        } catch (e2) {
+          toastError(e2);
+          return null;
+        }
+      }
+      toastError(e);
+      return null;
+    }
+  };
 }

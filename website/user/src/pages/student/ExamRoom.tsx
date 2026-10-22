@@ -5,7 +5,9 @@ import {
   ArrowRight,
   Check,
   Cloud,
+  CloudOff,
   CloudUpload,
+  Crown,
   Eraser,
   FileX2,
   Flag,
@@ -15,112 +17,218 @@ import {
   Send,
   TimerOff,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useSubjectLookup } from '@/api/catalog';
+import { errorMessage, idempotencyKey, isApiError, sendKeepalive, type ApiError } from '@/api/client';
+import { examsApi, useInvalidateExams, useStartExam } from '@/api/exams';
+import type { ExamAttemptState } from '@/api/types';
 import { ExamTimer } from '@/components/student/ExamTimer';
 import { QuestionNavigator } from '@/components/student/exam/QuestionNavigator';
-import {
-  clearExamSession,
-  readExamSession,
-  writeExamSession,
-  type ExamSession,
-} from '@/components/student/exam/examUtils';
 import { QuizCard } from '@/components/student/QuizCard';
 import { Badge, Button, EmptyState, LogoMark, Modal, ProgressBar, Seo, SubjectIcon } from '@/components/ui';
-import { getExam, getQuestion, getSubject } from '@/data';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
-import { cn, shuffle } from '@/lib/utils';
-import type { ExamBlueprint, Question } from '@/types';
+import { cn } from '@/lib/utils';
 
+/**
+ * Exam room. EXM-03 starts the attempt or resumes the active one (server-assembled paper, no answers);
+ * the countdown is server-authoritative (`endsAt` corrected by the client/server clock skew); state is
+ * autosaved with a monotonic `seq` (EXM-05) every `autosaveSeconds` and shortly after each change;
+ * flags go through EXM-06; submission (manual or on expiry) is idempotent (EXM-07 + Idempotency-Key).
+ */
 export default function ExamRoom() {
   const { examId } = useParams();
-  const exam = getExam(examId);
   const { t } = useTranslation();
+  const start = useStartExam();
+  const [attempt, setAttempt] = useState<ExamAttemptState | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
-  if (!exam) {
+  useEffect(() => {
+    if (!examId) return;
+    setAttempt(null);
+    setError(null);
+    start.mutate(examId, { onSuccess: setAttempt, onError: setError });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId]);
+
+  if (error || !examId) {
+    const locked = !!error?.isLocked;
     return (
       <div className="flex min-h-screen items-center justify-center bg-cream p-4">
         <Seo title={t('practice.room.notFound.title')} />
         <EmptyState
           className="w-full max-w-lg"
-          icon={<FileX2 className="h-7 w-7" />}
-          title={t('practice.room.notFound.title')}
-          body={t('practice.room.notFound.body')}
+          icon={locked ? <Crown className="h-7 w-7" /> : <FileX2 className="h-7 w-7" />}
+          title={error && error.status !== 404 ? errorMessage(error) : t('practice.room.notFound.title')}
+          body={error && error.status !== 404 ? undefined : t('practice.room.notFound.body')}
           action={
-            <Button to="/student/exams" leftIcon={<ArrowLeft className="h-4 w-4 rtl:-scale-x-100" />}>
-              {t('practice.room.backToExams')}
-            </Button>
+            <div className="flex flex-wrap justify-center gap-3">
+              {locked && (
+                <Button to="/student/subscription" variant="gold" leftIcon={<Crown className="h-4 w-4" />}>
+                  {t('learn.subject.upgrade')}
+                </Button>
+              )}
+              <Button to="/student/exams" leftIcon={<ArrowLeft className="h-4 w-4 rtl:-scale-x-100" />}>
+                {t('practice.room.backToExams')}
+              </Button>
+            </div>
           }
         />
       </div>
     );
   }
-  return <ExamRoomSession key={exam.id} exam={exam} />;
+
+  if (!attempt) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-cream" role="status" aria-live="polite">
+        <Seo title={t('common.loading')} />
+        <LogoMark className="h-12 w-12 animate-pulse" />
+        <p className="text-sm font-semibold text-muted">{t('practice.room.preparing')}</p>
+      </div>
+    );
+  }
+
+  if (attempt.status !== 'in_progress') {
+    return <RedirectToResult attemptId={attempt.attemptId} />;
+  }
+
+  return <ExamRoomSession key={attempt.attemptId} initial={attempt} />;
 }
 
-const newSession = (exam: ExamBlueprint): ExamSession => {
-  const now = Date.now();
-  return {
-    examId: exam.id,
-    startedAt: now,
-    endAt: now + exam.durationMin * 60_000,
-    order: shuffle(exam.questionIds),
-    answers: {},
-    flagged: [],
-    current: 0,
-    savedAt: now,
-  };
-};
+function RedirectToResult({ attemptId }: { attemptId: string }) {
+  const navigate = useNavigate();
+  useEffect(() => navigate(`/student/exams/result/${attemptId}`, { replace: true }), [attemptId, navigate]);
+  return null;
+}
 
-function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
+interface RoomState {
+  order: string[];
+  answers: Record<string, string | null>;
+  flagged: string[];
+  current: number;
+}
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'offline';
+
+function ExamRoomSession({ initial }: { initial: ExamAttemptState }) {
   const { t } = useTranslation();
   const { l } = useLang();
   const navigate = useNavigate();
-  const { saveAttempt, addMistake } = useStudent();
-  const subject = getSubject(exam.subjectId);
+  const invalidateExams = useInvalidateExams();
+  const exam = initial.exam;
+  const subject = useSubjectLookup()(exam.subjectSlug);
+  const attemptId = initial.attemptId;
+  const questionsById = useRef(new Map(initial.questions.map((q) => [q.id, q])));
 
-  const [session, setSession] = useState<ExamSession>(() => readExamSession(exam) ?? newSession(exam));
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState(session.savedAt);
+  const [session, setSession] = useState<RoomState>(() => ({
+    order: initial.order.length ? initial.order : initial.questions.map((q) => q.id),
+    answers: { ...initial.answers },
+    flagged: [...initial.flagged],
+    current: initial.currentIndex ?? 0,
+  }));
+  // Server-authoritative deadline in local clock terms: endsAt − (serverNow − localNow).
+  const [endAt, setEndAt] = useState(() => {
+    const skew = new Date(initial.serverNow).getTime() - Date.now();
+    return new Date(initial.endsAt).getTime() - skew;
+  });
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [savedAt, setSavedAt] = useState(() => (initial.lastSavedAt ? new Date(initial.lastSavedAt).getTime() : Date.now()));
   const [now, setNow] = useState(() => Date.now());
   const [submitOpen, setSubmitOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [timeUpId, setTimeUpId] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const sessionRef = useRef(session);
+  sessionRef.current = session;
   const submittedRef = useRef(false);
-  const firstSave = useRef(true);
+  const seq = useRef(0);
+  const dirty = useRef(false);
+  const submitKey = useRef(idempotencyKey());
+  const autosaveSeconds = Math.max(5, initial.autosaveSeconds || 15);
 
-  const questions = useMemo(
-    () => session.order.map((id) => getQuestion(id)).filter((q): q is Question => !!q),
-    [session.order],
-  );
+  const questions = session.order.map((id) => questionsById.current.get(id)).filter((q): q is NonNullable<typeof q> => !!q);
   const total = questions.length;
   const current = Math.min(session.current, total - 1);
   const q = questions[current];
   const answeredCount = session.order.filter((id) => session.answers[id] !== null && session.answers[id] !== undefined).length;
   const unanswered = total - answeredCount;
 
-  // Autosave every change (answers, flags, position).
-  useEffect(() => {
-    sessionRef.current = session;
-    if (submittedRef.current) return;
-    writeExamSession({ ...session, savedAt: Date.now() });
-    if (firstSave.current) {
-      firstSave.current = false;
-      return;
-    }
-    setSaving(true);
-    const id = window.setTimeout(() => {
-      setSaving(false);
+  const goToResult = useCallback(
+    (id: string) => {
+      invalidateExams();
+      navigate(`/student/exams/result/${id}`, { replace: true });
+    },
+    [invalidateExams, navigate],
+  );
+
+  /* ------------------------------------------------------------ autosave (EXM-05) */
+
+  const autosaveBody = () => {
+    const s = sessionRef.current;
+    seq.current += 1;
+    return { answers: s.answers, flagged: s.flagged, currentIndex: s.current, clientSavedAt: new Date().toISOString(), seq: seq.current };
+  };
+
+  const save = useCallback(async () => {
+    if (submittedRef.current || !dirty.current) return;
+    dirty.current = false;
+    setSaveStatus('saving');
+    try {
+      const res = await examsApi.autosave(attemptId, autosaveBody());
+      const skew = new Date(res.serverNow).getTime() - Date.now();
+      setEndAt(new Date(res.endsAt).getTime() - skew);
       setSavedAt(Date.now());
-    }, 650);
+      setSaveStatus('saved');
+    } catch (e) {
+      if (isApiError(e) && (e.reason === 'EXAM_ALREADY_SUBMITTED' || e.reason === 'EXAM_TIME_OVER')) {
+        submittedRef.current = true;
+        setDone(true);
+        setTimeUpId(attemptId);
+        return;
+      }
+      dirty.current = true; // retry on the next tick
+      setSaveStatus('offline');
+    }
+     
+  }, [attemptId]);
+
+  // Every change → save shortly after (debounced); plus the periodic cadence for safety.
+  const initialRef = useRef(session);
+  useEffect(() => {
+    if (submittedRef.current) return;
+    if (session === initialRef.current) return;
+    dirty.current = true;
+    const id = window.setTimeout(() => void save(), 1200);
     return () => window.clearTimeout(id);
-  }, [session]);
+  }, [session, save]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => void save(), autosaveSeconds * 1000);
+    return () => window.clearInterval(id);
+  }, [save, autosaveSeconds]);
+
+  // Leaving the tab / page: flush the latest state with a keepalive request.
+  useEffect(() => {
+    const flush = () => {
+      if (submittedRef.current || !dirty.current) return;
+      dirty.current = false;
+      sendKeepalive('PUT', `/exams/attempts/${attemptId}/autosave`, autosaveBody());
+    };
+    const onVis = () => document.visibilityState === 'hidden' && flush();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+     
+  }, [attemptId]);
 
   // Refresh the "Saved x min ago" label.
   useEffect(() => {
@@ -147,7 +255,8 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
   const select = useCallback(
     (choice: number) => {
       if (!q) return;
-      setSession((s) => ({ ...s, answers: { ...s.answers, [q.id]: choice } }));
+      const optionId = q.options[choice]?.id ?? null;
+      setSession((s) => ({ ...s, answers: { ...s.answers, [q.id]: optionId } }));
     },
     [q],
   );
@@ -156,53 +265,65 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
 
   const toggleFlag = useCallback(() => {
     if (!q) return;
-    setSession((s) => ({
-      ...s,
-      flagged: s.flagged.includes(q.id) ? s.flagged.filter((f) => f !== q.id) : [...s.flagged, q.id],
-    }));
-  }, [q]);
+    const on = !sessionRef.current.flagged.includes(q.id);
+    setSession((s) => ({ ...s, flagged: on ? [...s.flagged, q.id] : s.flagged.filter((f) => f !== q.id) }));
+    // EXM-06 (best effort — the flag set is also part of every autosave).
+    examsApi
+      .flag(attemptId, q.id, on)
+      .then((res) => setSession((s) => ({ ...s, flagged: res.flagged })))
+      .catch(() => undefined);
+  }, [q, attemptId]);
+
+  /* ------------------------------------------------------------ submit (EXM-07) */
 
   const submit = useCallback(
-    (auto: boolean) => {
-      if (submittedRef.current) return;
+    async (auto: boolean) => {
+      if (submittedRef.current && !submitError) return;
       submittedRef.current = true;
+      setSubmitting(true);
+      setSubmitError(null);
       const s = sessionRef.current;
-      const finished = Date.now();
-      const id = `att-${finished}`;
-      const answers = Object.fromEntries(s.order.map((qid) => [qid, s.answers[qid] ?? null]));
-      saveAttempt({
-        id,
-        examId: exam.id,
-        answers,
-        flagged: s.flagged,
-        questionIds: s.order,
-        // Derived from the deadline so an auto-submitted paper always reports the full duration.
-        timeSpentSec: Math.max(0, Math.min(exam.durationMin * 60, Math.round(exam.durationMin * 60 - (s.endAt - finished) / 1000))),
-        finishedAt: new Date(finished).toISOString(),
-        autoSubmitted: auto,
-      });
-      for (const qid of s.order) {
-        const ans = answers[qid];
-        const question = getQuestion(qid);
-        if (question && ans !== null && ans !== question.correctIndex) addMistake(qid, ans, 'exam');
+      seq.current += 1;
+      try {
+        const res = await examsApi.submit(
+          attemptId,
+          { reason: auto ? 'timeout' : 'manual', answers: s.answers, flagged: s.flagged, seq: seq.current },
+          submitKey.current,
+        );
+        setDone(true);
+        setSubmitOpen(false);
+        setExitOpen(false);
+        setNavOpen(false);
+        if (auto) setTimeUpId(res.attemptId);
+        else goToResult(res.attemptId);
+      } catch (e) {
+        if (isApiError(e) && e.reason === 'EXAM_ALREADY_SUBMITTED') {
+          setDone(true);
+          if (auto) setTimeUpId(attemptId);
+          else goToResult(attemptId);
+          return;
+        }
+        if (auto) {
+          // The server's auto-submit job finalises the paper at endsAt + grace anyway.
+          setDone(true);
+          setTimeUpId(attemptId);
+          return;
+        }
+        submittedRef.current = false;
+        setSubmitError(errorMessage(e));
+      } finally {
+        setSubmitting(false);
       }
-      clearExamSession(exam.id);
-      setDone(true);
-      setSubmitOpen(false);
-      setExitOpen(false);
-      setNavOpen(false);
-      if (auto) setTimeUpId(id);
-      else navigate(`/student/exams/result/${id}`, { replace: true });
     },
-    [exam, saveAttempt, addMistake, navigate],
+    [attemptId, goToResult, submitError],
   );
 
   // After an automatic submission, move on to the result shortly.
   useEffect(() => {
     if (!timeUpId) return;
-    const id = window.setTimeout(() => navigate(`/student/exams/result/${timeUpId}`, { replace: true }), 5000);
+    const id = window.setTimeout(() => goToResult(timeUpId), 5000);
     return () => window.clearTimeout(id);
-  }, [timeUpId, navigate]);
+  }, [timeUpId, goToResult]);
 
   const anyModal = submitOpen || exitOpen || navOpen || !!timeUpId;
 
@@ -223,17 +344,22 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [anyModal, done, current, go, toggleFlag]);
 
+  const saving = saveStatus === 'saving';
   const savedMinutes = Math.floor((now - savedAt) / 60_000);
   const saveLabel = saving
     ? t('practice.room.save.saving')
-    : savedMinutes < 1
-      ? t('practice.room.save.justNow')
-      : t('practice.room.save.minutesAgo', { count: savedMinutes });
+    : saveStatus === 'offline'
+      ? t('practice.room.save.offline')
+      : savedMinutes < 1
+        ? t('practice.room.save.justNow')
+        : t('practice.room.save.minutesAgo', { count: savedMinutes });
 
   const saveIndicator = (cls?: string) => (
     <span className={cn('items-center gap-1.5 text-xs font-medium text-muted', cls)} aria-live="polite">
       {saving ? (
         <CloudUpload className="h-4 w-4 animate-pulse text-accent" aria-hidden />
+      ) : saveStatus === 'offline' ? (
+        <CloudOff className="h-4 w-4 text-danger" aria-hidden />
       ) : (
         <span className="relative inline-flex text-success" aria-hidden>
           <Cloud className="h-4 w-4" />
@@ -247,6 +373,7 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
   if (!q) return null;
   const isFlagged = session.flagged.includes(q.id);
   const isAnswered = session.answers[q.id] !== null && session.answers[q.id] !== undefined;
+  const selectedIndex = isAnswered ? q.options.findIndex((o) => o.id === session.answers[q.id]) : -1;
 
   return (
     <div className="min-h-screen bg-cream">
@@ -259,12 +386,12 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
             <div className="hidden min-w-0 sm:block">
               <p className="truncate text-sm font-bold text-primary">{l(exam.title)}</p>
               <p className="flex items-center gap-1 truncate text-xs text-muted">
-                {subject && <SubjectIcon id={subject.id} className="h-3 w-3" style={{ color: subject.color }} />}
+                {subject && <SubjectIcon id={subject.slug} icon={subject.icon} className="h-3 w-3" style={{ color: subject.color }} />}
                 {subject && l(subject.name)} · {t('common.questions', { count: total })}
               </p>
             </div>
           </div>
-          <ExamTimer endAt={session.endAt} onExpire={() => submit(true)} stopped={done} />
+          <ExamTimer endAt={endAt} onExpire={() => void submit(true)} stopped={done} />
           <div className="flex items-center justify-end gap-2">
             {saveIndicator('hidden xl:inline-flex')}
             <Button size="sm" variant="gold" onClick={() => setSubmitOpen(true)} leftIcon={<Send className="h-4 w-4 rtl:-scale-x-100" />}>
@@ -298,7 +425,7 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
             >
               <QuizCard
                 question={q}
-                selected={session.answers[q.id] ?? null}
+                selected={selectedIndex >= 0 ? selectedIndex : null}
                 onSelect={select}
                 mode="exam"
                 index={current}
@@ -410,7 +537,7 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
             <Button variant="subtle" onClick={() => setSubmitOpen(false)}>
               {t('practice.room.confirmSubmit.back')}
             </Button>
-            <Button variant="gold" onClick={() => submit(false)} leftIcon={<Send className="h-4 w-4 rtl:-scale-x-100" />}>
+            <Button variant="gold" loading={submitting} onClick={() => void submit(false)} leftIcon={<Send className="h-4 w-4 rtl:-scale-x-100" />}>
               {t('practice.room.confirmSubmit.confirm')}
             </Button>
           </>
@@ -430,6 +557,11 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
             <dd className="text-2xl font-bold text-[#8A6A1F] num">{session.flagged.length}</dd>
           </div>
         </dl>
+        {submitError && (
+          <p role="alert" className="mt-4 rounded-2xl bg-danger/10 p-3 text-sm font-semibold text-danger">
+            {submitError}
+          </p>
+        )}
         {(unanswered > 0 || session.flagged.length > 0) && (
           <div role="alert" className="mt-4 flex gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-[#92400E]">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
@@ -454,7 +586,15 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
             <Button variant="subtle" onClick={() => setExitOpen(false)}>
               {t('practice.room.confirmExit.stay')}
             </Button>
-            <Button variant="danger" onClick={() => navigate('/student/exams')} leftIcon={<LogOut className="h-4 w-4 rtl:-scale-x-100" />}>
+            <Button
+              variant="danger"
+              onClick={() => {
+                void save();
+                invalidateExams();
+                navigate('/student/exams');
+              }}
+              leftIcon={<LogOut className="h-4 w-4 rtl:-scale-x-100" />}
+            >
               {t('practice.room.confirmExit.leave')}
             </Button>
           </>
@@ -470,7 +610,7 @@ function ExamRoomSession({ exam }: { exam: ExamBlueprint }) {
           <Button
             variant="gold"
             fullWidth
-            onClick={() => timeUpId && navigate(`/student/exams/result/${timeUpId}`, { replace: true })}
+            onClick={() => timeUpId && goToResult(timeUpId)}
           >
             {t('practice.room.timeUp.cta')}
           </Button>

@@ -84,13 +84,19 @@ export const Badge = memo(function Badge({ label, tone = 'neutral', color, icon,
     <View
       style={[
         styles.base,
-        { backgroundColor: bg, height: isSm ? 22 : 28, paddingHorizontal: isSm ? 8 : 10, gap: isSm ? 4 : 6 },
+        { backgroundColor: bg, height: isSm ? 24 : 28, paddingHorizontal: isSm ? 10 : 12, gap: isSm ? 4 : 6 },
         style,
       ]}
       accessibilityRole="text"
     >
       {icon ? <Icon name={icon} size={isSm ? 12 : 14} color={fg} strokeWidth={2.2} /> : null}
-      <Text variant={isSm ? 'caption' : 'label'} color={fg} numberOfLines={1} style={{ fontFamily: fontFor('semibold', isAr) }}>
+      <Text
+        variant={isSm ? 'caption' : 'label'}
+        color={fg}
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.2}
+        style={[styles.text, { fontFamily: fontFor('semibold', isAr) }]}
+      >
         {label}
       </Text>
     </View>
@@ -104,4 +110,5 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderRadius: radius.pill,
   },
+  text: { flexShrink: 1 },
 });

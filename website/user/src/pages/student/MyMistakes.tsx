@@ -12,16 +12,17 @@ import {
   SubjectBadgeIcon,
   SubjectIcon,
   Tabs,
-  useMockLoading,
+  ErrorState,
 } from '@/components/ui';
-import { getQuestion, subjects } from '@/data';
+import { useSubjects } from '@/api/catalog';
+import { useMistakes } from '@/api/mistakes';
+import type { QuestionReview } from '@/api/types';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { cn } from '@/lib/utils';
-import type { Mistake, Question, SubjectId } from '@/types';
+import type { Mistake, SubjectId } from '@/types';
 
 type Filter = 'all' | 'unresolved' | 'reviewed' | 'mastered' | 'repeated';
-type Row = { mistake: Mistake; question: Question };
+type Row = { mistake: Mistake; question: QuestionReview };
 
 const matches = (m: Mistake, f: Filter) =>
   f === 'all' ? true : f === 'repeated' ? m.repeatCount >= 2 : m.status === f;
@@ -29,8 +30,12 @@ const matches = (m: Mistake, f: Filter) =>
 export default function MyMistakes() {
   const { t } = useTranslation();
   const { l } = useLang();
-  const { mistakes } = useStudent();
-  const ready = useMockLoading(550);
+  // MST-01 (all entries, newest first; counts in meta). Status/subject filters apply client-side so
+  // items being worked on can stay pinned in view.
+  const mistakesQ = useMistakes({ sort: '-date', pageSize: 100 });
+  const mistakes = useMemo(() => mistakesQ.data?.items ?? [], [mistakesQ.data]);
+  const { data: subjects = [] } = useSubjects();
+  const ready = !mistakesQ.isLoading;
   const [filter, setFilterState] = useState<Filter>('all');
   const [subject, setSubjectState] = useState<SubjectId | 'all'>('all');
   // Items the student is working on stay in view (and in place) until the filter changes,
@@ -49,9 +54,7 @@ export default function MyMistakes() {
   const pin = useCallback((id: string) => setPinned((p) => (p.includes(id) ? p : [...p, id])), []);
 
   const rows = useMemo<Row[]>(() => {
-    const list = mistakes
-      .map((m) => ({ mistake: m, question: getQuestion(m.questionId) }))
-      .filter((r): r is Row => !!r.question);
+    const list: Row[] = mistakes.map((m) => ({ mistake: m, question: m.question }));
     // Newest first on arrival; afterwards the order is frozen so retried items don't jump around.
     const fresh = list.filter((r) => !rank.current.has(r.mistake.id));
     fresh.sort((a, b) => a.mistake.date.localeCompare(b.mistake.date));
@@ -71,18 +74,26 @@ export default function MyMistakes() {
   const filtered = rows.filter(
     (r) =>
       (matches(r.mistake, filter) || pinned.includes(r.mistake.id)) &&
-      (subject === 'all' || r.question.subjectId === subject),
+      (subject === 'all' || r.mistake.subject.slug === subject),
   );
 
-  // Group subject → unit, in curriculum order.
-  const groups = subjects
-    .map((s) => ({
-      subject: s,
-      units: s.units
-        .map((u) => ({ unit: u, rows: filtered.filter((r) => r.question.subjectId === s.id && r.question.unitId === u.id) }))
-        .filter((g) => g.rows.length),
-    }))
-    .filter((g) => g.units.length);
+  // Group subject → unit, in curriculum order (subject order from the catalog, units by order).
+  const subjectOrder = (slug: string) => {
+    const i = subjects.findIndex((s) => s.slug === slug);
+    return i < 0 ? 999 : i;
+  };
+  const groups = [...new Map(filtered.map((r) => [r.mistake.subject.id, r.mistake.subject])).values()]
+    .sort((a, b) => subjectOrder(a.slug) - subjectOrder(b.slug))
+    .map((s) => {
+      const srows = filtered.filter((r) => r.mistake.subject.id === s.id);
+      const unitsById = new Map(srows.map((r) => [r.mistake.unit.id, r.mistake.unit]));
+      return {
+        subject: { ...s, id: s.slug },
+        units: [...unitsById.values()]
+          .sort((a, b) => a.order - b.order)
+          .map((u) => ({ unit: { id: u.id, title: u.name }, rows: srows.filter((r) => r.mistake.unit.id === u.id) })),
+      };
+    });
 
   const stats = [
     { k: 'unresolved', icon: CircleAlert, cls: 'bg-danger/10 text-danger' },
@@ -152,21 +163,21 @@ export default function MyMistakes() {
             {t('common.all')}
           </button>
           {subjects.map((s) => {
-            const on = subject === s.id;
-            const n = rows.filter((r) => r.question.subjectId === s.id && matches(r.mistake, filter)).length;
+            const on = subject === s.slug;
+            const n = rows.filter((r) => r.mistake.subject.slug === s.slug && matches(r.mistake, filter)).length;
             return (
               <button
                 key={s.id}
                 type="button"
                 aria-pressed={on}
-                onClick={() => setSubject(s.id)}
+                onClick={() => setSubject(s.slug)}
                 className={cn(
                   'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition',
                   on ? 'text-white' : 'border-primary/10 bg-white hover:border-primary/25',
                 )}
                 style={on ? { backgroundColor: s.color, borderColor: s.color } : { color: s.color }}
               >
-                <SubjectIcon id={s.id} className="h-3.5 w-3.5" />
+                <SubjectIcon id={s.slug} icon={s.icon} className="h-3.5 w-3.5" />
                 {l(s.name)}
                 <span className="num opacity-70">{n}</span>
               </button>
@@ -176,7 +187,9 @@ export default function MyMistakes() {
       </div>
 
       <div className="mt-8">
-        {!ready ? (
+        {mistakesQ.isError ? (
+          <ErrorState onRetry={() => void mistakesQ.refetch()} />
+        ) : !ready ? (
           <SkeletonList rows={5} />
         ) : groups.length === 0 ? (
           <EmptyState

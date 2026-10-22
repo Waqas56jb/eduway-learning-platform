@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { subDays, startOfYear } from 'date-fns';
-import { MOCK_NOW } from '@/utils/random';
+
 
 export type Theme = 'light' | 'dark';
 export type RangePreset = 'today' | '7d' | '30d' | '90d' | '12m' | 'ytd' | 'custom';
@@ -15,7 +15,7 @@ export interface DateRange {
 export const THEME_KEY = 'eduway.admin.theme';
 
 export function rangeFromPreset(preset: Exclude<RangePreset, 'custom'>): DateRange {
-  const to = MOCK_NOW;
+  const to = new Date();
   const from =
     preset === 'today' ? to
     : preset === '7d' ? subDays(to, 6)

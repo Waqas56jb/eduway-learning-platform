@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/ui';
-import { palette, space } from '@/theme';
+import { gradients, palette, space } from '@/theme';
 
 interface StepIndicatorProps {
   current: number;
@@ -10,7 +11,7 @@ interface StepIndicatorProps {
   caption?: string;
 }
 
-/** "Step 1 of 2" pill + segmented bar, drawn on the navy hero. */
+/** Centered "Step 1 of 2 · Your details" with slim segmented bars, drawn on the navy hero. */
 export function StepIndicator({ current, total, label, caption }: StepIndicatorProps) {
   return (
     <View
@@ -20,31 +21,45 @@ export function StepIndicator({ current, total, label, caption }: StepIndicatorP
       accessibilityLabel={caption ? `${label}, ${caption}` : label}
       accessibilityValue={{ min: 0, max: total, now: current }}
     >
+      <View style={styles.bars}>
+        {Array.from({ length: total }, (_, i) => {
+          const done = i < current;
+          return (
+            <View key={i} style={[styles.bar, !done && styles.barIdle]}>
+              {done ? (
+                <LinearGradient
+                  colors={gradients.gold}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
       <View style={styles.labels}>
-        <Text variant="overline" color={palette.goldLight}>
+        <Text variant="label" color={palette.goldLight}>
           {label}
         </Text>
         {caption ? (
-          <Text variant="caption" color="rgba(255,255,255,0.7)">
-            {caption}
-          </Text>
+          <>
+            <View style={styles.dot} />
+            <Text variant="label" color="rgba(255,255,255,0.72)">
+              {caption}
+            </Text>
+          </>
         ) : null}
-      </View>
-      <View style={styles.bars}>
-        {Array.from({ length: total }, (_, i) => (
-          <View
-            key={i}
-            style={[styles.bar, { backgroundColor: i < current ? palette.gold : 'rgba(255,255,255,0.18)' }]}
-          />
-        ))}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: space.sm },
-  labels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bars: { flexDirection: 'row', gap: space.xs },
-  bar: { flex: 1, height: 4, borderRadius: 2 },
+  wrap: { alignSelf: 'center', width: '100%', maxWidth: 240, gap: space.sm + 2, alignItems: 'center' },
+  bars: { flexDirection: 'row', gap: space.sm, alignSelf: 'stretch' },
+  bar: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
+  barIdle: { backgroundColor: 'rgba(255,255,255,0.18)' },
+  labels: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.45)' },
 });

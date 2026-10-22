@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Share, StyleSheet, View } from 'react-native';
+import { Share, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -20,28 +20,44 @@ import { ExamsTab } from '@/components/subjects/ExamsTab';
 import { GlassButton } from '@/components/subjects/GlassButton';
 import { LessonsTab } from '@/components/subjects/LessonsTab';
 import { QuestionBankTab } from '@/components/subjects/QuestionBankTab';
-import { Button, EmptyState, SegmentedControl, Text, toast } from '@/components/ui';
+import { Button, EmptyState, SegmentedControl, SkeletonCard, Text, toast } from '@/components/ui';
 import { BLURHASH } from '@/constants/images';
-import { exams, getSubject, lessonsBySubject } from '@/data';
+import { toLesson, toSubject, useSubject } from '@/api';
+import { openSubscription } from '@/api/locked';
+import type { SubjectDetail as SubjectDetailDto } from '@/api/types';
 import { useI18n } from '@/hooks/useI18n';
-import { useAuthStore, useProgressStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { gradients, palette, radius, SCREEN_PADDING, space, subjectColors, useTheme } from '@/theme';
 import type { Lesson, Subject } from '@/types';
 import { formatNumber } from '@/utils/format';
 
 type TabKey = 'lessons' | 'bank' | 'exams';
 
-const HERO_BASE = 280;
+const HERO_MIN = 250;
+const HERO_MAX = 330;
 const BAR_H = 56;
 const SHEET_OVERLAP = 28;
 const SHEET_PAD = space.lg;
 
 export default function SubjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const subject = getSubject(id);
+  const query = useSubject(id);
   const { t } = useI18n('subjects');
 
-  if (!subject) {
+  if (query.isLoading) {
+    return (
+      <Screen>
+        <Header />
+        <View style={styles.loading}>
+          <SkeletonCard media lines={2} />
+          <SkeletonCard lines={3} />
+          <SkeletonCard lines={3} />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!query.data) {
     return (
       <Screen>
         <Header />
@@ -49,49 +65,53 @@ export default function SubjectDetailScreen() {
           icon="subjects"
           title={t('detail.notFoundTitle')}
           message={t('detail.notFoundMessage')}
-          actionLabel={t('common:actions.goHome')}
-          onAction={() => router.replace('/(tabs)/subjects')}
+          actionLabel={query.isError && !query.error?.status ? t('common:actions.retry') : t('common:actions.goHome')}
+          onAction={() =>
+            query.isError && !query.error?.status ? void query.refetch() : router.replace('/(tabs)/subjects')
+          }
         />
       </Screen>
     );
   }
-  return <SubjectDetail subject={subject} />;
+  return <SubjectDetail detail={query.data} />;
 }
 
 function truncate(s: string, n: number) {
   return s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
 }
 
-function SubjectDetail({ subject }: { subject: Subject }) {
+function SubjectDetail({ detail }: { detail: SubjectDetailDto }) {
   const { colors } = useTheme();
   const { t, L, lang } = useI18n(['subjects', 'common']);
   const insets = useSafeAreaInsets();
-  const unlocked = useAuthStore((s) => s.hasSubject(subject.id));
-  const locked = !unlocked;
-  const lessonProgress = useProgressStore((s) => s.lessonProgress);
-  const completion = useProgressStore((s) => s.subjectCompletion(subject.id));
-  const color = subjectColors[subject.id];
+  const { height: winH } = useWindowDimensions();
+  const subject: Subject = useMemo(() => toSubject(detail), [detail]);
+  const entitled = useAuthStore((s) => s.hasSubject(subject.id));
+  // Server lock flag wins; null (unknown) falls back to the cached entitlements.
+  const locked = detail.locked === null ? !entitled : detail.locked;
+  const completion = Math.round(detail.progress?.avgPct ?? 0);
+  const color = subjectColors[subject.id] ?? subject.color;
 
   const [tab, setTab] = useState<TabKey>('lessons');
   const [saved, setSaved] = useState(false);
 
-  const subjectLessons = useMemo(() => lessonsBySubject(subject.id), [subject.id]);
-  const examCount = useMemo(() => exams.filter((e) => e.subjectId === subject.id).length, [subject.id]);
+  const subjectLessons = useMemo(() => detail.lessons.map(toLesson), [detail.lessons]);
+  const examCount = detail.examsCount;
 
   /** First in-progress lesson, else first not-started, else the first lesson (review). */
   const next = useMemo((): { lesson: Lesson; kind: 'continue' | 'start' | 'review' } | null => {
-    const status = (l: Lesson) => lessonProgress[l.id]?.status ?? 'not-started';
-    const inProgress = subjectLessons.find((l) => status(l) === 'in-progress');
+    const inProgress = subjectLessons.find((l) => l.status === 'in-progress');
     if (inProgress) return { lesson: inProgress, kind: 'continue' };
-    const notStarted = subjectLessons.find((l) => status(l) === 'not-started');
+    const notStarted = subjectLessons.find((l) => l.status === 'not-started');
     if (notStarted) return { lesson: notStarted, kind: 'start' };
-    return subjectLessons[0] ? { lesson: subjectLessons[0], kind: 'review' } : null;
-  }, [subjectLessons, lessonProgress]);
+    const first = subjectLessons.find((l) => l.id === detail.nextLessonId) ?? subjectLessons[0];
+    return first ? { lesson: first, kind: 'review' } : null;
+  }, [subjectLessons, detail.nextLessonId]);
 
-  const heroH = HERO_BASE + insets.top;
+  const heroH = Math.round(Math.min(HERO_MAX, Math.max(HERO_MIN, winH * 0.34))) + insets.top;
   const barH = insets.top + BAR_H;
   const tabsTop = heroH - SHEET_OVERLAP + SHEET_PAD;
-  const footerH = 12 + 52 + Math.max(insets.bottom, 12) + 12;
+  const footerH = space.md + 52 + Math.max(insets.bottom, space.md) + space.md;
 
   // ---- scroll-driven animation ----
   const scrollY = useSharedValue(0);
@@ -135,6 +155,10 @@ function SubjectDetail({ subject }: { subject: Subject }) {
     transform: [{ translateY: Math.max(0, scrollY.value - (tabsTop - barH)) }],
   }));
 
+  const tabsEdgeStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [tabsTop - barH - 8, tabsTop - barH], [0, 1], Extrapolation.CLAMP),
+  }));
+
   // ---- actions ----
   const toggleSave = useCallback(() => {
     const nv = !saved;
@@ -155,9 +179,11 @@ function SubjectDetail({ subject }: { subject: Subject }) {
   }, []);
 
   const onCta = useCallback(() => {
-    if (locked) return router.push('/subscription');
+    if (locked) return openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug: subject.id });
     if (next) router.push({ pathname: '/lesson/[id]', params: { id: next.lesson.id } });
   }, [locked, next]);
+
+  const onTab = useCallback((k: string) => setTab(k as TabKey), []);
 
   const tabOptions = useMemo(
     () => [
@@ -184,7 +210,8 @@ function SubjectDetail({ subject }: { subject: Subject }) {
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: footerH + space.xl }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: footerH + space.xxl }}
       >
         {/* ---- Hero ---- */}
         <View style={[styles.hero, { height: heroH }]}>
@@ -253,10 +280,14 @@ function SubjectDetail({ subject }: { subject: Subject }) {
           ]}
         >
           <Animated.View style={[styles.tabs, { backgroundColor: colors.background }, tabsStyle]}>
-            <SegmentedControl options={tabOptions} value={tab} onChange={(k) => setTab(k as TabKey)} />
+            <SegmentedControl options={tabOptions} value={tab} onChange={onTab} />
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.tabsEdge, { backgroundColor: colors.border }, tabsEdgeStyle]}
+            />
           </Animated.View>
 
-          <Animated.View key={tab} entering={FadeIn.duration(220)} style={styles.tabBody}>
+          <Animated.View key={tab} entering={FadeIn.duration(250)} style={styles.tabBody}>
             {tab === 'lessons' ? (
               <LessonsTab
                 subject={subject}
@@ -339,6 +370,7 @@ function HeroStat({ icon, value, label, gold }: { icon: IconName; value: string;
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
+  loading: { gap: space.lg, paddingTop: space.lg },
   hero: { overflow: 'visible', justifyContent: 'flex-end' },
   topShade: { position: 'absolute', top: 0, start: 0, end: 0 },
   heroContent: { paddingHorizontal: SCREEN_PADDING, gap: space.md },
@@ -384,8 +416,9 @@ const styles = StyleSheet.create({
     borderTopEndRadius: radius.xl,
     paddingHorizontal: SCREEN_PADDING,
   },
-  tabs: { zIndex: 10, elevation: 4, paddingBottom: space.sm, marginHorizontal: -SCREEN_PADDING, paddingHorizontal: SCREEN_PADDING },
-  tabBody: { paddingTop: space.md },
+  tabs: { zIndex: 10, elevation: 4, paddingVertical: space.sm, marginHorizontal: -SCREEN_PADDING, paddingHorizontal: SCREEN_PADDING },
+  tabsEdge: { position: 'absolute', start: 0, end: 0, bottom: 0, height: StyleSheet.hairlineWidth },
+  tabBody: { paddingTop: space.lg },
   bar: {
     position: 'absolute',
     top: 0,
@@ -395,6 +428,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: space.lg,
     gap: space.sm,
+    zIndex: 20,
   },
   barBg: { overflow: 'hidden' },
   barStripe: { position: 'absolute', start: 0, end: 0, bottom: 0, height: 2 },

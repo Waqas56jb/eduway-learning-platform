@@ -40,7 +40,7 @@ export function CourseCard({ subject, progress, locked, className }: CourseCardP
             className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/95 shadow-soft backdrop-blur"
             style={{ color: subject.color }}
           >
-            <SubjectIcon id={subject.id} className="h-6 w-6" />
+            <SubjectIcon id={subject.slug} icon={subject.icon} className="h-6 w-6" />
           </span>
           {done ? (
             <Badge tone="success" className="bg-white/95">
@@ -64,7 +64,7 @@ export function CourseCard({ subject, progress, locked, className }: CourseCardP
       <div className="flex flex-1 flex-col p-5">
         <h3 className="text-xl font-bold text-primary">
           <Link
-            to={`/student/subjects/${subject.id}`}
+            to={`/student/subjects/${subject.slug}`}
             className="outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-accent"
           >
             {l(subject.name)}

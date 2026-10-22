@@ -4,9 +4,10 @@ import Animated, { FadeIn, LinearTransition, useAnimatedStyle, withTiming } from
 import { Icon } from '@/components/icons';
 import { MathText, PressableScale, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import type { AnswerRecord } from '@/store';
+import type { AnswerRecord } from '@/utils/quiz';
 import { radius, space, subjectColors, useTheme } from '@/theme';
 import type { Question } from '@/types';
+import { plainMath } from '@/utils/practice';
 import { DifficultyBadge } from './DifficultyBadge';
 
 interface Props {
@@ -37,7 +38,7 @@ export const AnswerReviewItem = memo(function AnswerReviewItem({ index, question
         scaleTo={0.99}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${index + 1}. ${L(question.text)} — ${open ? t('result.collapseA11y') : t('result.expandA11y')}`}
+        accessibilityLabel={`${index + 1}. ${plainMath(L(question.text))} — ${open ? t('result.collapseA11y') : t('result.expandA11y')}`}
         style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
       >
         <View style={styles.head}>
@@ -52,7 +53,7 @@ export const AnswerReviewItem = memo(function AnswerReviewItem({ index, question
               <DifficultyBadge difficulty={question.difficulty} />
             </View>
             <Text variant="bodyMedium" numberOfLines={open ? undefined : 2}>
-              {L(question.text)}
+              {plainMath(L(question.text))}
             </Text>
           </View>
           <Animated.View style={chevronStyle}>
@@ -66,7 +67,7 @@ export const AnswerReviewItem = memo(function AnswerReviewItem({ index, question
               {t('result.yourAnswer')}
             </Text>
             <Text variant="label" color={tone} numberOfLines={open ? undefined : 1}>
-              {chosen ? L(chosen) : t('result.noAnswer')}
+              {chosen ? plainMath(L(chosen)) : t('result.noAnswer')}
             </Text>
           </View>
           {!ok ? (
@@ -75,7 +76,7 @@ export const AnswerReviewItem = memo(function AnswerReviewItem({ index, question
                 {t('result.correctAnswer')}
               </Text>
               <Text variant="label" color={colors.success} numberOfLines={open ? undefined : 1}>
-                {L(correct)}
+                {plainMath(L(correct))}
               </Text>
             </View>
           ) : null}

@@ -4,20 +4,18 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { ArrowLeft, CalendarRange, Copy, Link2, MapPin, MessageSquarePlus, Pencil, Phone, QrCode, Target, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { School, Student } from '@/types';
-import { governorateById, packageById } from '@/data';
-import { calcIncentive, nextTier } from '@/data/incentives';
-import { useMarketers, useSchools, useStudents } from '@/store/core';
-import { useIncentiveRules } from '@/store/partners';
-import { useCan, useCurrentAdmin } from '@/store/auth';
+import { qk } from '@/api/keys';
+import { useApiMutation, usePagedList } from '@/api/hooks';
+import { useLookups } from '@/api/lookups';
+import { schoolsApi, useSchool, useSchoolNotes, useSchoolProgress, type AttributedStudentDto } from '@/api/partners';
+import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
 import { fmtDate, fmtMoney, fmtNumber, fmtRelative } from '@/utils/format';
-import { uid } from '@/utils/id';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SchoolForm } from '@/components/forms/SchoolForm';
-import { Avatar, Button, ButtonLink, Card, CardBody, CardHeader, DataTable, EmptyState, ProgressBar, Select, SkeletonCard, StatusBadge, Textarea, useConfirm } from '@/components/ui';
-import { reassignSchool } from '@/pages/marketers/attribution';
+import { Avatar, Button, ButtonLink, Card, CardBody, CardHeader, DataTable, EmptyState, ProgressBar, Select, SkeletonCard, StatusBadge, Textarea } from '@/components/ui';
+import { QueryError } from '@/components/ui/QueryError';
+import { useAttributionGuard } from '@/pages/marketers/attribution';
 import { SettlementsTable } from './SettlementsTable';
 import { TierBadge } from './TierBadge';
 
@@ -68,51 +66,86 @@ const copy = async (text: string, okMsg: string) => {
   }
 };
 
+
 export default function SchoolDetail() {
   const { id } = useParams();
   const { t } = useTranslation();
   const L = useLocalize();
   const navigate = useNavigate();
-  const confirm = useConfirm();
   const can = useCan();
-  const admin = useCurrentAdmin();
-  const loading = useMockLoading();
-  const school = useSchools((s) => s.items.find((x) => x.id === id));
-  const update = useSchools((s) => s.update);
-  const marketers = useMarketers((s) => s.items);
-  const allStudents = useStudents((s) => s.items);
-  const rule = useIncentiveRules((s) => s.items.find((r) => r.partnerType === 'school' && r.status === 'active'));
+  const lookups = useLookups();
+  const guard = useAttributionGuard();
+  const schoolQ = useSchool(id);
+  const progressQ = useSchoolProgress(id);
+  const notesQ = useSchoolNotes(id);
+  const school = schoolQ.data;
+  const marketers = lookups.marketers;
   const [editOpen, setEditOpen] = useState(false);
   const [note, setNote] = useState('');
+  const [changing, setChanging] = useState(false);
 
-  const students = useMemo(() => allStudents.filter((s) => s.schoolId === id), [allStudents, id]);
+  const students = usePagedList({
+    key: (p) => qk.schools.sub('students', id, p),
+    fetcher: (p) => schoolsApi.students(id!, p),
+    pageSize: 5,
+    initialSort: '-createdAt',
+    enabled: !!id,
+  });
 
-  const studentCols = useMemo<ColumnDef<Student>[]>(
+  const addNoteM = useApiMutation((body: string) => schoolsApi.addNote(id!, body), {
+    invalidate: [qk.schools.sub('notes', id), qk.schools.detail(id)],
+    success: 'schools.detail.noteAdded',
+    onSuccess: () => setNote(''),
+  });
+
+  const studentCols = useMemo<ColumnDef<AttributedStudentDto>[]>(
     () => [
       {
         id: 'name',
-        accessorFn: (r) => L(r, 'name'),
+        accessorFn: (r) => L({ name_en: r.name.en, name_ar: r.name.ar }, 'name'),
         header: t('common.student'),
-        cell: ({ row }) => (
-          <span className="flex items-center gap-2.5">
-            <Avatar name={row.original.name_en} size="sm" />
-            <span className="min-w-0">
-              <span className="block truncate font-medium">{L(row.original, 'name')}</span>
-              <span className="block text-xs text-muted num" dir="ltr">
-                {row.original.mobile}
+        cell: ({ row }) => {
+          const n = { name_en: row.original.name.en, name_ar: row.original.name.ar };
+          return (
+            <span className="flex items-center gap-2.5">
+              <Avatar name={n.name_en} src={row.original.avatarUrl} size="sm" />
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{L(n, 'name')}</span>
+                <span className="block text-xs text-muted num" dir="ltr">
+                  {row.original.mobile}
+                </span>
               </span>
             </span>
-          </span>
-        ),
+          );
+        },
       },
-      { id: 'package', accessorFn: (r) => L(packageById(r.packageId), 'name'), header: t('schools.detail.package'), cell: ({ getValue }) => <span className="text-muted">{getValue<string>()}</span> },
-      { accessorKey: 'subscriptionStatus', header: t('schools.detail.subscription'), cell: ({ getValue }) => <StatusBadge status={getValue<string>()} /> },
-      { accessorKey: 'createdAt', header: t('common.created'), cell: ({ getValue }) => <span className="whitespace-nowrap text-muted">{fmtDate(getValue<string>())}</span> },
+      {
+        id: 'package',
+        accessorFn: (r) => (r.package ? L({ name_en: r.package.name.en, name_ar: r.package.name.ar }, 'name') : '—'),
+        header: t('schools.detail.package'),
+        enableSorting: false,
+        cell: ({ getValue }) => <span className="text-muted">{getValue<string>()}</span>,
+      },
+      { id: 'subscriptionStatus', accessorKey: 'subscriptionStatus', header: t('schools.detail.subscription'), enableSorting: false, cell: ({ getValue }) => <StatusBadge status={getValue<string>()} /> },
+      { id: 'createdAt', accessorKey: 'createdAt', header: t('common.created'), cell: ({ getValue }) => <span className="whitespace-nowrap text-muted">{fmtDate(getValue<string>())}</span> },
     ],
     [t, L],
   );
 
+  if (schoolQ.isLoading) {
+    return (
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="space-y-6 xl:col-span-2">
+          <SkeletonCard lines={4} />
+          <SkeletonCard lines={6} />
+        </div>
+        <SkeletonCard lines={6} />
+      </div>
+    );
+  }
+
   if (!school) {
+    if (schoolQ.error && schoolQ.error.code !== 'NOT_FOUND') return <QueryError error={schoolQ.error} onRetry={() => schoolQ.refetch()} />;
     return (
       <Card>
         <EmptyState title={t('schools.detail.notFound')} action={<ButtonLink to="/schools" variant="secondary" icon={<ArrowLeft className="h-4 w-4 flip-rtl" />}>{t('schools.detail.back')}</ButtonLink>} />
@@ -120,46 +153,37 @@ export default function SchoolDetail() {
     );
   }
 
-  const link = `https://eduway.iq/join?code=${encodeURIComponent(school.code)}`;
-  const paid = school.verifiedPaidStudents;
-  const res = rule ? calcIncentive(rule, paid) : null;
-  const next = rule ? nextTier(rule.tiers, paid) : null;
-  const curFrom = res?.tier?.from ?? 0;
-  const progress = next ? ((paid - curFrom) / Math.max(1, next.from - curFrom)) * 100 : 100;
+  const link = school.referralLink;
+  const prog = progressQ.data;
+  const rule = prog?.rule ?? null;
+  const res = prog?.result ?? null;
+  const next = res?.nextTier ?? null;
+  const paid = prog?.paid ?? school.periodPaidStudents;
+  const progress = prog ? prog.progressPct : 0;
+  const toNext = res?.studentsToNext ?? (next ? next.from - paid : 0);
 
   const changeMarketer = async (toId: string) => {
     const target = toId || null;
     if (target === school.marketerId) return;
-    let reason: string | undefined;
-    if (school.marketerId && target) {
-      const cur = marketers.find((m) => m.id === school.marketerId);
-      const r = await confirm({
-        title: t('marketers.detail.doubleTitle'),
-        body: t('marketers.detail.doubleBody', { school: L(school, 'name'), marketer: cur ? L(cur, 'name') : '—' }),
-        tone: 'warning',
-        confirmText: t('marketers.detail.override'),
-        reason: { label: t('marketers.detail.overrideReason'), placeholder: t('marketers.detail.overridePlaceholder') },
-      });
-      if (!r) return;
-      reason = r.reason;
-    }
-    reassignSchool(school.id, target, reason);
-    toast.success(reason ? t('marketers.detail.overridden') : t('schools.detail.marketerChanged'));
+    setChanging(true);
+    const r = await guard({
+      schoolName: L(school, 'name'),
+      currentMarketerName: school.marketer ? L(school.marketer, 'name') : null,
+      needsReason: !!school.marketerId && !!target,
+      run: (overrideReason) => schoolsApi.setMarketer(school.id, { marketerId: target, overrideReason }),
+    });
+    setChanging(false);
+    if (r) toast.success(r.overridden ? t('marketers.detail.overridden') : t('schools.detail.marketerChanged'));
   };
 
   const addNote = () => {
     const body = note.trim();
     if (!body) return;
-    update(school.id, (s: School) => ({ notes: [{ id: uid('note'), author: admin?.name ?? 'Admin', body, createdAt: new Date().toISOString() }, ...s.notes] }), {
-      action: 'school.add_note',
-      summary: `Added note to ${school.name_en}`,
-    });
-    setNote('');
-    toast.success(t('schools.detail.noteAdded'));
+    addNoteM.mutate(body);
   };
 
-  const gov = governorateById(school.governorateId);
-  const mkt = marketers.find((m) => m.id === school.marketerId);
+  const mkt = school.marketer;
+  const notes = notesQ.data ?? [];
 
   return (
     <>
@@ -169,7 +193,7 @@ export default function SchoolDetail() {
         meta={
           <>
             <StatusBadge status={school.status} />
-            <TierBadge tier={school.tier} />
+            {school.tier && <TierBadge tier={school.tier} />}
             <span className="text-xs text-muted">{t('schools.detail.contractEnds', { date: fmtDate(school.contractEnd) })}</span>
           </>
         }
@@ -190,29 +214,38 @@ export default function SchoolDetail() {
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
           {/* Incentive progress */}
-          {loading ? (
+          {progressQ.isLoading ? (
             <SkeletonCard lines={4} />
+          ) : progressQ.error ? (
+            <QueryError error={progressQ.error} onRetry={() => progressQ.refetch()} />
           ) : (
             <Card>
-              <CardHeader icon={<Target className="h-4 w-4" />} title={t('schools.detail.progress')} subtitle={t('schools.detail.progressSub')} />
+              <CardHeader
+                icon={<Target className="h-4 w-4" />}
+                title={t('schools.detail.progress')}
+                subtitle={prog ? `${t('schools.detail.progressSub')} · ${prog.period.key}` : t('schools.detail.progressSub')}
+              />
               <CardBody>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <div className="kpi-num text-4xl text-primary">{fmtNumber(paid)}</div>
-                    <div className="text-xs text-muted">{t('schools.fields.paidStudents')}</div>
+                    <div className="text-xs text-muted">{t('schools.detail.periodPaid')}</div>
+                    <div className="mt-1 text-[11px] text-muted">{t('schools.detail.allTimePaid', { count: school.verifiedPaidStudents })}</div>
                   </div>
                   <div className="text-end">
                     <div className="text-xs text-muted">{t('schools.detail.estimated')}</div>
-                    <div className="kpi-num text-2xl text-accent">{fmtMoney(res?.amount ?? 0)}</div>
+                    <div className="kpi-num text-2xl text-accent">{fmtMoney(res?.amount ?? school.estimatedReward)}</div>
                     {res?.tier && res.tier.rewardType === 'per_student' && <div className="text-xs text-muted">{t('schools.detail.rate', { amount: fmtMoney(res.tier.amount) })}</div>}
                   </div>
                 </div>
                 <div className="mt-5 flex items-center gap-3">
-                  <TierBadge tier={res?.tier?.label ?? school.tier} />
+                  {(res?.tier?.label || school.tier) && <TierBadge tier={res?.tier?.label ?? school.tier} />}
                   <ProgressBar value={progress} size="md" className="flex-1" label={t('schools.detail.progress')} />
                   {next && <TierBadge tier={next.label} />}
                 </div>
-                <p className="mt-2 text-sm text-muted">{next ? t('schools.detail.nextTier', { count: next.from - paid, tier: next.label }) : t('schools.detail.topTier')}</p>
+                <p className="mt-2 text-sm text-muted">
+                  {!rule ? t('schools.detail.noRule') : next ? t('schools.detail.nextTier', { count: toNext, tier: next.label }) : t('schools.detail.topTier')}
+                </p>
                 {rule && (
                   <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {rule.tiers.map((tier) => {
@@ -234,15 +267,16 @@ export default function SchoolDetail() {
           )}
 
           <Card className="overflow-hidden">
-            <CardHeader icon={<UserRound className="h-4 w-4" />} title={t('schools.detail.attributed')} subtitle={t('common.results', { count: students.length })} />
+            <CardHeader icon={<UserRound className="h-4 w-4" />} title={t('schools.detail.attributed')} subtitle={t('common.results', { count: students.meta.total })} />
             <DataTable
               bare
-              data={students}
+              data={students.items}
               columns={studentCols}
-              loading={loading}
-              pageSize={5}
+              loading={students.isLoading}
+              error={students.error}
+              onRetry={() => students.refetch()}
+              server={students.server}
               onRowClick={can('users', 'view') ? (s) => navigate(`/users/${s.id}`) : undefined}
-              searchText={(s) => `${s.name_en} ${s.name_ar} ${s.mobile}`}
               emptyTitle={t('schools.detail.attributedEmpty')}
               emptyHint=" "
               maxHeight="420px"
@@ -263,7 +297,7 @@ export default function SchoolDetail() {
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
                 <div>
                   <div className="font-medium">{L(school, 'city')}</div>
-                  <div className="text-xs text-muted">{L(gov, 'name')}</div>
+                  <div className="text-xs text-muted">{L(school, 'governorateName')}</div>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -289,12 +323,12 @@ export default function SchoolDetail() {
                   {t('schools.fields.marketer')}
                 </label>
                 <div className="flex items-center gap-2">
-                  {mkt && <Avatar name={mkt.name_en} src={mkt.avatar} size="sm" />}
+                  {mkt && <Avatar name={mkt.name_en} src={mkt.avatarUrl} size="sm" />}
                   <Select
                     id="sd-mkt"
                     className="flex-1"
                     value={school.marketerId ?? ''}
-                    disabled={!can('schools', 'edit')}
+                    disabled={!(can('schools', 'edit') || can('marketers', 'edit')) || changing}
                     placeholder={t('schools.unassigned')}
                     options={marketers.filter((m) => m.status === 'active' || m.id === school.marketerId).map((m) => ({ value: m.id, label: L(m, 'name') }))}
                     onChange={(e) => changeMarketer(e.target.value)}
@@ -341,23 +375,27 @@ export default function SchoolDetail() {
             <CardBody className="space-y-4">
               {can('schools', 'edit') && (
                 <div className="space-y-2">
-                  <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('schools.detail.notePlaceholder')} aria-label={t('schools.detail.addNote')} />
+                  <Textarea rows={3} value={note} maxLength={4000} onChange={(e) => setNote(e.target.value)} placeholder={t('schools.detail.notePlaceholder')} aria-label={t('schools.detail.addNote')} />
                   <div className="flex justify-end">
-                    <Button size="sm" disabled={!note.trim()} onClick={addNote}>
+                    <Button size="sm" disabled={!note.trim()} loading={addNoteM.isPending} onClick={addNote}>
                       {t('schools.detail.addNote')}
                     </Button>
                   </div>
                 </div>
               )}
-              {school.notes.length === 0 ? (
+              {notesQ.isLoading ? (
+                <SkeletonCard lines={2} />
+              ) : notesQ.error ? (
+                <QueryError compact error={notesQ.error} onRetry={() => notesQ.refetch()} />
+              ) : notes.length === 0 ? (
                 <p className="text-sm text-muted">{t('schools.detail.noNotes')}</p>
               ) : (
                 <ul className="space-y-3">
-                  {school.notes.map((n) => (
+                  {notes.map((n) => (
                     <li key={n.id} className="rounded-lg border border-line bg-surface-2 p-3">
-                      <div className="text-sm text-ink">{n.body}</div>
+                      <div className="whitespace-pre-line text-sm text-ink">{n.body}</div>
                       <div className="mt-1.5 text-[11px] text-muted">
-                        {n.author} · {fmtRelative(n.createdAt)}
+                        {L({ name_en: n.author?.name.en, name_ar: n.author?.name.ar }, 'name')} · {fmtRelative(n.createdAt)}
                       </div>
                     </li>
                   ))}

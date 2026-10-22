@@ -17,20 +17,25 @@ import { CSS } from '@dnd-kit/utilities';
 import { Clock, Lock, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { ContentStatus, Lesson, Subject, Teacher } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import type { ContentStatus, Teacher } from '@/types';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtDuration, fmtRelative } from '@/utils/format';
-import { teachers } from '@/data/curriculum';
-import { useLessons, useSubjects, useUnits } from '@/store/core';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useDebounce } from '@/hooks/useMisc';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Avatar, FilterSelect, Skeleton } from '@/components/ui';
+import { Avatar, Button, EmptyState, FilterSelect, Skeleton } from '@/components/ui';
+import { errorMessage, toastError } from '@/api/client';
+import { useApiQuery } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { lessonsApi, toTeacherVM, useSubjectsQuery, type LessonVM, type SubjectVM } from '@/api/content';
 import { APPROVAL_STATUSES, CONTENT_STATUSES, STATUS_COLOR, ScheduleModal, useLessonStatus } from './shared';
 
+type Lesson = LessonVM;
+
 interface CardCtx {
-  subject?: Subject;
+  subject?: SubjectVM;
   teacher?: Teacher;
   unitName: string;
 }
@@ -119,36 +124,49 @@ export default function ContentWorkflow() {
   const { t } = useTranslation();
   const L = useLocalize();
   const can = useCan();
-  const loading = useMockLoading();
-  const lessons = useLessons((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
+  const qc = useQueryClient();
+  const subjectsQ = useSubjectsQuery();
+  const subjects = useMemo(() => subjectsQ.data ?? [], [subjectsQ.data]);
   const { move } = useLessonStatus();
   const [subject, setSubject] = useState('');
   const [query, setQuery] = useState('');
+  const q = useDebounce(query.trim(), 300);
+  const boardKey = qk.lessons.list({ view: 'board', subjectId: subject, q });
+  const board = useApiQuery(boardKey, () => lessonsApi.list({ view: 'board', pageSize: 1000, subjectId: subject, q, sort: '-updatedAt' }), {
+    placeholderData: (prev) => prev,
+  });
+  const lessons = useMemo(() => board.data?.items ?? [], [board.data]);
+  const loading = board.isLoading;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pendingSchedule, setPendingSchedule] = useState<Lesson | null>(null);
 
   const canApprove = can('content', 'approve');
   const canMoveAny = canApprove || can('content', 'edit');
 
-  const maps = useMemo(
-    () => ({
-      subject: new Map(subjects.map((s) => [s.id, s])),
-      unit: new Map(units.map((u) => [u.id, u])),
-      teacher: new Map(teachers.map((x) => [x.id, x])),
-    }),
-    [subjects, units],
-  );
+  const maps = useMemo(() => ({ subject: new Map(subjects.map((s) => [s.id, s])) }), [subjects]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return lessons
-      .filter((l) => (!subject || l.subjectId === subject) && (!q || `${l.title_en} ${l.title_ar}`.toLowerCase().includes(q)))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, [lessons, subject, query]);
+  const filtered = useMemo(() => [...lessons].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [lessons]);
 
-  const ctxFor = (l: Lesson): CardCtx => ({ subject: maps.subject.get(l.subjectId), teacher: maps.teacher.get(l.teacherId), unitName: L(maps.unit.get(l.unitId), 'name') });
+  const ctxFor = (l: Lesson): CardCtx => ({
+    subject: maps.subject.get(l.subjectId),
+    teacher: l.teacher ? toTeacherVM(l.teacher) : undefined,
+    unitName: l.unit ? L({ name_en: l.unit.name.en, name_ar: l.unit.name.ar }, 'name') : '',
+  });
+
+  /** Optimistic move on the board; the server confirms (or rejects) the transition. */
+  const transition = async (lesson: Lesson, to: ContentStatus, publishAt?: string) => {
+    const prev = qc.getQueryData(boardKey);
+    qc.setQueryData(boardKey, (old: typeof board.data) =>
+      old ? { ...old, items: old.items.map((x) => (x.id === lesson.id ? { ...x, status: to, publishAt: publishAt ?? x.publishAt, updatedAt: new Date().toISOString() } : x)) } : old,
+    );
+    try {
+      await move(lesson, to, publishAt);
+      toast.success(t('content.workflow.moved', { title: L(lesson, 'title'), status: t(`status.${to}`) }));
+    } catch (e) {
+      qc.setQueryData(boardKey, prev);
+      toastError(e);
+    }
+  };
 
   /** Supervisor permission is required to move into or out of approval stages. */
   const permitted = (from: ContentStatus, to: ContentStatus) =>
@@ -172,8 +190,7 @@ export default function ContentWorkflow() {
       setPendingSchedule(lesson);
       return;
     }
-    move(lesson, to);
-    toast.success(t('content.workflow.moved', { title: L(lesson, 'title'), status: t(`status.${to}`) }));
+    transition(lesson, to);
   };
 
   return (
@@ -193,6 +210,10 @@ export default function ContentWorkflow() {
           {CONTENT_STATUSES.map((s) => (
             <Skeleton key={s} className="h-[60vh] rounded-xl" />
           ))}
+        </div>
+      ) : board.isError ? (
+        <div className="card">
+          <EmptyState title={t('api.loadFailed')} hint={errorMessage(board.error)} action={<Button variant="secondary" onClick={() => board.refetch()}>{t('api.retry')}</Button>} />
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
@@ -219,10 +240,7 @@ export default function ContentWorkflow() {
         initial={pendingSchedule?.publishAt}
         onClose={() => setPendingSchedule(null)}
         onConfirm={(iso) => {
-          if (pendingSchedule) {
-            move(pendingSchedule, 'scheduled', iso);
-            toast.success(t('content.workflow.moved', { title: L(pendingSchedule, 'title'), status: t('status.scheduled') }));
-          }
+          if (pendingSchedule) transition(pendingSchedule, 'scheduled', iso);
           setPendingSchedule(null);
         }}
       />

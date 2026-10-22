@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '@/components/ui';
-import { subjects } from '@/data';
+import { useAppConfig } from '@/api/appSettings';
+import { useSubjects } from '@/api/catalog';
 import { useLang } from '@/hooks/useLang';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
@@ -15,11 +16,13 @@ function TikTok({ className }: { className?: string }) {
   );
 }
 
-function StoreBadge({ top, name, icon }: { top: string; name: string; icon: ReactNode }) {
+function StoreBadge({ top, name, icon, href }: { top: string; name: string; icon: ReactNode; href?: string | null }) {
   return (
     <a
-      href="#"
-      onClick={(e) => e.preventDefault()}
+      href={href || '#'}
+      onClick={(e) => !href && e.preventDefault()}
+      target={href ? '_blank' : undefined}
+      rel={href ? 'noopener noreferrer' : undefined}
       className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 transition hover:border-accent/60 hover:bg-white/10"
     >
       {icon}
@@ -34,7 +37,9 @@ function StoreBadge({ top, name, icon }: { top: string; name: string; icon: Reac
 export function Footer() {
   const { t } = useTranslation();
   const { l } = useLang();
-  const year = 2026;
+  const { data: subjects = [] } = useSubjects();
+  const { data: config } = useAppConfig();
+  const year = new Date().getFullYear();
 
   const cols = [
     {
@@ -70,12 +75,13 @@ export function Footer() {
     },
   ];
 
+  const social = config?.social;
   const socials = [
-    { name: 'Instagram', icon: Instagram },
-    { name: 'Facebook', icon: Facebook },
-    { name: 'YouTube', icon: Youtube },
-    { name: 'Telegram', icon: Send },
-    { name: 'TikTok', icon: TikTok },
+    { name: 'Instagram', icon: Instagram, href: social?.instagram },
+    { name: 'Facebook', icon: Facebook, href: social?.facebook },
+    { name: 'YouTube', icon: Youtube, href: social?.youtube },
+    { name: 'Telegram', icon: Send, href: social?.telegram },
+    { name: 'TikTok', icon: TikTok, href: social?.tiktok },
   ];
 
   return (
@@ -96,11 +102,13 @@ export function Footer() {
               {t('footer.about')}
             </p>
             <ul className="mt-6 flex gap-2">
-              {socials.map(({ name, icon: Icon }) => (
+              {socials.map(({ name, icon: Icon, href }) => (
                 <li key={name}>
                   <a
-                    href="#"
-                    onClick={(e) => e.preventDefault()}
+                    href={href || '#'}
+                    onClick={(e) => !href && e.preventDefault()}
+                    target={href ? '_blank' : undefined}
+                    rel={href ? 'noopener noreferrer' : undefined}
                     aria-label={t('footer.social', { network: name })}
                     className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white/75 transition hover:-translate-y-0.5 hover:border-accent hover:bg-accent hover:text-primary"
                   >
@@ -142,6 +150,7 @@ export function Footer() {
               <StoreBadge
                 top={t('footer.appStore')}
                 name={t('footer.appStoreName')}
+                href={config?.appLinks.appStore}
                 icon={
                   <svg viewBox="0 0 24 24" className="h-6 w-6 fill-white" aria-hidden>
                     <path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.83-.81-3-.79-1.55.02-2.97.9-3.77 2.28-1.6 2.78-.41 6.9 1.15 9.15.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.65zM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.01.61-2.66 1.37-.58.67-1.09 1.75-.96 2.79 1.02.08 2.05-.52 2.68-1.27z" />
@@ -151,6 +160,7 @@ export function Footer() {
               <StoreBadge
                 top={t('footer.googlePlay')}
                 name={t('footer.googlePlayName')}
+                href={config?.appLinks.googlePlay}
                 icon={
                   <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden>
                     <path

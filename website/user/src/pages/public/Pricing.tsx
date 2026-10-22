@@ -61,7 +61,7 @@ export default function Pricing() {
       <PricingSection heading={false} className="md:pt-20" />
       <PricingCompare />
       <PaymentMethods />
-      <FaqSection />
+      <FaqSection placement="pricing" />
       <CTA showPricingLink={false} />
     </>
   );

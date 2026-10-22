@@ -1,18 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Ban, CheckCircle2, CreditCard, ExternalLink, KeyRound, MapPin, MonitorSmartphone, RotateCcw, ShieldAlert, ShieldX, Siren, UserX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import toast from 'react-hot-toast';
 import type { SecurityAlert } from '@/types';
-import { useSecurityAlerts } from '@/store/security';
-import { useStudents } from '@/store/core';
 import { useCan } from '@/store/auth';
-import { useMockLoading } from '@/hooks/useMockLoading';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtNumber, fmtRelative } from '@/utils/format';
+import { useApiMutation, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { securityApi, type AlertsMeta, type SecurityAlertVM } from '@/api/security';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Badge, Button, Card, EmptyState, FilterSelect, SkeletonCard, StatCard, StatusBadge, useConfirm, type Tone } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, FilterSelect, Pagination, SkeletonCard, StatCard, StatusBadge, useConfirm, type Tone } from '@/components/ui';
+import { QueryError } from '@/components/ui/QueryError';
 
 const KINDS: SecurityAlert['kind'][] = ['multiple_devices', 'otp_bruteforce', 'unusual_location', 'payment_fraud', 'admin_login_failure'];
 const SEVERITIES: SecurityAlert['severity'][] = ['critical', 'high', 'medium', 'low'];
@@ -38,72 +38,67 @@ export default function SuspiciousActivity() {
   const { t } = useTranslation();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const alerts = useSecurityAlerts((s) => s.items);
-  const update = useSecurityAlerts((s) => s.update);
-  const updateStudent = useStudents((s) => s.update);
-  const students = useStudents((s) => s.items);
   const [kind, setKind] = useState('');
   const [severity, setSeverity] = useState('');
   const [status, setStatus] = useState('open');
 
   const canAct = can('security', 'edit');
 
-  const filtered = useMemo(
-    () =>
-      alerts
-        .filter((a) => (!kind || a.kind === kind) && (!severity || a.severity === severity) && (!status || a.status === status))
-        .sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity) || b.createdAt.localeCompare(a.createdAt)),
-    [alerts, kind, severity, status],
-  );
+  // Server sorts by severity desc, then newest (contract ADM-ALR-01 default).
+  const list = usePagedList({
+    key: qk.alerts.list,
+    fetcher: securityApi.alerts,
+    filters: { kind, severity, status },
+    pageSize: 25,
+  });
+  const filtered = list.items;
+  const stats = (list.meta as AlertsMeta).stats;
+  const loading = list.isLoading;
 
-  const isStudent = (a: SecurityAlert) => !!a.subjectId?.startsWith('stu_');
-  const isAdmin = (a: SecurityAlert) => !!a.subjectId?.startsWith('adm_');
+  const isStudent = (a: SecurityAlertVM) => a.subjectType === 'student';
+  const isAdmin = (a: SecurityAlertVM) => a.subjectType === 'admin';
 
-  const resolve = async (a: SecurityAlert) => {
+  const inv = [qk.alerts.all, qk.students.all, qk.admins.all, qk.adminSessions.all];
+  const resolveM = useApiMutation((v: { id: string; reason: string }) => securityApi.resolveAlert(v.id, v.reason), { invalidate: inv, success: 'security.alerts.resolved' });
+  const blockM = useApiMutation((v: { id: string; reason: string }) => securityApi.blockAlert(v.id, v.reason), { invalidate: inv, success: 'security.alerts.blocked' });
+  const reopenM = useApiMutation((id: string) => securityApi.reopenAlert(id), { invalidate: inv, success: 'security.alerts.reopened' });
+  const busy = (id: string) =>
+    (resolveM.isPending && resolveM.variables?.id === id) || (blockM.isPending && blockM.variables?.id === id) || (reopenM.isPending && reopenM.variables === id);
+
+  const resolve = async (a: SecurityAlertVM) => {
     const ok = await confirm({ title: t('security.alerts.resolveTitle'), body: t('security.alerts.resolveBody'), tone: 'primary', confirmText: t('actions.resolve'), reason: true });
     if (!ok) return;
-    update(a.id, { status: 'resolved' }, { action: 'security_alert.resolve', summary: `Resolved ${a.kind.replace(/_/g, ' ')} alert for ${a.subject} — ${ok.reason}` });
-    toast.success(t('security.alerts.resolved'));
+    resolveM.mutate({ id: a.id, reason: ok.reason });
   };
 
-  const block = async (a: SecurityAlert) => {
+  const block = async (a: SecurityAlertVM) => {
     const ok = await confirm({
       title: t('security.alerts.blockTitle', { subject: a.subject }),
-      body: isStudent(a) ? t('security.alerts.blockBodyStudent') : t('security.alerts.blockBody'),
+      body: isStudent(a) ? t('security.alerts.blockBodyStudent') : isAdmin(a) ? t('security.alerts.blockBodyAdmin') : t('security.alerts.blockBody'),
       confirmText: t('actions.block'),
       reason: { placeholder: t('security.alerts.reasonPlaceholder') },
     });
     if (!ok) return;
-    if (isStudent(a) && a.subjectId && students.some((s) => s.id === a.subjectId)) {
-      updateStudent(a.subjectId, { locked: true, sessions: [] }, { action: 'student.block', summary: `Locked ${a.subject} from security alert — ${ok.reason}` });
-    }
-    update(a.id, { status: 'blocked' }, { action: 'security_alert.block', summary: `Blocked ${a.subject} (${a.kind.replace(/_/g, ' ')}) — ${ok.reason}` });
-    toast.success(t('security.alerts.blocked'));
+    blockM.mutate({ id: a.id, reason: ok.reason });
   };
 
-  const reopen = (a: SecurityAlert) => {
-    update(a.id, { status: 'open' }, { action: 'security_alert.reopen', summary: `Reopened alert for ${a.subject}` });
-    toast.success(t('security.alerts.reopened'));
-  };
-
-  const open = alerts.filter((a) => a.status === 'open');
+  const reopen = (a: SecurityAlertVM) => reopenM.mutate(a.id);
 
   return (
     <>
       <PageHeader title={t('security.alerts.title')} subtitle={t('security.alerts.subtitle')} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('security.alerts.kpiOpen')} value={fmtNumber(open.length)} icon={<Siren />} color="#F59E0B" onClick={() => setStatus('open')} />
+        <StatCard loading={loading} label={t('security.alerts.kpiOpen')} value={fmtNumber(stats?.open ?? 0)} icon={<Siren />} color="#F59E0B" onClick={() => setStatus('open')} />
         <StatCard
           loading={loading}
           label={t('security.alerts.kpiCritical')}
-          value={fmtNumber(open.filter((a) => a.severity === 'critical' || a.severity === 'high').length)}
+          value={fmtNumber(stats?.openCriticalHigh ?? 0)}
           icon={<ShieldAlert />}
           color="#DC2626"
         />
-        <StatCard loading={loading} label={t('security.alerts.kpiResolved')} value={fmtNumber(alerts.filter((a) => a.status === 'resolved').length)} icon={<CheckCircle2 />} color="#16A34A" onClick={() => setStatus('resolved')} />
-        <StatCard loading={loading} label={t('security.alerts.kpiBlocked')} value={fmtNumber(alerts.filter((a) => a.status === 'blocked').length)} icon={<ShieldX />} color="#0B1F3A" onClick={() => setStatus('blocked')} />
+        <StatCard loading={loading} label={t('security.alerts.kpiResolved')} value={fmtNumber(stats?.resolved ?? 0)} icon={<CheckCircle2 />} color="#16A34A" onClick={() => setStatus('resolved')} />
+        <StatCard loading={loading} label={t('security.alerts.kpiBlocked')} value={fmtNumber(stats?.blocked ?? 0)} icon={<ShieldX />} color="#0B1F3A" onClick={() => setStatus('blocked')} />
       </div>
 
       <Card className="mb-4 flex flex-wrap items-center gap-2 px-4 py-3">
@@ -115,10 +110,12 @@ export default function SuspiciousActivity() {
             {t('actions.clearFilters')}
           </Button>
         )}
-        <span className="ms-auto text-xs text-muted num">{t('common.results', { count: filtered.length })}</span>
+        <span className="ms-auto text-xs text-muted num">{t('common.results', { count: list.meta.total })}</span>
       </Card>
 
-      {loading ? (
+      {list.error && !loading ? (
+        <QueryError error={list.error} onRetry={() => list.refetch()} />
+      ) : loading ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} lines={3} />
@@ -152,6 +149,12 @@ export default function SuspiciousActivity() {
                         {a.subject}
                       </div>
                       <p className="mt-1.5 text-sm text-muted">{a.detail}</p>
+                      {a.status !== 'open' && a.resolutionReason && (
+                        <p className="mt-1.5 text-xs text-ink/70">
+                          <span className="font-medium">{t('security.alerts.resolution')}:</span> {a.resolutionReason}
+                          {a.resolvedBy && <span className="text-muted"> — {a.resolvedBy}{a.resolvedAt ? ` · ${fmtRelative(a.resolvedAt)}` : ''}</span>}
+                        </p>
+                      )}
                       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                         <span title={fmtDateTime(a.createdAt)}>
                           {t('security.alerts.detected')}: {fmtRelative(a.createdAt)}
@@ -173,15 +176,15 @@ export default function SuspiciousActivity() {
                     <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-3">
                       {a.status === 'open' ? (
                         <>
-                          <Button variant="secondary" size="sm" icon={<CheckCircle2 className="h-4 w-4 text-success" />} onClick={() => resolve(a)}>
+                          <Button variant="secondary" size="sm" disabled={busy(a.id)} icon={<CheckCircle2 className="h-4 w-4 text-success" />} onClick={() => resolve(a)}>
                             {t('actions.resolve')}
                           </Button>
-                          <Button variant="danger" size="sm" icon={<Ban className="h-4 w-4" />} onClick={() => block(a)}>
+                          <Button variant="danger" size="sm" loading={blockM.isPending && blockM.variables?.id === a.id} disabled={busy(a.id)} icon={<Ban className="h-4 w-4" />} onClick={() => block(a)}>
                             {t('actions.block')}
                           </Button>
                         </>
                       ) : (
-                        <Button variant="ghost" size="sm" icon={<RotateCcw className="h-4 w-4" />} onClick={() => reopen(a)}>
+                        <Button variant="ghost" size="sm" loading={reopenM.isPending && reopenM.variables === a.id} icon={<RotateCcw className="h-4 w-4" />} onClick={() => reopen(a)}>
                           {t('security.alerts.reopen')}
                         </Button>
                       )}
@@ -192,6 +195,17 @@ export default function SuspiciousActivity() {
             );
           })}
         </div>
+      )}
+      {!loading && !list.error && list.meta.total > list.server.pageSize && (
+        <Card className="mt-4 overflow-hidden">
+          <Pagination
+            page={list.server.page}
+            pageSize={list.server.pageSize}
+            total={list.meta.total}
+            onPage={list.server.onPage}
+            onPageSize={list.server.onPageSize}
+          />
+        </Card>
       )}
     </>
   );

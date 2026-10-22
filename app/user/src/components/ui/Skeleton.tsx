@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { I18nManager, StyleSheet, View, type DimensionValue, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { isRTL } from '@/utils/rtl';
+import { StyleSheet, View, type DimensionValue, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { radius as radii, space, useTheme } from '@/theme';
@@ -16,7 +17,7 @@ export const Skeleton = memo(function Skeleton({ width = '100%', height = 16, ra
   const { colors } = useTheme();
   const [w, setW] = useState(0);
   const progress = useSharedValue(0);
-  const dir = I18nManager.isRTL ? -1 : 1;
+  const dir = isRTL() ? -1 : 1;
 
   useEffect(() => {
     progress.value = 0;

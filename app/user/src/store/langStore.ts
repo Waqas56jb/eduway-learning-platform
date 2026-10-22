@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
-import * as Updates from 'expo-updates';
-import { DevSettings, I18nManager } from 'react-native';
+import { I18nManager } from 'react-native';
 import { create } from 'zustand';
 import i18n from '@/i18n';
 import type { Lang } from '@/types';
@@ -14,10 +13,7 @@ interface LangState {
   ready: boolean;
   /** Load the persisted language (or device locale on first launch, defaulting to Arabic). */
   init: () => Promise<void>;
-  /**
-   * Switch language. Persists, updates i18next immediately and, when the layout
-   * direction must flip, forces RTL/LTR natively and reloads the JS bundle.
-   */
+  /** Switch language instantly: persists, updates i18next and flips the root layout direction. */
   setLanguage: (lang: Lang) => Promise<void>;
 }
 
@@ -27,23 +23,16 @@ function detectDeviceLang(): Lang {
   return 'ar';
 }
 
-function applyDirection(lang: Lang): boolean {
-  const wantRTL = lang === 'ar';
-  I18nManager.allowRTL(true);
-  I18nManager.swapLeftAndRightInRTL(true);
-  if (I18nManager.isRTL !== wantRTL) {
-    I18nManager.forceRTL(wantRTL);
-    return true;
-  }
-  return false;
-}
-
-async function reloadApp() {
-  try {
-    await Updates.reloadAsync();
-  } catch {
-    // expo-updates is disabled in development builds; fall back to a dev reload.
-    if (__DEV__) DevSettings.reload();
+/**
+ * Keep the native layout direction LTR. RTL is applied by the root view's Yoga `direction`
+ * (see `src/utils/rtl.ts`), which needs no reload and works identically in Expo Go and store builds.
+ * Undo any native RTL that an earlier build may have persisted on the device.
+ */
+function resetNativeDirection() {
+  if (I18nManager.isRTL || I18nManager.doLeftAndRightSwapInRTL) {
+    I18nManager.allowRTL(false);
+    I18nManager.forceRTL(false);
+    I18nManager.swapLeftAndRightInRTL(false);
   }
 }
 
@@ -52,6 +41,7 @@ export const useLangStore = create<LangState>()((set) => ({
   isAr: true,
   ready: false,
   init: async () => {
+    resetNativeDirection();
     let lang: Lang;
     try {
       const saved = await AsyncStorage.getItem(LANG_KEY);
@@ -60,16 +50,11 @@ export const useLangStore = create<LangState>()((set) => ({
       lang = 'ar';
     }
     await i18n.changeLanguage(lang);
-    applyDirection(lang);
     set({ lang, isAr: lang === 'ar', ready: true });
   },
   setLanguage: async (lang) => {
     await AsyncStorage.setItem(LANG_KEY, lang);
     await i18n.changeLanguage(lang);
     set({ lang, isAr: lang === 'ar' });
-    if (applyDirection(lang)) {
-      // Give the UI a moment to show the new language before reloading for RTL.
-      setTimeout(reloadApp, 350);
-    }
   },
 }));

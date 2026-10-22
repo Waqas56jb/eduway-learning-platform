@@ -3,10 +3,10 @@ import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Icon, type IconName } from '@/components/icons';
-import { Badge, Button, Card, Dialog, EmptyState, Text } from '@/components/ui';
-import { exams } from '@/data';
+import { Badge, Button, Card, Dialog, EmptyState, SkeletonCard, Text } from '@/components/ui';
+import { toExam, useSubjectExams } from '@/api';
+import { openSubscription } from '@/api/locked';
 import { useI18n } from '@/hooks/useI18n';
-import { useProgressStore } from '@/store';
 import { radius, space, subjectColors, useTheme } from '@/theme';
 import type { ExamBlueprint, Subject } from '@/types';
 
@@ -17,9 +17,11 @@ export interface ExamsTabProps {
 
 export function ExamsTab({ subject, locked }: ExamsTabProps) {
   const { t, L } = useI18n(['subjects', 'common']);
-  const used = useProgressStore((s) => s.examAttemptsUsed);
-  const list = useMemo(() => exams.filter((e) => e.subjectId === subject.id), [subject.id]);
+  const { data, isLoading } = useSubjectExams(subject.id);
+  const list = useMemo(() => (data ?? []).map(toExam), [data]);
   const [pending, setPending] = useState<ExamBlueprint | null>(null);
+
+  if (isLoading) return <SkeletonCard lines={3} />;
 
   if (!list.length) {
     return (
@@ -48,12 +50,16 @@ export function ExamsTab({ subject, locked }: ExamsTabProps) {
         </Text>
       </View>
       {list.map((exam, i) => (
-        <Animated.View key={exam.id} entering={FadeInDown.duration(260).delay(i * 60)}>
+        <Animated.View key={exam.id} entering={FadeInDown.duration(350).delay(Math.min(i * 60, 300))}>
           <ExamCard
             exam={exam}
-            left={Math.max(0, exam.attemptsLeft - (used[exam.id] ?? 0))}
-            locked={locked}
-            onStart={() => (locked ? router.push('/subscription') : setPending(exam))}
+            left={Math.max(0, exam.attemptsLeft)}
+            locked={locked || exam.locked}
+            onStart={() =>
+              locked || exam.locked
+                ? openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug: subject.id })
+                : setPending(exam)
+            }
           />
         </Animated.View>
       ))}
@@ -84,7 +90,7 @@ export function ExamsTab({ subject, locked }: ExamsTabProps) {
 function ExamCard({ exam, left, locked, onStart }: { exam: ExamBlueprint; left: number; locked: boolean; onStart: () => void }) {
   const { colors } = useTheme();
   const { t, L } = useI18n(['subjects', 'common']);
-  const color = subjectColors[exam.subjectId];
+  const color = subjectColors[exam.subjectId] ?? colors.accent;
   const exhausted = left <= 0;
 
   return (

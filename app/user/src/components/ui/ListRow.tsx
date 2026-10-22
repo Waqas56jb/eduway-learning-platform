@@ -51,7 +51,7 @@ export const ListRow = memo(function ListRow({
     <>
       {icon ? (
         <View style={[styles.tile, { backgroundColor: tileBg }]}>
-          <Icon name={icon} size={19} color={accent} strokeWidth={1.9} />
+          <Icon name={icon} size={18} color={accent} strokeWidth={1.9} />
         </View>
       ) : null}
       <View style={styles.texts}>
@@ -70,7 +70,11 @@ export const ListRow = memo(function ListRow({
         </Text>
       ) : null}
       {right}
-      {onPress && showChevron && !right ? <Icon name="chevron" size={16} color={colors.muted} strokeWidth={2} /> : null}
+      {onPress && showChevron && !right ? (
+        <View style={styles.chevron}>
+          <Icon name="chevron" size={16} color={colors.muted} strokeWidth={2} />
+        </View>
+      ) : null}
     </>
   );
 
@@ -101,18 +105,21 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 60,
+    minHeight: 56,
     paddingVertical: space.sm,
+    // Rows usually live inside unpadded cards; inset them so content never touches the card edge.
+    paddingHorizontal: space.lg,
     gap: space.md,
   },
   tile: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.sm + 1,
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   texts: { flex: 1, justifyContent: 'center' },
   subtitle: { marginTop: 2 },
-  value: { maxWidth: '40%' },
+  value: { maxWidth: '40%', flexShrink: 1 },
+  chevron: { width: 16, alignItems: 'center', justifyContent: 'center' },
 });

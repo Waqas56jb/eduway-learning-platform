@@ -114,13 +114,52 @@
     "by": "Exported by",
     "when": "When",
     "reports": {
-      "students": { "name": "Students", "desc": "Profiles, school, package, subscription status and source" },
-      "transactions": { "name": "Transactions", "desc": "Payments with gateway, status, discounts and attribution" },
-      "refunds": { "name": "Refunds", "desc": "Refund requests, decisions and amounts" },
-      "schools": { "name": "School performance", "desc": "Paid students, revenue, tier and pending settlement" },
-      "learning": { "name": "Learning activity", "desc": "Daily DAU/WAU/MAU, watch time and completion" },
-      "ai": { "name": "AI Tutor usage", "desc": "Daily questions, users, tokens, cost and subjects" },
-      "audit": { "name": "Audit log", "desc": "Admin actions with actor, entity, IP and device" }
+      "students": {
+        "name": "Students",
+        "desc": "Profiles, school, package, subscription status and source"
+      },
+      "transactions": {
+        "name": "Transactions",
+        "desc": "Payments with gateway, status, discounts and attribution"
+      },
+      "refunds": {
+        "name": "Refunds",
+        "desc": "Refund requests, decisions and amounts"
+      },
+      "schools": {
+        "name": "School performance",
+        "desc": "Paid students, revenue, tier and pending settlement"
+      },
+      "learning": {
+        "name": "Learning activity",
+        "desc": "Daily DAU/WAU/MAU, watch time and completion"
+      },
+      "ai": {
+        "name": "AI Tutor usage",
+        "desc": "Daily questions, users, tokens, cost and subjects"
+      },
+      "audit": {
+        "name": "Audit log",
+        "desc": "Admin actions with actor, entity, IP and device"
+      }
+    },
+    "processing": "Large export queued — it will download automatically when ready.",
+    "failed": "The export failed. Please try again.",
+    "fromTable": "Table",
+    "download": "Download",
+    "statuses": {
+      "ready": "Ready",
+      "processing": "Processing",
+      "failed": "Failed"
     }
+  },
+  "platform": {
+    "title": "Platform split",
+    "businessSub": "Registrations, paid subscriptions and revenue by platform — web vs. iOS and Android apps",
+    "learningSub": "Daily active users, watch hours and quiz attempts by platform",
+    "platform": "Platform",
+    "web": "Web",
+    "ios": "iOS app",
+    "android": "Android app"
   }
 }

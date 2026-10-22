@@ -1,5 +1,5 @@
 export { HomeHeader } from './HomeHeader';
-export { SubscriptionCard } from './SubscriptionCard';
+export { StreakPlanCard, StreakPlanCard as SubscriptionCard } from './StreakPlanCard';
 export { SubjectCarousel } from './SubjectCarousel';
 export { StatsGrid } from './StatsGrid';
 export { TodayPlan } from './TodayPlan';

@@ -1,22 +1,40 @@
-import type { Localized } from '@/types';
+/** Caption cue parsed from a signed WebVTT track (StreamUrlDto.captions). */
+export interface Cue {
+  start: number;
+  end: number;
+  text: string;
+}
 
-/** Mock bilingual caption track — cycles every CUE_SEC seconds through the lesson. */
-export const CUE_SEC = 6;
+function toSec(ts: string): number {
+  const parts = ts.trim().replace(',', '.').split(':').map(Number);
+  if (parts.some((n) => Number.isNaN(n))) return 0;
+  return parts.reduce((acc, n) => acc * 60 + n, 0);
+}
 
-export const sampleCaptions: Localized[] = [
-  { en: "Welcome back! Let's start by reviewing the key idea from last time.", ar: 'أهلاً بعودتك! لنبدأ بمراجعة الفكرة الأساسية من الدرس السابق.' },
-  { en: 'Write this rule down — it appears in almost every ministerial exam.', ar: 'اكتب هذه القاعدة عندك — تتكرر تقريباً في كل امتحان وزاري.' },
-  { en: 'Notice how each step follows directly from the definition.', ar: 'لاحظ كيف تنتج كل خطوة مباشرة من التعريف.' },
-  { en: 'Now pause the video and try the next example on your own.', ar: 'الآن أوقف الفيديو وحاول حل المثال التالي بنفسك.' },
-  { en: "A common mistake here is forgetting the sign. Let's fix that.", ar: 'من الأخطاء الشائعة هنا نسيان الإشارة. لنصحّح ذلك.' },
-  { en: 'Great — substitute the values and simplify carefully.', ar: 'ممتاز — عوّض القيم وبسّط بعناية.' },
-  { en: 'Remember: units must be consistent before you calculate.', ar: 'تذكّر: يجب توحيد الوحدات قبل الحساب.' },
-  { en: "That's the full method. We'll practise it in the quiz.", ar: 'هذه هي الطريقة كاملة. سنتدرّب عليها في الاختبار.' },
-];
+/** Minimal WebVTT parser (cue timings + text; styling tags stripped). */
+export function parseVtt(vtt: string): Cue[] {
+  const cues: Cue[] = [];
+  const blocks = vtt.replace(/\r\n?/g, '\n').split(/\n{2,}/);
+  for (const block of blocks) {
+    const lines = block.split('\n').filter(Boolean);
+    const timeIdx = lines.findIndex((l) => l.includes('-->'));
+    if (timeIdx < 0) continue;
+    const [a, b] = lines[timeIdx]!.split('-->');
+    const end = (b ?? '').trim().split(/\s+/)[0] ?? '';
+    const text = lines
+      .slice(timeIdx + 1)
+      .join('\n')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+    if (text) cues.push({ start: toSec(a ?? ''), end: toSec(end), text });
+  }
+  return cues;
+}
 
-export function captionAt(sec: number): Localized {
-  const i = Math.floor(Math.max(0, sec) / CUE_SEC) % sampleCaptions.length;
-  return sampleCaptions[i]!;
+/** Cue text at `sec`, or null. */
+export function cueAt(cues: Cue[], sec: number): string | null {
+  for (const c of cues) if (sec >= c.start && sec < c.end) return c.text;
+  return null;
 }
 
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 2] as const;

@@ -1,51 +1,40 @@
 import { ArrowRight, ClipboardList, Clock3, FileQuestion, Medal, RotateCcw, Target } from 'lucide-react';
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, Card, CardHeader, EmptyState, HoverCard } from '@/components/ui';
-import { Formula } from '@/components/ui/MathText';
-import { exams, questionsBySubject } from '@/data';
+import { useQuestionStats, useSubjectExams } from '@/api/catalog';
+import { Badge, Button, Card, CardHeader, EmptyState, ErrorState, HoverCard, Skeleton, SkeletonList } from '@/components/ui';
+import { Formula, MathText } from '@/components/ui/MathText';
 import { useLang } from '@/hooks/useLang';
 import type { Difficulty, Subject } from '@/types';
 
 const DIFFS: Difficulty[] = ['easy', 'medium', 'hard'];
 const DIFF_COLOR: Record<Difficulty, string> = { easy: '#059669', medium: '#F59E0B', hard: '#DC2626' };
 
-/**
- * Projects the (small) mock question sample onto the subject's full bank size so the
- * breakdown reads like production data. Laplace smoothing keeps every bucket non-empty.
- */
-function useBankBreakdown(subject: Subject) {
-  return useMemo(() => {
-    const qs = questionsBySubject(subject.id);
-    const units = subject.units.map((u) => {
-      const uq = qs.filter((q) => q.unitId === u.id);
-      const share = (uq.length + 1) / (qs.length + subject.units.length);
-      const total = Math.round(subject.questionsCount * share);
-      const diff = Object.fromEntries(
-        DIFFS.map((d) => [d, (uq.filter((q) => q.difficulty === d).length + 1) / (uq.length + DIFFS.length)]),
-      ) as Record<Difficulty, number>;
-      const counts = Object.fromEntries(DIFFS.map((d) => [d, Math.round(total * diff[d])])) as Record<Difficulty, number>;
-      return { unit: u, total, counts };
-    });
-    const totals = Object.fromEntries(DIFFS.map((d) => [d, units.reduce((s, u) => s + u.counts[d], 0)])) as Record<
-      Difficulty,
-      number
-    >;
-    return { units, totals, samples: qs.slice(0, 3) };
-  }, [subject]);
-}
-
 export function QuestionBankPanel({ subject }: { subject: Subject }) {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
-  const { units, totals, samples } = useBankBreakdown(subject);
+  // CAT-03: real published-question counts by difficulty and unit + 3 sample questions.
+  const { data, isLoading, isError, refetch } = useQuestionStats(subject.slug);
+  if (isError) return <ErrorState onRetry={() => void refetch()} />;
+  if (isLoading || !data) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-5" aria-busy="true">
+        <Skeleton className="h-96 rounded-2xl lg:col-span-3" />
+        <SkeletonList rows={3} className="lg:col-span-2" />
+      </div>
+    );
+  }
+  const totals = data.byDifficulty;
+  const units = [...data.byUnit]
+    .sort((a, b) => a.order - b.order)
+    .map((u) => ({ unit: { id: u.unitId, title: u.title }, total: u.total, counts: { easy: u.easy, medium: u.medium, hard: u.hard } as Record<Difficulty, number> }));
+  const samples = data.samples;
 
   return (
     <div className="grid gap-6 lg:grid-cols-5">
       <Card className="p-5 sm:p-6 lg:col-span-3">
         <CardHeader
           title={t('learn.subject.bank.title')}
-          subtitle={t('learn.subject.bank.subtitle', { total: fmtNumber(subject.questionsCount) })}
+          subtitle={t('learn.subject.bank.subtitle', { total: fmtNumber(data.total) })}
         />
         <div className="mt-5 grid grid-cols-3 gap-3">
           {DIFFS.map((d) => (
@@ -107,7 +96,9 @@ export function QuestionBankPanel({ subject }: { subject: Subject }) {
                 {t(`common.difficulty.${q.difficulty}`)}
               </Badge>
             </div>
-            <p className="mt-3 text-sm font-semibold leading-relaxed text-primary">{l(q.text)}</p>
+            <p className="mt-3 text-sm font-semibold leading-relaxed text-primary">
+              <MathText text={l(q.text)} />
+            </p>
             {q.formula && (
               <div className="mt-2 overflow-x-auto rounded-lg bg-cream px-3 py-1 text-sm">
                 <Formula tex={q.formula} />
@@ -120,7 +111,7 @@ export function QuestionBankPanel({ subject }: { subject: Subject }) {
           </Card>
         ))}
         <Button
-          to={`/student/question-bank?subject=${subject.id}`}
+          to={`/student/question-bank?subject=${subject.slug}`}
           variant="gold"
           fullWidth
           rightIcon={<ArrowRight className="h-4 w-4 rtl:-scale-x-100" />}
@@ -135,7 +126,10 @@ export function QuestionBankPanel({ subject }: { subject: Subject }) {
 export function ExamsPanel({ subject }: { subject: Subject }) {
   const { t } = useTranslation();
   const { l } = useLang();
-  const list = exams.filter((e) => e.subjectId === subject.id);
+  // CAT-04: published blueprints for this subject with the caller's attempts/best score.
+  const { data: list = [], isLoading, isError, refetch } = useSubjectExams(subject.slug);
+  if (isError) return <ErrorState onRetry={() => void refetch()} />;
+  if (isLoading) return <SkeletonList rows={2} />;
 
   if (!list.length) {
     return (
@@ -192,8 +186,12 @@ export function ExamsPanel({ subject }: { subject: Subject }) {
                 <Target className="h-3.5 w-3.5" aria-hidden />
                 {t('learn.subject.exams.passMark', { pct: e.passMark })}
               </span>
-              <Button to="/student/exams" size="sm" rightIcon={<ArrowRight className="h-4 w-4 rtl:-scale-x-100" />}>
-                {t('learn.subject.exams.start')}
+              <Button
+                to={e.available && e.attemptsLeft > 0 && !e.locked ? `/student/exams/${e.id}/room` : '/student/exams'}
+                size="sm"
+                rightIcon={<ArrowRight className="h-4 w-4 rtl:-scale-x-100" />}
+              >
+                {e.activeAttempt ? t('common.resume') : t('learn.subject.exams.start')}
               </Button>
             </div>
           </HoverCard>

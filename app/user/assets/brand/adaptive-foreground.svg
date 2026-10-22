@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+  <linearGradient id="gold" x1="20" y1="10" x2="80" y2="88" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#F3DD9A"/>
+    <stop offset="0.45" stop-color="#E6C77A"/>
+    <stop offset="0.75" stop-color="#C9A24A"/>
+    <stop offset="1" stop-color="#A9832F"/>
+  </linearGradient>
+  <linearGradient id="goldBand" x1="27" y1="31" x2="73" y2="48" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#B8913C"/>
+    <stop offset="1" stop-color="#8E6D26"/>
+  </linearGradient></defs>
+  <g transform="translate(512 518) scale(6.578947368421052) translate(-50 -48)">
+  <path d="M50 10 L88 25 L50 40 L12 25 Z" fill="url(#gold)"/>
+  <path d="M13.5 25 L50 10.6 L86.5 25" stroke="#FFF1C4" stroke-opacity="0.7" stroke-width="0.7" fill="none" stroke-linejoin="round"/>
+  <path d="M27 31 L50 40 L73 31 L73 41.5 Q50 50 27 41.5 Z" fill="url(#goldBand)"/>
+  <path d="M50 25 C62 25.2 74 25.8 84.2 26.6" stroke="#9C7A2E" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  <circle cx="50" cy="25" r="2.6" fill="#9C7A2E"/>
+  <path d="M26.5 48 H71 V59.5 H68.4 C67.4 55.6 64.6 53.5 59.5 53.5 H43 V63.5 H55.5 C57.8 63.5 58.9 62.4 59.4 59.8 H61.8 V72.2 H59.4 C58.9 69.6 57.8 68.5 55.5 68.5 H43 V80.5 H61 C66 80.5 68.6 78.4 69.8 73.5 H72.4 V86 H26.5 V84.2 C29.8 84 31 83 31 80.5 V53.5 C31 51 29.8 50 26.5 49.8 Z" fill="url(#gold)"/>
+  <path d="M84.2 26.6 V45" stroke="url(#gold)" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <path d="M81.6 45 H86.4 L88 57 H80 Z" fill="url(#gold)" stroke="url(#gold)" stroke-width="1" stroke-linejoin="round"/></g>
+</svg>

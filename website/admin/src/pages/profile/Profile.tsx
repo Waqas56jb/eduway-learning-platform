@@ -7,50 +7,17 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
-import { Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, Field, Input, Segmented, SkeletonCard } from '@/components/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, Field, FileUpload, Input, Segmented, SkeletonCard, useConfirm } from '@/components/ui';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
-import { logAudit } from '@/store/audit';
-import { DEMO_2FA, DEMO_PASSWORD, useCurrentAdmin, useCurrentRole } from '@/store/auth';
-import { useAdminUsers } from '@/store/core';
+import { useAuth, useCurrentAdmin, useCurrentRole } from '@/store/auth';
 import { useUi } from '@/store/ui';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtRelative } from '@/utils/format';
-import { createRng } from '@/utils/random';
-
-/* ─── QR mock ─────────────────────────────────────────────────────────────── */
-function MockQr({ seed }: { seed: string }) {
-  const n = 25;
-  const cells = useMemo(() => {
-    const rng = createRng([...seed].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 17));
-    const finder = (x: number, y: number) => {
-      const inBox = (ox: number, oy: number) => x >= ox && x < ox + 7 && y >= oy && y < oy + 7;
-      for (const [ox, oy] of [[0, 0], [n - 7, 0], [0, n - 7]] as const) {
-        if (inBox(ox, oy)) {
-          const dx = x - ox;
-          const dy = y - oy;
-          return dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4) ? 1 : 0;
-        }
-        if (x >= ox - 1 && x <= ox + 7 && y >= oy - 1 && y <= oy + 7) return 0;
-      }
-      return -1;
-    };
-    const out: [number, number][] = [];
-    for (let y = 0; y < n; y++)
-      for (let x = 0; x < n; x++) {
-        const f = finder(x, y);
-        if (f === 1 || (f === -1 && (x === 6 || y === 6 ? (x + y) % 2 === 0 : rng.bool(0.48)))) out.push([x, y]);
-      }
-    return out;
-  }, [seed]);
-  return (
-    <svg viewBox={`-2 -2 ${n + 4} ${n + 4}`} className="h-44 w-44 rounded-xl bg-white p-1 shadow-card ring-1 ring-line" role="img" aria-label="QR code">
-      {cells.map(([x, y]) => (
-        <rect key={`${x}-${y}`} x={x} y={y} width="1.02" height="1.02" fill="#0B1F3A" />
-      ))}
-    </svg>
-  );
-}
+import { adminMeApi, authApi, type MfaSetupDto } from '@/api/auth';
+import { errorMessage, isApiError, toastError } from '@/api/client';
+import { qk } from '@/api/keys';
+import { useUpload } from '@/api/storage';
 
 /* ─── Password strength ───────────────────────────────────────────────────── */
 const rules = (p: string) => ({
@@ -65,12 +32,25 @@ const STRENGTH_COLORS = ['bg-danger', 'bg-danger', 'bg-warning', 'bg-info', 'bg-
 export default function Profile() {
   const { t } = useTranslation();
   const L = useLocalize();
-  const loading = useMockLoading(350);
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const me = useAuth((s) => s.me);
+  const setMe = useAuth((s) => s.setMe);
+  const loading = !me;
   const admin = useCurrentAdmin();
   const role = useCurrentRole();
-  const update = useAdminUsers((s) => s.update);
   const theme = useUi((s) => s.theme);
-  const setTheme = useUi((s) => s.setTheme);
+  const setUiTheme = useUi((s) => s.setTheme);
+  const avatarUpload = useUpload('admin_avatar');
+  const refreshMe = async () => {
+    const fresh = await authApi.me();
+    setMe(fresh);
+    qc.setQueryData(qk.me, fresh);
+  };
+  const setTheme = (v: 'light' | 'dark') => {
+    setUiTheme(v);
+    adminMeApi.preferences({ theme: v }).catch(() => undefined);
+  };
 
   // ── Profile form ────────────────────────────────────────────────────────────
   const profileSchema = z.object({
@@ -94,7 +74,6 @@ export default function Profile() {
       confirm: z.string(),
     })
     .superRefine((v, ctx) => {
-      if (v.current && v.current !== DEMO_PASSWORD) ctx.addIssue({ code: 'custom', path: ['current'], message: t('profile.password.currentWrong') });
       if (score(v.next) < 4) ctx.addIssue({ code: 'custom', path: ['next'], message: t('profile.password.weak') });
       else if (v.next === v.current) ctx.addIssue({ code: 'custom', path: ['next'], message: t('profile.password.same') });
       if (v.confirm !== v.next) ctx.addIssue({ code: 'custom', path: ['confirm'], message: t('profile.password.mismatch') });
@@ -106,48 +85,107 @@ export default function Profile() {
   const ruleState = rules(nextPw);
 
   // ── MFA ─────────────────────────────────────────────────────────────────────
-  const [setup, setSetup] = useState(false);
+  const [setup, setSetup] = useState<MfaSetupDto | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
   const [code, setCode] = useState('');
-  const [codeError, setCodeError] = useState(false);
-  const secret = useMemo(() => {
-    const rng = createRng([...(admin?.email ?? 'x')].reduce((h, c) => (h * 37 + c.charCodeAt(0)) >>> 0, 3));
-    const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    return Array.from({ length: 16 }, () => abc[rng.int(0, 31)]).join('').replace(/(.{4})/g, '$1 ').trim();
-  }, [admin?.email]);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [recovery, setRecovery] = useState<string[] | null>(null);
+  const secret = useMemo(() => (setup?.secret ?? '').replace(/(.{4})/g, '$1 ').trim(), [setup]);
 
   if (!admin) return null;
 
-  const saveProfile = (v: ProfileForm) => {
-    update(admin.id, v, { action: 'admin.update_profile', summary: `Updated own profile (${admin.email})` });
-    toast.success(t('profile.saved'));
-  };
-
-  const savePassword = () => {
-    logAudit({ action: 'admin.change_password', entity: 'admin_user', entityId: admin.id, summary: 'Changed own password; other sessions revoked' });
-    pw.reset();
-    toast.success(t('profile.password.updated'));
-  };
-
-  const verifyMfa = () => {
-    if (code !== DEMO_2FA) {
-      setCodeError(true);
-      return;
+  const saveProfile = async (v: ProfileForm) => {
+    try {
+      await adminMeApi.update({ name: { en: v.name, ar: v.name_ar }, email: v.email, mobile: v.mobile });
+      await refreshMe();
+      toast.success(t('profile.saved'));
+    } catch (e) {
+      if (isApiError(e) && Object.keys(e.fields).length) {
+        for (const [k, msg] of Object.entries(e.fields)) {
+          const field = k === 'name.en' ? 'name' : k === 'name.ar' ? 'name_ar' : (k as keyof ProfileForm);
+          pf.setError(field as keyof ProfileForm, { message: msg });
+        }
+      } else toastError(e);
     }
-    update(admin.id, { mfaEnabled: true }, { action: 'admin.enable_mfa', summary: 'Enabled two-factor authentication' });
-    setSetup(false);
-    setCode('');
-    setCodeError(false);
-    toast.success(t('profile.mfa.enabledToast'));
   };
 
-  const disableMfa = () => {
-    update(admin.id, { mfaEnabled: false }, { action: 'admin.disable_mfa', summary: 'Disabled two-factor authentication' });
-    toast.success(t('profile.mfa.disabledToast'));
+  const onAvatar = async (file: File) => {
+    const r = await avatarUpload.start(file);
+    if (!r) return;
+    try {
+      await adminMeApi.update({ avatarFileKey: r.fileKey });
+      await refreshMe();
+      toast.success(t('profile.saved'));
+    } catch (e) {
+      toastError(e);
+    } finally {
+      avatarUpload.reset();
+    }
+  };
+
+  const savePassword = async (v: PwForm) => {
+    try {
+      await adminMeApi.changePassword(v.current, v.next);
+      pw.reset();
+      toast.success(t('profile.password.updated'));
+    } catch (e) {
+      if (isApiError(e) && e.status === 401) pw.setError('current', { message: t('profile.password.currentWrong') });
+      else if (isApiError(e) && e.reason === 'PASSWORD_POLICY') pw.setError('next', { message: errorMessage(e) });
+      else toastError(e);
+    }
+  };
+
+  const startSetup = async () => {
+    setSetupLoading(true);
+    try {
+      setSetup(await authApi.mfaSetup());
+      setRecovery(null);
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const verifyMfa = async () => {
+    setVerifying(true);
+    try {
+      const r = await authApi.mfaEnable(code);
+      setRecovery(r.recoveryCodes);
+      setSetup(null);
+      setCode('');
+      setCodeError(null);
+      await refreshMe();
+      toast.success(t('profile.mfa.enabledToast'));
+    } catch (e) {
+      setCodeError(isApiError(e) && (e.status === 401 || e.reason === 'MFA_INVALID') ? t('profile.mfa.invalid') : errorMessage(e));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    const ok = await confirm({
+      title: t('profile.mfa.disable'),
+      tone: 'danger',
+      reason: { label: t('profile.mfa.step3'), placeholder: '123456' },
+    });
+    if (!ok) return;
+    try {
+      const value = ok.reason.trim();
+      await authApi.mfaDisable(/^\d{6}$/.test(value) ? { code: value } : { password: value });
+      setRecovery(null);
+      await refreshMe();
+      toast.success(t('profile.mfa.disabledToast'));
+    } catch (e) {
+      toastError(e);
+    }
   };
 
   const copySecret = async () => {
     try {
-      await navigator.clipboard.writeText(secret.replace(/\s/g, ''));
+      await navigator.clipboard.writeText(setup?.secret ?? '');
       toast.success(t('toast.copied'));
     } catch {
       toast.error(t('toast.error'));
@@ -181,7 +219,20 @@ export default function Profile() {
             <form onSubmit={pf.handleSubmit(saveProfile)} noValidate>
               <CardBody>
                 <div className="mb-6 flex flex-wrap items-center gap-4">
-                  <Avatar name={admin.name} src={admin.avatar} size="xl" />
+                  <div className="w-24">
+                    <Avatar name={admin.name} src={admin.avatar} size="xl" />
+                    <FileUpload
+                      compact
+                      accept="image/png,image/jpeg,image/webp"
+                      maxSizeMb={5}
+                      progress={avatarUpload.progress}
+                      disabled={avatarUpload.uploading}
+                      onFile={(f) => onAvatar(f)}
+                      label={<span className="text-xs">{t('actions.upload')}</span>}
+                      hint=""
+                      className="mt-2"
+                    />
+                  </div>
                   <div>
                     <div className="text-lg font-semibold text-ink">{L(admin, 'name') !== '—' ? L(admin, 'name') : admin.name}</div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -210,7 +261,7 @@ export default function Profile() {
                 <Button variant="secondary" onClick={() => pf.reset()} disabled={!pf.formState.isDirty}>
                   {t('actions.reset')}
                 </Button>
-                <Button type="submit" disabled={!pf.formState.isDirty}>
+                <Button type="submit" disabled={!pf.formState.isDirty} loading={pf.formState.isSubmitting}>
                   {t('actions.saveChanges')}
                 </Button>
               </CardFooter>
@@ -254,7 +305,7 @@ export default function Profile() {
                 </div>
               </CardBody>
               <CardFooter>
-                <Button type="submit">{t('profile.password.update')}</Button>
+                <Button type="submit" loading={pw.formState.isSubmitting}>{t('profile.password.update')}</Button>
               </CardFooter>
             </form>
           </Card>
@@ -270,6 +321,19 @@ export default function Profile() {
               action={<Badge tone={admin.mfaEnabled ? 'success' : 'warning'} dot>{admin.mfaEnabled ? t('profile.mfa.enabled') : t('profile.mfa.disabled')}</Badge>}
             />
             <CardBody>
+              {recovery && (
+                <div className="mb-4 rounded-xl border border-warning/30 bg-warning/5 p-4">
+                  <p className="text-sm font-semibold text-ink">{t('auth.recoveryTitle')}</p>
+                  <p className="mt-1 text-xs text-muted">{t('auth.recoverySub')}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-1.5 font-mono text-xs" dir="ltr">
+                    {recovery.map((c) => (
+                      <span key={c} className="rounded bg-surface px-2 py-1 ring-1 ring-line">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {admin.mfaEnabled ? (
                 <div className="space-y-4">
                   <div className="flex items-start gap-3 rounded-xl bg-success/[0.07] p-4 text-sm text-ink">
@@ -281,7 +345,7 @@ export default function Profile() {
                   </Button>
                 </div>
               ) : !setup ? (
-                <Button className="w-full" icon={<ShieldCheck className="h-4 w-4" />} onClick={() => setSetup(true)}>
+                <Button className="w-full" icon={<ShieldCheck className="h-4 w-4" />} onClick={startSetup} loading={setupLoading}>
                   {t('profile.mfa.enable')}
                 </Button>
               ) : (
@@ -289,7 +353,7 @@ export default function Profile() {
                   <li>
                     <p className="mb-3 text-sm font-medium text-ink">1. {t('profile.mfa.step1')}</p>
                     <div className="flex justify-center">
-                      <MockQr seed={admin.email} />
+                      <img src={setup.qrDataUrl} alt="QR code" className="h-44 w-44 rounded-xl bg-white p-1 shadow-card ring-1 ring-line" />
                     </div>
                   </li>
                   <li>
@@ -310,23 +374,23 @@ export default function Profile() {
                         value={code}
                         onChange={(e) => {
                           setCode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                          setCodeError(false);
+                          setCodeError(null);
                         }}
                         inputMode="numeric"
                         placeholder="123456"
                         dir="ltr"
                         aria-label={t('profile.mfa.step3')}
-                        invalid={codeError}
+                        invalid={!!codeError}
                         className="text-center font-semibold tracking-[0.4em]"
                       />
-                      <Button onClick={verifyMfa} disabled={code.length !== 6}>
+                      <Button onClick={verifyMfa} disabled={code.length !== 6} loading={verifying}>
                         {t('profile.mfa.verify')}
                       </Button>
                     </div>
-                    {codeError && <p className="mt-1.5 text-xs font-medium text-danger">{t('profile.mfa.invalid')}</p>}
+                    {codeError && <p className="mt-1.5 text-xs font-medium text-danger">{codeError}</p>}
                   </li>
                   <li>
-                    <Button variant="ghost" size="sm" onClick={() => setSetup(false)}>
+                    <Button variant="ghost" size="sm" onClick={() => setSetup(null)}>
                       {t('actions.cancel')}
                     </Button>
                   </li>

@@ -44,15 +44,15 @@
   },
   "stats": {
     "title": "At a glance",
-    "lessonsDone": "Lessons completed",
+    "lessonsDone": "Lessons done",
     "lessonsSub": "of {{total}}",
     "quizAvg": "Quiz average",
     "quizSub": "Last 30 days",
-    "mistakes": "Mistakes to review",
+    "mistakes": "To review",
     "mistakesSub": "Tap to review",
     "mistakesClear": "All clear",
-    "ai": "AI questions left",
-    "aiSub": "This period"
+    "ai": "AI questions",
+    "aiSub": "left of {{total}}"
   },
   "plan": {
     "title": "Today's plan",
@@ -98,5 +98,21 @@
     "wed": "Wed",
     "thu": "Thu",
     "fri": "Fri"
+  },
+  "summary": {
+    "streak": "Study streak",
+    "plan": "Your plan",
+    "streakUnit_zero": "days",
+    "streakUnit_one": "day",
+    "streakUnit_two": "days",
+    "streakUnit_few": "days",
+    "streakUnit_many": "days",
+    "streakUnit_other": "days",
+    "daysUnit_zero": "days left",
+    "daysUnit_one": "day left",
+    "daysUnit_two": "days left",
+    "daysUnit_few": "days left",
+    "daysUnit_many": "days left",
+    "daysUnit_other": "days left"
   }
 }

@@ -1,18 +1,23 @@
 import { useTranslation } from 'react-i18next';
+import { usePublicStats } from '@/api/public';
 import { AnimatedCounter, Reveal, RevealItem } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 
-const STATS = [
-  { key: 'lessons', value: 850, suffix: '+' },
-  { key: 'students', value: 12000, suffix: '+' },
-  { key: 'questions', value: 25000, suffix: '+' },
-  { key: 'satisfaction', value: 96, suffix: '%' },
-];
+type StatKey = 'lessons' | 'students' | 'questions' | 'satisfaction';
+const ORDER: StatKey[] = ['lessons', 'students', 'questions', 'satisfaction'];
 
 export function Stats() {
   const { t } = useTranslation();
   const { fmtNumber } = useLang();
+  // PUB-05: live counts (students rounded down to the nearest 100 unless an override such as "48K+" is set).
+  const { data } = usePublicStats();
+  const STATS = ORDER.map((key) => {
+    if (key === 'satisfaction') return { key, value: data?.satisfactionPct ?? 0, suffix: '%', override: undefined };
+    const raw = data?.[key] ?? 0;
+    const value = key === 'students' ? Math.floor(raw / 100) * 100 : raw;
+    return { key, value, suffix: '+', override: data?.displayOverrides[key] };
+  });
 
   return (
     <section aria-label={t('landing.stats.label')} className="relative isolate overflow-hidden bg-navy-grad py-16 text-white md:py-20">
@@ -31,8 +36,14 @@ export function Stats() {
               className={cn('flex flex-col items-center px-4 text-center lg:border-s lg:border-white/10', i === 0 && 'lg:border-s-0')}
             >
               <span className="font-display text-4xl font-bold sm:text-5xl md:text-6xl" dir="ltr">
-                <AnimatedCounter to={s.value} format={(n) => fmtNumber(n)} />
-                <span className="text-gold-grad">{s.suffix}</span>
+                {s.override ? (
+                  <span className="num">{s.override}</span>
+                ) : (
+                  <>
+                    <AnimatedCounter key={s.value} to={s.value} format={(n) => fmtNumber(n)} />
+                    <span className="text-gold-grad">{s.suffix}</span>
+                  </>
+                )}
               </span>
               <span className="mx-auto mt-3 h-0.5 w-10 rounded-full bg-gold-grad" aria-hidden />
               <span className="mt-3 text-sm font-medium text-white/70 md:text-base">{t(`landing.stats.items.${s.key}`)}</span>

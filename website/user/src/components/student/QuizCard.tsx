@@ -1,22 +1,34 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Lightbulb, Star, X } from 'lucide-react';
+import { Check, Lightbulb, Loader2, Star, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui';
-import { Formula, RichText } from '@/components/ui/MathText';
-import { getSubject } from '@/data';
+import { useBookmarks } from '@/api/bookmarks';
+import { useSubjectLookup } from '@/api/catalog';
+import type { Localized, QuestionPublic, QuestionReview } from '@/api/types';
+import { Formula, MathText, RichText } from '@/components/ui/MathText';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { cn } from '@/lib/utils';
-import type { Question } from '@/types';
+
+const isReview = (q: QuestionPublic | QuestionReview): q is QuestionReview => 'correctIndex' in q;
 
 const LETTERS = { en: ['A', 'B', 'C', 'D', 'E'], ar: ['أ', 'ب', 'ج', 'د', 'هـ'] };
 
 export interface QuizCardProps {
-  question: Question;
-  /** Selected option index (in original question.options indexing). */
+  /** Served question (QuestionPublic) — or QuestionReview when the answer may be shown. */
+  question: QuestionPublic | QuestionReview;
+  /** Selected option index (index in `question.options` as served). */
   selected: number | null;
   onSelect: (index: number) => void;
+  /**
+   * Correct option index revealed by the server (AnswerFeedback.correctIndex) for "instant" mode.
+   * Falls back to `question.correctIndex` for QuestionReview payloads. Unknown → no feedback yet.
+   */
+  correctIndex?: number | null;
+  /** Explanation from the server feedback (null when the quiz rule hides explanations). */
+  explanation?: Localized | null;
+  /** Answer submitted, waiting for the server's verdict. */
+  pending?: boolean;
   /**
    * "instant": after selecting, the answer locks and correct/incorrect feedback + explanation show.
    * "exam": selection only, no feedback (can change answer).
@@ -49,13 +61,19 @@ export function QuizCard({
   className,
   keyboard = true,
   hideText = false,
+  correctIndex: correctIndexProp,
+  explanation: explanationProp,
+  pending = false,
 }: QuizCardProps) {
   const { t } = useTranslation();
   const { l, lang } = useLang();
-  const { isBookmarked, toggleBookmark } = useStudent();
-  const subject = getSubject(question.subjectId);
+  const { isBookmarked, toggleBookmark } = useBookmarks();
+  const subjectOf = useSubjectLookup();
+  const subject = subjectOf(question.subjectSlug) ?? subjectOf(question.subjectId);
   const opts = order ?? question.options.map((_, i) => i);
-  const locked = mode === 'review' || (mode === 'instant' && selected !== null);
+  const locked = mode === 'review' || (mode === 'instant' && selected !== null) || pending;
+  const correctIndex = correctIndexProp ?? (isReview(question) ? question.correctIndex : null);
+  const explanation = explanationProp !== undefined ? explanationProp : isReview(question) ? question.explanation : null;
   const [explainOpen, setExplainOpen] = useState(mode === 'review');
   const bookmarked = isBookmarked(question.id);
 
@@ -79,8 +97,8 @@ export function QuizCard({
   }, [keyboard, locked, opts, onSelect]);
 
   const answered = selected !== null;
-  const isCorrect = selected === question.correctIndex;
-  const showFeedback = mode !== 'exam' && answered;
+  const isCorrect = selected === correctIndex;
+  const showFeedback = mode !== 'exam' && answered && correctIndex !== null && correctIndex !== undefined;
 
   return (
     <div className={cn('card p-5 sm:p-7', className)}>
@@ -119,8 +137,11 @@ export function QuizCard({
             dir="auto"
             className="mt-4 text-start font-sans text-lg font-semibold leading-relaxed tracking-normal text-primary sm:text-xl"
           >
-            {l(question.text)}
+            <MathText text={l(question.text)} />
           </h3>
+          {question.imageUrl && (
+            <img src={question.imageUrl} alt="" loading="lazy" className="mt-3 max-h-72 rounded-xl border border-primary/5 object-contain" />
+          )}
           {question.formula && (
             <div className="mt-3 rounded-xl bg-cream px-4 py-2">
               <Formula tex={question.formula} block className="!my-1" />
@@ -133,7 +154,7 @@ export function QuizCard({
         {opts.map((oi, pos) => {
           const opt = question.options[oi];
           const isSel = selected === oi;
-          const isAns = oi === question.correctIndex;
+          const isAns = oi === correctIndex;
           const state =
             showFeedback && isAns ? 'correct' : showFeedback && isSel && !isAns ? 'wrong' : isSel ? 'selected' : 'idle';
           return (
@@ -165,10 +186,18 @@ export function QuizCard({
                   state === 'wrong' && 'bg-danger text-white',
                 )}
               >
-                {state === 'correct' ? <Check className="h-4 w-4" /> : state === 'wrong' ? <X className="h-4 w-4" /> : LETTERS[lang][pos]}
+                {state === 'correct' ? (
+                  <Check className="h-4 w-4" />
+                ) : state === 'wrong' ? (
+                  <X className="h-4 w-4" />
+                ) : isSel && pending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  LETTERS[lang][pos]
+                )}
               </span>
               <span className="flex-1 text-start font-medium text-ink" dir="auto">
-                {l(opt)}
+                <MathText text={l(opt.text)} />
               </span>
             </motion.button>
           );
@@ -194,18 +223,20 @@ export function QuizCard({
                 {isCorrect ? <Check className="h-5 w-5" /> : <X className="h-5 w-5" />}
                 {isCorrect ? t('common.correct') : t('common.incorrect')}
               </span>
-              <button
-                type="button"
-                onClick={() => setExplainOpen((v) => !v)}
-                aria-expanded={explainOpen}
-                className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-accent"
-              >
-                <Lightbulb className="h-4 w-4" />
-                {explainOpen ? t('common.hideExplanation') : t('common.showExplanation')}
-              </button>
+              {explanation && (
+                <button
+                  type="button"
+                  onClick={() => setExplainOpen((v) => !v)}
+                  aria-expanded={explainOpen}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-accent"
+                >
+                  <Lightbulb className="h-4 w-4" />
+                  {explainOpen ? t('common.hideExplanation') : t('common.showExplanation')}
+                </button>
+              )}
             </div>
             <AnimatePresence initial={false}>
-              {explainOpen && (
+              {explainOpen && explanation && (
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -213,7 +244,7 @@ export function QuizCard({
                   className="mt-3 rounded-2xl border border-accent/25 bg-accent/5 p-4 text-ink"
                 >
                   <p className="mb-1 text-xs font-bold uppercase tracking-wider text-accent">{t('common.explanation')}</p>
-                  <RichText source={l(question.explanation)} />
+                  <RichText source={l(explanation)} />
                 </motion.div>
               )}
             </AnimatePresence>

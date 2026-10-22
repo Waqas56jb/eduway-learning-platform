@@ -27,10 +27,6 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "extra": {
-      "supportsRTL": true,
-      "forcesRTL": false
-    },
     "plugins": [
       "expo-router",
       [

@@ -19,6 +19,8 @@ interface TutorChatProps {
   messages: ChatMessage[];
   typing: boolean;
   streamingId: string | null;
+  /** The streaming message is still receiving deltas from the server. */
+  streamingLive?: boolean;
   welcomeText: string;
   onStreamDone: () => void;
   onRate: (id: string, rating: 'up' | 'down') => void;
@@ -67,7 +69,7 @@ function TypingBubble() {
 }
 
 /** Scrollable, auto-following message list for the AI tutor. */
-export function TutorChat({ messages, typing, streamingId, welcomeText, onStreamDone, onRate, onCopy, footer }: TutorChatProps) {
+export function TutorChat({ messages, typing, streamingId, streamingLive = false, welcomeText, onStreamDone, onRate, onCopy, footer }: TutorChatProps) {
   const { t } = useTranslation();
   const { l, fmtDate } = useLang();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -140,6 +142,7 @@ export function TutorChat({ messages, typing, streamingId, welcomeText, onStream
                   className="flex flex-col items-end gap-1"
                 >
                   <div className="max-w-[88%] whitespace-pre-wrap break-words rounded-2xl rounded-ee-md bg-navy-grad px-4 py-3 text-[15px] leading-relaxed text-white shadow-soft sm:max-w-[75%]">
+                    {m.imageUrl && <img src={m.imageUrl} alt="" className="mb-2 max-h-60 rounded-xl object-contain" loading="lazy" />}
                     {l(m.content)}
                   </div>
                   <span className="px-1 text-[11px] text-muted num">
@@ -167,7 +170,7 @@ export function TutorChat({ messages, typing, streamingId, welcomeText, onStream
                     )}
                   >
                     {streaming ? (
-                      <StreamingAnswer source={l(m.content)} onDone={onStreamDone} />
+                      <StreamingAnswer source={l(m.content)} onDone={onStreamDone} live={streamingLive} />
                     ) : (
                       <RichText source={isWelcome ? welcomeText : l(m.content)} />
                     )}

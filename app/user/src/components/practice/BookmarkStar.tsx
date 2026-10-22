@@ -3,7 +3,7 @@ import { Pressable, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { useI18n } from '@/hooks/useI18n';
-import { useProgressStore } from '@/store';
+import { useBookmarkIds, useToggleBookmark } from '@/api/bank';
 import { HIT_SLOP, radius, useTheme } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
@@ -13,14 +13,17 @@ interface Props {
   /** Render on a soft surface circle (session header) instead of bare. */
   surface?: boolean;
   onToggled?(bookmarked: boolean): void;
+  /** Server-provided state used until the bookmark id list (BMK-02) has loaded. */
+  initial?: boolean;
 }
 
-/** Animated bookmark star bound to progressStore.bookmarks. */
-export const BookmarkStar = memo(function BookmarkStar({ questionId, size = 22, surface = false, onToggled }: Props) {
+/** Animated bookmark star bound to the server bookmark list (BMK-02/03/04, optimistic). */
+export const BookmarkStar = memo(function BookmarkStar({ questionId, size = 22, surface = false, onToggled, initial }: Props) {
   const { colors } = useTheme();
   const { t } = useI18n('practice');
-  const bookmarked = useProgressStore((s) => s.bookmarks.includes(questionId));
-  const toggleBookmark = useProgressStore((s) => s.toggleBookmark);
+  const { data: ids } = useBookmarkIds();
+  const bookmarked = ids ? ids.includes(questionId) : !!initial;
+  const { mutate: toggle } = useToggleBookmark();
   const scale = useSharedValue(1);
   const rotate = useSharedValue(0);
   const mounted = useRef(false);
@@ -40,13 +43,13 @@ export const BookmarkStar = memo(function BookmarkStar({ questionId, size = 22, 
 
   const onPress = useCallback(() => {
     const next = !bookmarked;
-    toggleBookmark(questionId);
+    toggle({ questionId, bookmarked: next });
     if (next) haptic.success();
     else haptic.light();
     onToggled?.(next);
-  }, [bookmarked, onToggled, questionId, toggleBookmark]);
+  }, [bookmarked, onToggled, questionId, toggle]);
 
-  const box = surface ? 44 : Math.max(36, size + 14);
+  const box = Math.max(44, size + 16);
 
   return (
     <Pressable
@@ -55,7 +58,7 @@ export const BookmarkStar = memo(function BookmarkStar({ questionId, size = 22, 
       accessibilityRole="button"
       accessibilityState={{ selected: bookmarked }}
       accessibilityLabel={bookmarked ? t('bank.bookmarkRemove') : t('bank.bookmarkAdd')}
-      style={[
+      style={({ pressed }) => [
         styles.base,
         { width: box, height: box },
         surface && {
@@ -63,6 +66,7 @@ export const BookmarkStar = memo(function BookmarkStar({ questionId, size = 22, 
           borderColor: bookmarked ? colors.accent : colors.border,
           borderWidth: StyleSheet.hairlineWidth,
         },
+        pressed && styles.pressed,
       ]}
     >
       <Animated.View style={animStyle}>
@@ -74,4 +78,5 @@ export const BookmarkStar = memo(function BookmarkStar({ questionId, size = 22, 
 
 const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+  pressed: { opacity: 0.6, transform: [{ scale: 0.92 }] },
 });

@@ -1,26 +1,37 @@
-import { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Bot, CheckCircle2, ClipboardCheck, GraduationCap, PlayCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BarChart } from '@/components/charts';
-import { Badge, Card, CardBody, CardHeader, EmptyState, ProgressBar, StatusBadge } from '@/components/ui';
-import { useLocalize } from '@/hooks/useLocale';
-import { useLessons, useSubjects } from '@/store/core';
-import type { Student } from '@/types';
+import { Badge, Button, Card, CardBody, CardHeader, EmptyState, ProgressBar, SkeletonCard, StatusBadge } from '@/components/ui';
+import { useLang } from '@/hooks/useLocale';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtDuration, fmtNumber, fmtPercent, fmtRelative } from '@/utils/format';
-import { generateActivity } from '../activity';
+import { errorMessage } from '@/api/client';
+import { useApiQuery } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { studentsApi, type AdminStudentDetail } from '@/api/students';
 
-export function ActivityTab({ student }: { student: Student }) {
+export function ActivityTab({ student }: { student: AdminStudentDetail }) {
   const { t } = useTranslation();
-  const L = useLocalize();
-  const lessons = useLessons((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
-  const act = useMemo(() => generateActivity(student, lessons), [student, lessons]);
+  const lang = useLang();
+  const q = useApiQuery(qk.students.sub('activity', student.id), () => studentsApi.activity(student.id, { limit: 20, days: 14 }));
+  const act = q.data;
 
-  const lesson = (id: string) => lessons.find((l) => l.id === id);
-  const subjectOf = (id: string) => subjects.find((s) => s.id === lesson(id)?.subjectId);
-  const subjectByKey = (k: string) => subjects.find((s) => s.key === k);
+  if (q.isLoading) {
+    return (
+      <div className="grid gap-4 xl:grid-cols-2">
+        <SkeletonCard lines={5} />
+        <SkeletonCard lines={5} />
+      </div>
+    );
+  }
+  if (!act) {
+    return (
+      <Card>
+        <EmptyState title={t('api.loadFailed')} hint={errorMessage(q.error)} action={<Button variant="secondary" onClick={() => q.refetch()}>{t('api.retry')}</Button>} />
+      </Card>
+    );
+  }
 
   const empty = act.watch.length === 0 && act.exams.length === 0 && act.aiRecent.length === 0;
   if (empty) {
@@ -40,16 +51,15 @@ export function ActivityTab({ student }: { student: Student }) {
         ) : (
           <ul className="divide-y divide-line">
             {act.watch.map((w) => {
-              const l = lesson(w.lessonId);
-              const s = subjectOf(w.lessonId);
+              const s = w.subject;
               return (
                 <li key={w.id} className="px-5 py-3">
                   <div className="flex items-center gap-3">
                     <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: s?.color }} aria-hidden />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-ink">{L(l, 'title')}</div>
+                      <div className="truncate text-sm font-medium text-ink">{w.lessonTitle[lang]}</div>
                       <div className="text-xs text-muted">
-                        {L(s, 'name')} · {fmtRelative(w.at)}
+                        {s?.name[lang]} · {fmtRelative(w.at)}
                       </div>
                     </div>
                     {w.completed ? (
@@ -88,7 +98,7 @@ export function ActivityTab({ student }: { student: Student }) {
                 {act.quizzes.map((q) => (
                   <tr key={q.id} className="border-t border-line">
                     <td className="px-5 py-2.5">
-                      <div className="max-w-[16rem] truncate font-medium text-ink">{L(lesson(q.lessonId), 'title')}</div>
+                      <div className="max-w-[16rem] truncate font-medium text-ink">{q.lessonTitle[lang]}</div>
                       <div className="text-xs text-muted">{fmtDateTime(q.at)}</div>
                     </td>
                     <td className="px-3 py-2.5 text-end">
@@ -118,7 +128,7 @@ export function ActivityTab({ student }: { student: Student }) {
                   <span className={cn('kpi-num text-base', e.score >= 50 ? 'text-success' : 'text-danger')}>{e.score}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ink">{L(e, 'title')}</div>
+                  <div className="truncate text-sm font-medium text-ink">{e.title[lang]}</div>
                   <div className="text-xs text-muted">
                     {fmtDateTime(e.at)} · {t('users.activity.duration')}: {fmtNumber(e.durationMin)} {t('common.minutes')}
                   </div>
@@ -146,11 +156,11 @@ export function ActivityTab({ student }: { student: Student }) {
               <div className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted">{t('users.activity.aiRecent')}</div>
               <ul className="space-y-2">
                 {act.aiRecent.map((q) => {
-                  const s = subjectByKey(q.subject);
+                  const s = q.subject;
                   return (
                     <li key={q.id} className="flex items-start gap-2.5 rounded-lg bg-surface-2 px-3 py-2 text-sm">
                       <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: s?.color }} />
-                      <span className="min-w-0 flex-1 text-ink/85">{L(q, 'text')}</span>
+                      <span className="min-w-0 flex-1 text-ink/85">{q.text[lang]}</span>
                       <span className="shrink-0 text-[11px] text-muted">{fmtRelative(q.at)}</span>
                     </li>
                   );

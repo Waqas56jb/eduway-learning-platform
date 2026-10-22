@@ -26,7 +26,10 @@
     "resume": "استأنف الامتحان",
     "inProgress": "قيد التقدّم · متبقٍّ {{time}}",
     "expired": "انتهى الوقت — افتح الورقة لتسليمها",
-    "a11y": "{{title}}، {{questions}} سؤالاً، {{minutes}} دقيقة"
+    "a11y": "{{title}}، {{questions}} سؤالاً، {{minutes}} دقيقة",
+    "factQuestions": "الأسئلة",
+    "factMinutes": "الدقائق",
+    "factPass": "درجة النجاح"
   },
   "previous": "المحاولات السابقة",
   "previousSub": "اضغط على أي محاولة لعرض التقرير الكامل",

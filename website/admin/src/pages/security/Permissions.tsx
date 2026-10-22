@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { Check, Minus, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ACTIONS, MODULES, type ModuleKey } from '@/types';
-import { useRoles } from '@/store/core';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { usePermissionCatalog, useRolesQuery } from '@/api/security';
+import { QueryError } from '@/components/ui/QueryError';
 import { cn } from '@/utils/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, FilterSelect, Skeleton, Tooltip } from '@/components/ui';
@@ -15,9 +15,17 @@ const SHORT: Record<(typeof ACTIONS)[number], string> = { view: 'V', create: 'C'
 export default function Permissions() {
   const { t } = useTranslation();
   const L = useLocalize();
-  const loading = useMockLoading();
-  const roles = useRoles((s) => s.items);
+  const q = useRolesQuery();
+  const catalog = usePermissionCatalog();
+  const loading = q.isLoading;
+  const roles = q.data?.items ?? [];
   const [mod, setMod] = useState<ModuleKey | ''>('');
+  // Module order/labels from the server catalog (ADM-ROL-07); falls back to the built-in list.
+  const modules: ModuleKey[] = catalog.data?.modules?.filter((m) => (MODULES as readonly string[]).includes(m)) ?? [...MODULES];
+  const modLabel = (m: ModuleKey) => {
+    const l = catalog.data?.labels?.[m];
+    return l ? L({ label_en: l.en, label_ar: l.ar }, 'label') : t(`modules.${m}`);
+  };
 
   const head = 'border-b border-line bg-surface-2 px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted';
 
@@ -31,7 +39,7 @@ export default function Permissions() {
             label={t('security.permissions.filterModule')}
             value={mod}
             onChange={(v) => setMod(v as ModuleKey | '')}
-            options={MODULES.map((m) => ({ value: m, label: t(`modules.${m}`) }))}
+            options={modules.map((m) => ({ value: m, label: modLabel(m) }))}
             className="w-56"
           />
           <div className="ms-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
@@ -57,7 +65,9 @@ export default function Permissions() {
           </div>
         </div>
 
-        {loading ? (
+        {q.error && !loading ? (
+          <QueryError compact error={q.error} onRetry={() => q.refetch()} />
+        ) : loading ? (
           <div className="space-y-3 p-5">
             {Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="h-8 w-full" />
@@ -90,23 +100,23 @@ export default function Permissions() {
                         </th>
                         {roles.map((r) => (
                           <td key={r.id} className="border-b border-line px-3 py-3 text-center">
-                            <Cell on={!!r.permissions[mod][a]} label={`${L(r, 'name')} — ${t(`perm.${a}`)}`} />
+                            <Cell on={!!r.permissions[mod]?.[a]} label={`${L(r, 'name')} — ${t(`perm.${a}`)}`} />
                           </td>
                         ))}
                       </tr>
                     ))
-                  : MODULES.map((m) => (
+                  : modules.map((m) => (
                       <tr key={m} className="hover:bg-accent/[0.03]">
                         <th scope="row" className="border-b border-line px-4 py-3 text-start">
                           <button type="button" onClick={() => setMod(m)} className="font-medium text-ink hover:text-accent">
-                            {t(`modules.${m}`)}
+                            {modLabel(m)}
                           </button>
                         </th>
                         {roles.map((r) => (
                           <td key={r.id} className="border-b border-line px-3 py-3">
                             <div className="flex justify-center gap-1" dir="ltr">
                               {ACTIONS.map((a) => {
-                                const on = !!r.permissions[m][a];
+                                const on = !!r.permissions[m]?.[a];
                                 return (
                                   <Tooltip key={a} content={`${t(`perm.${a}`)}: ${on ? t('security.permissions.allowed') : t('security.permissions.denied')}`}>
                                     <span

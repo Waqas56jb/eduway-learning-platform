@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { BottomSheet, EmptyState, Input } from '@/components/ui';
-import { governorates } from '@/data';
+import { useGovernorates, type Governorate } from '@/api';
 import { useI18n } from '@/hooks/useI18n';
 import { space } from '@/theme';
 import { haptic } from '@/utils/haptics';
+import { AUTH_INPUT_STYLE } from './MobileField';
 import { PickerRow } from './PickerRow';
-
-type Governorate = (typeof governorates)[number];
+import { usePickerBodyHeight } from './usePickerBodyHeight';
 
 interface GovernoratePickerProps {
   visible: boolean;
@@ -21,8 +21,9 @@ const normalize = (s: string) => s.toLowerCase().replace(/[ً-ْـ]/g, '').repla
 /** Searchable BottomSheet listing Iraq's governorates (localized, checkmark on selection). */
 export function GovernoratePicker({ visible, onClose, value, onSelect }: GovernoratePickerProps) {
   const { t, L } = useI18n('auth');
-  const { height } = useWindowDimensions();
   const [query, setQuery] = useState('');
+  const bodyHeight = usePickerBodyHeight(false);
+  const { data: governorates = [], isLoading } = useGovernorates();
 
   useEffect(() => {
     if (!visible) setQuery('');
@@ -32,7 +33,7 @@ export function GovernoratePicker({ visible, onClose, value, onSelect }: Governo
     const q = normalize(query);
     if (!q) return governorates;
     return governorates.filter((g) => normalize(g.name.en).includes(q) || normalize(g.name.ar).includes(q));
-  }, [query]);
+  }, [query, governorates]);
 
   const renderItem = useCallback(
     ({ item }: { item: Governorate }) => (
@@ -51,8 +52,14 @@ export function GovernoratePicker({ visible, onClose, value, onSelect }: Governo
   );
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={t('pickers.governorate.title')} snap="full">
-      <View style={styles.body}>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={t('pickers.governorate.title')}
+      snap="auto"
+      scrollable={false}
+    >
+      <View style={[styles.body, { height: bodyHeight }]}>
         <Input
           icon="search"
           placeholder={t('pickers.governorate.search')}
@@ -60,6 +67,8 @@ export function GovernoratePicker({ visible, onClose, value, onSelect }: Governo
           onChangeText={setQuery}
           autoCorrect={false}
           returnKeyType="search"
+          clearButtonMode="while-editing"
+          style={AUTH_INPUT_STYLE}
           accessibilityLabel={t('pickers.governorate.search')}
         />
         <FlatList
@@ -67,9 +76,11 @@ export function GovernoratePicker({ visible, onClose, value, onSelect }: Governo
           keyExtractor={(g) => g.id}
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={styles.list}
-          style={{ maxHeight: height * 0.6 }}
-          ListEmptyComponent={<EmptyState icon="search" title={t('pickers.noResults')} />}
+          style={styles.flex}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={isLoading ? null : <EmptyState icon="search" title={t('pickers.noResults')} />}
         />
       </View>
     </BottomSheet>
@@ -78,5 +89,6 @@ export function GovernoratePicker({ visible, onClose, value, onSelect }: Governo
 
 const styles = StyleSheet.create({
   body: { gap: space.md },
+  flex: { flex: 1 },
   list: { gap: space.xs, paddingBottom: space.lg },
 });

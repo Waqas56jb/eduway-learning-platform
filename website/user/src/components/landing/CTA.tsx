@@ -9,7 +9,7 @@ export function CTA({ showPricingLink = true }: { showPricingLink?: boolean }) {
   return (
     <section className="relative isolate overflow-hidden bg-primary py-24 text-white md:py-32">
       <SmartImage
-        src={IMAGES.graduation}
+        src={IMAGES.libraryAisle}
         alt={t('landing.cta.bgAlt')}
         wrapperClassName="!absolute inset-0 -z-20"
         overlay="bg-gradient-to-b from-primary/90 via-primary/80 to-primary/95"

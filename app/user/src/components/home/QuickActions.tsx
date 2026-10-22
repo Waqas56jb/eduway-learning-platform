@@ -1,10 +1,10 @@
 import { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { Icon, type IconName } from '@/components/icons';
 import { PressableScale, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { palette, radius, shadows, space, useTheme } from '@/theme';
+import { palette, radius, SCREEN_PADDING, shadows, space, useTheme } from '@/theme';
 import { withAlpha } from './color';
 
 interface QuickAction {
@@ -21,13 +21,17 @@ const ACTIONS: QuickAction[] = [
   { key: 'progress', icon: 'chart', href: '/progress', color: '#059669' },
 ];
 
-/** Row of four shortcut tiles. */
+const GAP = space.md;
+
+/** 2×2 grid of equal shortcut tiles (width computed from the window). */
 export const QuickActions = memo(function QuickActions() {
   const { colors, isDark } = useTheme();
   const { t } = useI18n('home');
+  const { width } = useWindowDimensions();
+  const tileWidth = Math.floor((width - SCREEN_PADDING * 2 - GAP) / 2);
 
   return (
-    <View style={styles.row}>
+    <View style={styles.grid}>
       {ACTIONS.map((a) => {
         const label = t(`quick.${a.key}`);
         return (
@@ -36,12 +40,16 @@ export const QuickActions = memo(function QuickActions() {
             onPress={() => router.push(a.href)}
             accessibilityRole="button"
             accessibilityLabel={label}
-            style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }, !isDark && shadows.sm]}
+            style={[
+              styles.tile,
+              { width: tileWidth, backgroundColor: colors.surface, borderColor: colors.border },
+              !isDark && shadows.sm,
+            ]}
           >
             <View style={[styles.icon, { backgroundColor: withAlpha(a.color, isDark ? 0.24 : 0.12) }]}>
-              <Icon name={a.icon} size={22} color={a.color} />
+              <Icon name={a.icon} size={20} color={a.color} />
             </View>
-            <Text variant="caption" align="center" numberOfLines={2}>
+            <Text variant="label" numberOfLines={2} style={styles.label}>
               {label}
             </Text>
           </PressableScale>
@@ -52,22 +60,23 @@ export const QuickActions = memo(function QuickActions() {
 });
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: space.sm },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   tile: {
-    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: space.md,
+    minHeight: 68,
+    paddingHorizontal: space.md + 2,
     paddingVertical: space.md,
-    paddingHorizontal: space.xs,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 96,
   },
   icon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: space.sm,
   },
+  label: { flex: 1 },
 });

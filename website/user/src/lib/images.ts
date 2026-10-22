@@ -15,8 +15,8 @@ export const IMAGES = {
   books: u('1497633762265-9d179a990aa6'),
   openBooks: u('1456513080510-7bf3a84b82f8'),
   education: u('1503676260728-1c00da094a0b'),
-  graduation: u('1427504494785-3a9ca7044f45'),
-  campus: u('1541339907198-e08756dedf3f'),
+  libraryAisle: u('1427504494785-3a9ca7044f45'),
+  // 1541339907198 (graduates, Singapore skyline) intentionally not used for an Iraqi brand.
   math: u('1635070041078-e363dbe005cb'),
   physics: u('1636466497217-26a8cbeaf0aa'),
   chemistry: u('1603126857599-f6e157fa2fe6'),

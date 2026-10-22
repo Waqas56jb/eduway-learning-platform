@@ -55,6 +55,7 @@
   "health": {
     "operational": "Operational",
     "degraded": "Degraded",
-    "services": "Services"
+    "services": "Services",
+    "down": "Down"
   }
 }

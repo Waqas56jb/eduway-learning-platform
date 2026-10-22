@@ -17,7 +17,8 @@
     "subscription": "الاشتراك",
     "lastActive": "آخر نشاط",
     "created": "تاريخ التسجيل",
-    "source": "المصدر"
+    "source": "المصدر",
+    "platforms": "المنصات"
   },
   "filters": {
     "status": "الحالة",
@@ -27,7 +28,8 @@
     "source": "المصدر",
     "locked": "مقفل",
     "noPackage": "بدون باقة",
-    "noSchool": "بدون مدرسة"
+    "noSchool": "بدون مدرسة",
+    "platform": "المنصة"
   },
   "source": {
     "organic": "مباشر",
@@ -57,7 +59,8 @@
     "avgScore": "متوسط الدرجات",
     "aiUsed": "أسئلة المعلّم الذكي",
     "lifetime": "إجمالي المدفوع",
-    "ofAllowance": "من أصل {{n}} هذا الشهر"
+    "ofAllowance": "من أصل {{n}} هذا الشهر",
+    "aiDisabled": "المعلم الذكي معطّل لهذا الطالب"
   },
   "tabs": {
     "overview": "نظرة عامة",
@@ -89,7 +92,21 @@
     "revoke": "سحب",
     "revokeTitle": "سحب الوصول اليدوي إلى {{subject}}؟",
     "revokeBody": "سيفقد الطالب الوصول إلى هذه المادة فوراً. لا يؤثر ذلك على صلاحيات الباقة.",
-    "revoked": "تم سحب الوصول اليدوي"
+    "revoked": "تم سحب الوصول اليدوي",
+    "entitlementLog": "سجل الوصول",
+    "noEntitlementLog": "لا توجد تغييرات في الوصول بعد",
+    "logAction": {
+      "grant": "منح",
+      "revoke": "إلغاء",
+      "extend": "تمديد",
+      "expire": "انتهاء"
+    },
+    "logSource": {
+      "package": "الباقة",
+      "manual": "يدوي",
+      "payment": "دفع",
+      "refund": "استرداد"
+    }
   },
   "activity": {
     "watch": "سجل المشاهدة",
@@ -164,6 +181,8 @@
     "attrConfirm": "تغيير انتساب {{name}}؟",
     "attrBody": "ستُحتسب التسويات القادمة للمدرسة أو الإحالة الجديدة. أدخل سبباً لسجل التدقيق.",
     "attrDone": "تم تحديث الانتساب",
-    "reasonRequired": "يرجى إدخال سبب (5 أحرف على الأقل)"
+    "reasonRequired": "يرجى إدخال سبب (5 أحرف على الأقل)",
+    "otpFailures": "محاولات رمز التحقق الفاشلة: {{count}}",
+    "otpLocked": "رمز التحقق مقفل"
   }
 }

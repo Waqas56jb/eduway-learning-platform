@@ -1,10 +1,12 @@
 import { ArrowRight, LockKeyhole, Sparkles } from 'lucide-react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthLayout, DemoHint } from '@/components/auth/AuthLayout';
 import { MobileInput } from '@/components/auth/MobileInput';
 import { DEMO_MOBILE, isIraqiMobile, normalizeMobile } from '@/components/auth/mobile';
+import { errorMessage, isApiError } from '@/api/client';
 import { Button, Seo } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { IMAGES } from '@/lib/images';
@@ -24,13 +26,21 @@ export default function Login() {
     register,
     handleSubmit,
     setValue,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({ defaultValues: { mobile: '' } });
 
   const onSubmit = async ({ mobile }: LoginForm) => {
-    await requestOtp(normalizeMobile(mobile));
-    navigate('/verify-otp', { state: { from } });
+    try {
+      await requestOtp(normalizeMobile(mobile));
+      navigate('/verify-otp', { state: { from } });
+    } catch (e) {
+      // ACCOUNT_NOT_FOUND / ACCOUNT_LOCKED / OTP_RESEND_* … shown inline under the field.
+      setError('mobile', { type: 'server', message: errorMessage(e) });
+      if (isApiError(e) && e.reason === 'ACCOUNT_NOT_FOUND') setNotFound(true);
+    }
   };
+  const [notFound, setNotFound] = useState(false);
 
   const fillDemo = () => {
     setValue('mobile', DEMO_MOBILE, { shouldValidate: true });
@@ -55,9 +65,10 @@ export default function Login() {
           hint={t('auth.mobile.hint')}
           error={errors.mobile?.message}
           autoFocus
-          {...register('mobile', {
+            {...register('mobile', {
             required: t('validation.required'),
             validate: (v) => isIraqiMobile(v) || t('validation.mobile'),
+            onChange: () => setNotFound(false),
           })}
         />
 
@@ -72,6 +83,12 @@ export default function Login() {
           {isSubmitting ? t('auth.login.sending') : t('auth.login.submit')}
         </Button>
 
+        {notFound && (
+          <Button to="/register" variant="outline" fullWidth>
+            {t('auth.login.register')}
+          </Button>
+        )}
+
         <p className="flex items-center justify-center gap-2 text-xs text-muted">
           <LockKeyhole className="h-3.5 w-3.5 text-accent" aria-hidden />
           {t('auth.login.secure')}
@@ -80,7 +97,13 @@ export default function Login() {
 
       <DemoHint
         action={
-          <Button variant="ghost" size="sm" onClick={fillDemo} disabled={isSubmitting} className="-ms-2 text-accent">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fillDemo}
+            disabled={isSubmitting}
+            rightIcon={<ArrowRight className="h-4 w-4 rtl:-scale-x-100" aria-hidden />}
+          >
             {t('auth.demo.useAccount')}
           </Button>
         }

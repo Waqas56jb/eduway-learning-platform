@@ -1,6 +1,6 @@
 const u = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=200&q=80`;
 
-/** Mock avatar gallery for the edit-profile picker. */
+/** Fallback avatar presets, used only when `/public/app-config` has none. */
 export const AVATAR_OPTIONS: readonly string[] = [
   u('photo-1506794778202-cad84cf45f1d'),
   u('photo-1500648767791-00dcc994a43e'),

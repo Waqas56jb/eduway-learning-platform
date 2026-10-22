@@ -1,24 +1,17 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, CreditCard, Download, Loader2, Lock, ShieldCheck, Smartphone, Tag, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Modal, useToast } from '@/components/ui';
-import { getSubject } from '@/data';
+import { useSubjectLookup } from '@/api/catalog';
+import { errorMessage, idempotencyKey } from '@/api/client';
+import { paymentsApi, useDownloadReceipt, useQuote, useValidatePromo, waitForPayment } from '@/api/payments';
+import { usePaymentMethods } from '@/api/public';
+import type { PaymentDetailDto, PriceQuote } from '@/api/types';
+import { Button, Input, Modal, Skeleton, useToast } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 import type { Package } from '@/types';
-import {
-  PAYMENT_METHODS,
-  PROMO_CODE,
-  PROMO_RATE,
-  formatCardNumber,
-  formatExpiry,
-  isValidExpiry,
-  newReceipt,
-  type BillingPeriod,
-  type BillingRecord,
-  type PaymentMethod,
-} from './billing';
+import { formatCardNumber, formatExpiry, isValidExpiry, type BillingPeriod, type PaymentMethod } from './billing';
 
 type Step = 'summary' | 'method' | 'details' | 'processing' | 'success';
 const STEPS: Step[] = ['summary', 'method', 'details'];
@@ -29,65 +22,117 @@ interface PaymentModalProps {
   pkg: Package;
   initialPeriod: BillingPeriod;
   defaultPhone: string;
-  onPaid: (record: BillingRecord) => void;
+  onPaid: (payment: PaymentDetailDto) => void;
 }
 
-/** Gateway "logo": initials on a brand-neutral tile (or a card icon). */
+/** Gateway "logo": initials on a brand-neutral tile in the gateway colour (or a card icon / CMS logo). */
 export function MethodLogo({ id, size = 40 }: { id: PaymentMethod; size?: number }) {
-  const m = PAYMENT_METHODS.find((x) => x.id === id);
-  if (!m) return null;
+  const { data: methods } = usePaymentMethods();
+  const m = methods?.find((x) => x.id === id);
+  if (m?.logoUrl) {
+    return <img src={m.logoUrl} alt="" aria-hidden className="shrink-0 rounded-xl object-contain shadow-sm" style={{ width: size, height: size }} />;
+  }
+  const initials = m && m.kind !== 'card' ? m.name.en.replace(/[^A-Za-z ]/g, '').split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || id.slice(0, 2).toUpperCase() : '';
   return (
     <span
       className="flex shrink-0 items-center justify-center rounded-xl text-xs font-black tracking-tight shadow-sm"
-      style={{ width: size, height: size, backgroundColor: m.bg, color: m.fg }}
+      style={{ width: size, height: size, backgroundColor: m?.color || '#0B1F3A', color: '#FFFFFF' }}
       aria-hidden
     >
-      {m.initials || <CreditCard style={{ width: size * 0.5, height: size * 0.5 }} />}
+      {initials || <CreditCard style={{ width: size * 0.5, height: size * 0.5 }} />}
     </span>
   );
 }
 
-/** Mock multi-step checkout: summary → method → gateway → processing → receipt. */
+/**
+ * Checkout: summary (PAY-04 quote, PAY-05 promo) → method (PUB-09) → gateway details → PAY-06 initiate
+ * (Idempotency-Key) → real gateway redirect, or in non-production the MockGateway (PAY-07 confirm →
+ * signed webhook) → poll PAY-08 until paid → receipt (PAY-10). Card numbers / CVV / wallet PINs never
+ * leave the browser — the card form only exists for the mock gateway's simulated hosted page.
+ */
 export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, onPaid }: PaymentModalProps) {
   const { t } = useTranslation();
   const { l, fmtNumber, fmtDate } = useLang();
   const toast = useToast();
-  const timers = useRef<number[]>([]);
+  const subjectOf = useSubjectLookup();
+  const { data: allMethods, isLoading: methodsLoading } = usePaymentMethods();
+  const PAYMENT_METHODS = useMemo(() => (allMethods ?? []).filter((m) => m.enabled), [allMethods]);
+  const quoteMutation = useQuote();
+  const validatePromo = useValidatePromo();
+  const downloadReceipt = useDownloadReceipt();
+  const abortRef = useRef<AbortController | null>(null);
+  const idemKey = useRef(idempotencyKey());
 
   const [step, setStep] = useState<Step>('summary');
   const [period, setPeriod] = useState<BillingPeriod>(initialPeriod);
   const [promoInput, setPromoInput] = useState('');
   const [promo, setPromo] = useState<string | null>(null);
   const [promoError, setPromoError] = useState('');
-  const [method, setMethod] = useState<PaymentMethod>('zain');
+  const [quote, setQuote] = useState<PriceQuote | null>(null);
+  const [method, setMethod] = useState<PaymentMethod>('zaincash');
   const [card, setCard] = useState({ number: '', name: '', expiry: '', cvc: '' });
   const [phone, setPhone] = useState(defaultPhone);
   const [submitted, setSubmitted] = useState(false);
   const [phase, setPhase] = useState(0);
-  const [record, setRecord] = useState<BillingRecord | null>(null);
+  const [record, setRecord] = useState<PaymentDetailDto | null>(null);
+  const [payError, setPayError] = useState('');
 
   // Fresh checkout every time the modal opens.
   useEffect(() => {
     if (!open) return;
     setStep('summary');
-    setPeriod(initialPeriod);
+    setPeriod(pkg.priceYearly ? initialPeriod : 'monthly');
     setPromoInput('');
     setPromo(null);
     setPromoError('');
-    setMethod('zain');
+    setQuote(null);
     setCard({ number: '', name: '', expiry: '', cvc: '' });
     setPhone(defaultPhone);
     setSubmitted(false);
     setRecord(null);
-  }, [open, initialPeriod, defaultPhone, pkg.id]);
+    setPayError('');
+    idemKey.current = idempotencyKey();
+  }, [open, initialPeriod, defaultPhone, pkg.id, pkg.priceYearly]);
 
-  useEffect(() => () => timers.current.forEach((x) => window.clearTimeout(x)), []);
+  // Default to the first enabled gateway.
+  useEffect(() => {
+    if (PAYMENT_METHODS.length && !PAYMENT_METHODS.some((m) => m.id === method)) setMethod(PAYMENT_METHODS[0].id);
+  }, [PAYMENT_METHODS, method]);
 
-  const subtotal = period === 'monthly' ? pkg.priceMonthly : pkg.priceYearly;
-  const discount = promo ? Math.round(subtotal * PROMO_RATE) : 0;
-  const total = subtotal - discount;
+  // Server quote (subtotal, promo discount, upgrade proration) whenever the plan / cycle / promo changes.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    quoteMutation.mutate(
+      { packageId: pkg.id, cycle: period, promoCode: promo ?? undefined },
+      {
+        onSuccess: (q) => alive && setQuote(q),
+        onError: (e) => {
+          if (!alive) return;
+          if (promo) {
+            setPromo(null);
+            setPromoError(errorMessage(e));
+          } else setPayError(errorMessage(e));
+        },
+      },
+    );
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pkg.id, period, promo]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const listPrice = period === 'yearly' && pkg.priceYearly ? pkg.priceYearly : pkg.priceMonthly;
+  const subtotal = quote?.subtotal ?? listPrice;
+  const total = quote?.total ?? subtotal;
   const money = (n: number) => `${fmtNumber(n)} ${t('common.currency')}`;
-  const methodName = t(`account.subscription.methods.${method}`);
+  const selected = PAYMENT_METHODS.find((m) => m.id === method);
+  const methodName = selected ? l(selected.name) : t(`account.subscription.methods.${method}`, { defaultValue: method });
+  const isCard = selected?.kind === 'card';
+  // Real gateways host their own page (redirect); the mock gateway renders our simulated form.
+  const needsDetails = !selected || selected.flow === 'mock' || selected.requiresPhone || isCard;
 
   const errors = {
     number: card.number.replace(/\s/g, '').length !== 16 ? t('account.subscription.pay.cardNumberError') : '',
@@ -96,42 +141,83 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
     cvc: !/^\d{3,4}$/.test(card.cvc) ? t('account.subscription.pay.cvcError') : '',
     phone: !/^07[3-9]\d{8}$/.test(phone.replace(/\s/g, '')) ? t('validation.mobile') : '',
   };
-  const detailsValid =
-    method === 'card' ? !errors.number && !errors.name && !errors.expiry && !errors.cvc : !errors.phone;
+  const detailsValid = isCard
+    ? !errors.number && !errors.name && !errors.expiry && !errors.cvc
+    : selected?.requiresPhone || selected?.flow === 'mock'
+      ? !errors.phone
+      : true;
 
+  // PAY-05: 200 with valid:false carries the localized reason.
   const applyPromo = () => {
-    if (promoInput.trim().toUpperCase() === PROMO_CODE) {
-      setPromo(PROMO_CODE);
-      setPromoError('');
-    } else {
-      setPromo(null);
-      setPromoError(t('account.subscription.pay.promoInvalid'));
-    }
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    validatePromo.mutate(
+      { code, packageId: pkg.id, cycle: period },
+      {
+        onSuccess: (res) => {
+          if (res.valid) {
+            setPromo(res.code || code);
+            setPromoError('');
+            if (res.quote) setQuote(res.quote);
+          } else {
+            setPromo(null);
+            setPromoError(
+              res.reason && t(`errors.reasons.${res.reason}`, { defaultValue: '' })
+                ? t(`errors.reasons.${res.reason}`)
+                : res.message || t('account.subscription.pay.promoInvalid'),
+            );
+          }
+        },
+        onError: (e) => setPromoError(errorMessage(e)),
+      },
+    );
   };
 
-  const pay = (e: FormEvent) => {
-    e.preventDefault();
+  const pay = async (e?: FormEvent) => {
+    e?.preventDefault();
     setSubmitted(true);
-    if (!detailsValid) return;
+    if (needsDetails && !detailsValid) return;
+    setPayError('');
     setStep('processing');
     setPhase(0);
-    timers.current.push(
-      window.setTimeout(() => setPhase(1), 1100),
-      window.setTimeout(() => {
-        const r: BillingRecord = {
-          id: `b-${Date.now()}`,
-          receipt: newReceipt(),
-          date: new Date().toISOString(),
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      // PAY-06 — idempotent per checkout attempt.
+      const init = await paymentsApi.initiate(
+        {
           packageId: pkg.id,
-          period,
-          amount: total,
-          method,
-        };
-        setRecord(r);
-        setStep('success');
-        onPaid(r);
-      }, 2200),
-    );
+          cycle: period,
+          gateway: method,
+          promoCode: promo ?? undefined,
+          walletPhone: !isCard && phone.trim() ? phone.replace(/\s/g, '') : undefined,
+          returnUrl: `${window.location.origin}/student/subscription?payment=__ID__`,
+        },
+        idemKey.current,
+      );
+      if (init.redirectUrl && !init.mock) {
+        window.location.assign(init.redirectUrl.replace('__ID__', init.paymentId));
+        return;
+      }
+      setPhase(1);
+      // Non-production MockGateway: confirm → signed webhook → entitlement.
+      if (init.mock) await paymentsApi.mockConfirm(init.paymentId, 'success');
+      const final = await waitForPayment(init.paymentId, controller.signal);
+      if (final.status !== 'paid') {
+        setPayError(t('account.subscription.pay.failed'));
+        setStep('details');
+        idemKey.current = idempotencyKey();
+        return;
+      }
+      setRecord(final);
+      setStep('success');
+      onPaid(final);
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      setPayError(errorMessage(err));
+      setStep(needsDetails ? 'details' : 'method');
+      idemKey.current = idempotencyKey();
+    }
   };
 
   const stepIndex = STEPS.indexOf(step);
@@ -182,7 +268,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                 <p className="mt-1 text-xl font-bold">{l(pkg.name)}</p>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {pkg.subjects.map((sid) => {
-                    const s = getSubject(sid);
+                    const s = subjectOf(sid);
                     return (
                       <span key={sid} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold">
                         {l(s?.name)}
@@ -195,7 +281,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
               <fieldset>
                 <legend className="mb-2 text-sm font-semibold text-primary">{t('account.subscription.pay.period')}</legend>
                 <div className="grid grid-cols-2 gap-2">
-                  {(['monthly', 'yearly'] as const).map((p) => (
+                  {(pkg.priceYearly ? (['monthly', 'yearly'] as const) : (['monthly'] as const)).map((p) => (
                     <label
                       key={p}
                       className={cn(
@@ -213,7 +299,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                       />
                       <span className="block text-sm font-semibold text-primary">{t(`common.${p}`)}</span>
                       <span className="mt-0.5 block text-xs text-muted num">
-                        {money(p === 'monthly' ? pkg.priceMonthly : pkg.priceYearly)}
+                        {money(p === 'monthly' ? pkg.priceMonthly : (pkg.priceYearly ?? pkg.priceMonthly))}
                       </span>
                     </label>
                   ))}
@@ -259,7 +345,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                     icon={<Tag className="h-4 w-4" />}
                     className="uppercase !pe-24 placeholder:normal-case"
                     suffix={
-                      <Button size="sm" variant="subtle" onClick={applyPromo} disabled={!promoInput.trim()}>
+                      <Button size="sm" variant="subtle" onClick={applyPromo} loading={validatePromo.isPending} disabled={!promoInput.trim()}>
                         {t('account.subscription.pay.apply')}
                       </Button>
                     }
@@ -267,15 +353,21 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                 )}
               </div>
 
-              <dl className="space-y-2 rounded-2xl bg-cream p-4 text-sm">
+              <dl className={cn('space-y-2 rounded-2xl bg-cream p-4 text-sm transition-opacity', quoteMutation.isPending && 'opacity-60')} aria-busy={quoteMutation.isPending}>
                 <div className="flex justify-between">
                   <dt className="text-muted">{t('account.subscription.pay.subtotal')}</dt>
                   <dd className="font-semibold text-primary num">{money(subtotal)}</dd>
                 </div>
-                {discount > 0 && (
+                {!!quote?.prorationCredit && (
+                  <div className="flex justify-between text-success">
+                    <dt>{t('account.subscription.pay.proration')}</dt>
+                    <dd className="font-semibold num">−{money(quote.prorationCredit)}</dd>
+                  </div>
+                )}
+                {(quote?.discount ?? 0) > 0 && (
                   <div className="flex justify-between text-success">
                     <dt>{t('account.subscription.pay.discount')}</dt>
-                    <dd className="font-semibold num">−{money(discount)}</dd>
+                    <dd className="font-semibold num">−{money(quote?.discount ?? 0)}</dd>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-primary/10 pt-2 text-base">
@@ -284,10 +376,12 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                 </div>
               </dl>
 
+              {payError && <p role="alert" className="text-sm font-semibold text-danger">{payError}</p>}
               <Button
                 fullWidth
                 size="lg"
                 onClick={() => setStep('method')}
+                disabled={!quote}
                 rightIcon={<ArrowRight className="h-4 w-4 rtl:-scale-x-100" aria-hidden />}
               >
                 {t('common.continue')}
@@ -300,6 +394,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
               <fieldset>
                 <legend className="mb-3 text-sm font-semibold text-primary">{t('account.subscription.pay.chooseMethod')}</legend>
                 <div className="grid gap-2.5 sm:grid-cols-2">
+                  {methodsLoading && [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[72px] rounded-2xl" />)}
                   {PAYMENT_METHODS.map((m) => {
                     const on = method === m.id;
                     return (
@@ -320,12 +415,8 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                         />
                         <MethodLogo id={m.id} />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold text-primary">
-                            {t(`account.subscription.methods.${m.id}`)}
-                          </span>
-                          <span className="block truncate text-xs text-muted">
-                            {t(`account.subscription.methods.${m.id}Hint`)}
-                          </span>
+                          <span className="block text-sm font-semibold text-primary">{l(m.name)}</span>
+                          <span className="block truncate text-xs text-muted">{l(m.hint)}</span>
                         </span>
                         <span
                           className={cn(
@@ -355,9 +446,11 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                 </Button>
                 <Button
                   className="flex-1"
+                  disabled={!selected}
                   onClick={() => {
                     setSubmitted(false);
-                    setStep('details');
+                    if (needsDetails) setStep('details');
+                    else void pay();
                   }}
                   rightIcon={<ArrowRight className="h-4 w-4 rtl:-scale-x-100" aria-hidden />}
                 >
@@ -380,7 +473,12 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                 <span className="text-sm font-bold text-primary num">{money(total)}</span>
               </div>
 
-              {method === 'card' ? (
+              {payError && (
+                <p role="alert" className="rounded-xl bg-danger/10 p-3 text-sm font-semibold text-danger">
+                  {payError}
+                </p>
+              )}
+              {isCard ? (
                 <>
                   <Input
                     label={t('account.subscription.pay.cardNumber')}
@@ -507,9 +605,9 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
 
               <dl className="mt-6 divide-y divide-dashed divide-primary/10 rounded-2xl border border-primary/5 bg-cream p-4 text-start text-sm">
                 {[
-                  [t('account.subscription.pay.receipt'), <span key="r" className="font-mono font-bold tracking-wide text-primary" dir="ltr">{record.receipt}</span>],
+                  [t('account.subscription.pay.receipt'), <span key="r" className="font-mono font-bold tracking-wide text-primary" dir="ltr">{record.receiptNumber ?? record.ref}</span>],
                   [t('account.subscription.pay.amount'), <span key="a" className="font-semibold num">{money(record.amount)}</span>],
-                  [t('account.subscription.pay.date'), <span key="d" className="num">{fmtDate(record.date, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>],
+                  [t('account.subscription.pay.date'), <span key="d" className="num">{fmtDate(record.paidAt ?? record.createdAt, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>],
                   [t('account.subscription.pay.method'), <span key="m">{methodName}</span>],
                 ].map(([k, v], i) => (
                   <div key={i} className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
@@ -524,7 +622,16 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                   variant="outline"
                   className="flex-1"
                   leftIcon={<Download className="h-4 w-4" aria-hidden />}
-                  onClick={() => toast.success(t('account.subscription.downloadDone'), t('account.subscription.downloadBody', { receipt: record.receipt }))}
+                  loading={downloadReceipt.isPending}
+                  onClick={() =>
+                    downloadReceipt.mutate(
+                      { id: record.id, receiptNumber: record.receiptNumber },
+                      {
+                        onSuccess: () =>
+                          toast.success(t('account.subscription.downloadDone'), t('account.subscription.downloadBody', { receipt: record.receiptNumber ?? record.ref })),
+                      },
+                    )
+                  }
                 >
                   {t('account.subscription.download')}
                 </Button>

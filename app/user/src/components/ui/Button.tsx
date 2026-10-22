@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, type IconName } from '@/components/icons';
-import { gradients, palette, radius, shadows, useTheme, type TypeVariant } from '@/theme';
+import { useLangStore } from '@/store/langStore';
+import { fontFor, gradients, lineHeightFor, palette, radius, shadows, useTheme } from '@/theme';
 import { PressableScale } from './PressableScale';
 import { Text } from './Text';
 
@@ -25,10 +26,10 @@ export interface ButtonProps {
   testID?: string;
 }
 
-const SIZES: Record<ButtonSize, { height: number; paddingH: number; icon: number; text: TypeVariant; gap: number }> = {
-  lg: { height: 52, paddingH: 24, icon: 20, text: 'bodyBold', gap: 10 },
-  md: { height: 44, paddingH: 18, icon: 18, text: 'bodyBold', gap: 8 },
-  sm: { height: 36, paddingH: 14, icon: 16, text: 'label', gap: 6 },
+const SIZES: Record<ButtonSize, { height: number; paddingH: number; icon: number; font: number; gap: number }> = {
+  lg: { height: 52, paddingH: 24, icon: 20, font: 16, gap: 8 },
+  md: { height: 44, paddingH: 18, icon: 18, font: 15, gap: 8 },
+  sm: { height: 36, paddingH: 14, icon: 16, font: 13, gap: 6 },
 };
 
 /** Primary call to action. `primary` is the signature gold gradient with navy text. */
@@ -47,82 +48,92 @@ export const Button = memo(function Button({
   testID,
 }: ButtonProps) {
   const { colors, isDark } = useTheme();
+  const isAr = useLangStore((s) => s.isAr);
   const s = SIZES[size];
 
   let background: string = 'transparent';
   let textColor: string = colors.ink;
   let borderColor: string | undefined;
   let shadow: ViewStyle = shadows.none;
+  let gradient = false;
 
-  switch (variant) {
-    case 'primary':
-      textColor = palette.navy;
-      shadow = disabled ? shadows.none : shadows.gold;
-      break;
-    case 'secondary':
-      background = isDark ? colors.primaryLight : colors.primary;
-      textColor = colors.onPrimary;
-      borderColor = isDark ? colors.border : undefined;
-      shadow = disabled ? shadows.none : shadows.md;
-      break;
-    case 'outline':
-      background = 'transparent';
-      textColor = colors.ink;
-      borderColor = isDark ? colors.border : '#D9D0BF';
-      break;
-    case 'ghost':
-      background = 'transparent';
-      textColor = isDark ? colors.accentLight : colors.primary;
-      break;
-    case 'danger':
-      background = colors.danger;
-      textColor = '#FFFFFF';
-      shadow = disabled ? shadows.none : shadows.sm;
-      break;
+  if (disabled && !loading && variant !== 'ghost') {
+    // Readable disabled state: a calm muted surface instead of a washed-out brand color.
+    background = variant === 'outline' ? 'transparent' : isDark ? 'rgba(255,255,255,0.06)' : colors.surfaceMuted;
+    textColor = colors.muted;
+    borderColor = colors.border;
+  } else {
+    switch (variant) {
+      case 'primary':
+        gradient = true;
+        textColor = palette.navy;
+        shadow = shadows.gold;
+        break;
+      case 'secondary':
+        background = isDark ? colors.primaryLight : colors.primary;
+        textColor = colors.onPrimary;
+        borderColor = isDark ? 'rgba(201,162,74,0.25)' : undefined;
+        shadow = isDark ? shadows.none : shadows.md;
+        break;
+      case 'outline':
+        textColor = colors.ink;
+        borderColor = isDark ? 'rgba(255,255,255,0.18)' : '#D9D0BF';
+        break;
+      case 'ghost':
+        textColor = disabled ? colors.muted : isDark ? colors.accentLight : colors.primary;
+        break;
+      case 'danger':
+        background = colors.danger;
+        textColor = '#FFFFFF';
+        shadow = shadows.sm;
+        break;
+    }
   }
 
-  const iconEl = icon ? <Icon name={icon} size={s.icon} color={textColor} strokeWidth={2} /> : null;
   const inactive = disabled || loading;
+  const labelStyle: TextStyle = {
+    fontFamily: fontFor('semibold', isAr),
+    fontSize: s.font,
+    lineHeight: lineHeightFor(s.font, isAr, s.font + 6),
+  };
+  const iconEl = icon ? <Icon name={icon} size={s.icon} color={textColor} strokeWidth={2} /> : null;
 
   return (
     <PressableScale
       onPress={onPress}
       disabled={inactive}
-      disabledOpacity={loading ? 1 : 0.5}
+      // Disabled is expressed by colors (readable); loading keeps full opacity behind the spinner.
+      disabledOpacity={1}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: inactive, busy: loading }}
       testID={testID}
       style={[
         styles.base,
-        {
-          height: s.height,
-          paddingHorizontal: s.paddingH,
-          backgroundColor: background,
-          borderRadius: radius.md,
-        },
-        borderColor ? { borderWidth: 1, borderColor } : null,
+        { height: s.height, paddingHorizontal: s.paddingH, backgroundColor: background },
+        borderColor ? { borderWidth: StyleSheet.hairlineWidth * 2, borderColor } : null,
         shadow,
         fullWidth && styles.fullWidth,
         style,
       ]}
     >
-      {variant === 'primary' ? (
+      {gradient ? (
         <View style={[StyleSheet.absoluteFill, styles.clip]} pointerEvents="none">
+          <LinearGradient colors={gradients.gold} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          {/* Soft top highlight + 1px inner rim for a polished, metallic finish. */}
           <LinearGradient
-            colors={gradients.gold}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
+            colors={['rgba(255,255,255,0.30)', 'rgba(255,255,255,0)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.sheen}
           />
-          {/* Soft top sheen for a polished, metallic finish. */}
-          <View style={styles.sheen} />
+          <View style={styles.rim} />
         </View>
       ) : null}
 
-      <View style={[styles.row, { gap: s.gap, opacity: loading ? 0 : 1 }]}>
+      <View style={[styles.row, { gap: s.gap, opacity: loading ? 0 : 1 }]} pointerEvents="none">
         {iconPosition === 'start' ? iconEl : null}
-        <Text variant={s.text} color={textColor} numberOfLines={1} style={size === 'lg' ? styles.lgText : undefined}>
+        <Text color={textColor} numberOfLines={1} align="center" style={[styles.label, labelStyle]} maxFontSizeMultiplier={1.25}>
           {title}
         </Text>
         {iconPosition === 'end' ? iconEl : null}
@@ -142,18 +153,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+    borderRadius: radius.md,
   },
   fullWidth: { alignSelf: 'stretch', width: '100%' },
   clip: { borderRadius: radius.md, overflow: 'hidden' },
-  sheen: {
+  sheen: { position: 'absolute', top: 0, start: 0, end: 0, height: '55%' },
+  rim: {
     position: 'absolute',
     top: 0,
+    bottom: 0,
     start: 0,
     end: 0,
-    height: '50%',
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: 'rgba(255,255,255,0.22)',
   },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', maxWidth: '100%' },
+  label: { flexShrink: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
-  lgText: { fontSize: 16 },
 });

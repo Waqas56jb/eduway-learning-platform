@@ -1,0 +1,26 @@
+/** EDUWAY API layer — axios client, react-query hooks and DTO adapters (see docs/API_CONTRACT.md). */
+export * from './types';
+export * from './keys';
+export * from './config';
+export { ApiError, normalizeError, toastError, isLockedError, hasReason } from './errors';
+export { http, get, getPaged, post, put, patch, del, idem, refreshAccessToken } from './client';
+export { queryClient } from './queryClient';
+export { useAppStatus } from './appStatus';
+export { useConnectivity, isOnline, probe } from './connectivity';
+export * from './adapters';
+export * from './public';
+export * from './auth';
+export * from './me';
+export * from './catalog';
+export * from './progress';
+export * from './quizzes';
+export * from './bank';
+export * from './mistakes';
+export * from './exams';
+export * from './examQueue';
+export * from './tutor';
+export * from './notifications';
+export * from './payments';
+export * from './storage';
+export * from './push';
+export * from './locked';

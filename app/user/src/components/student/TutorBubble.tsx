@@ -1,16 +1,17 @@
 import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { ThumbIcon } from '@/components/tutor/ThumbIcon';
 import { TutorAvatar } from '@/components/tutor/TutorAvatar';
-import { localizeMessage, messageTime } from '@/components/tutor/seed';
+import { RichText } from '@/components/tutor/RichText';
+import { isServerMessage, messageTime, type TutorMessage } from '@/components/tutor/messages';
+import { rateTutorMessage } from '@/api/tutor';
 import { MathText, Text, toast } from '@/components/ui';
 import { BLURHASH } from '@/constants/images';
 import { useI18n } from '@/hooks/useI18n';
-import type { TutorMessage } from '@/store';
 import { HIT_SLOP, palette, radius, space, useTheme } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
@@ -21,12 +22,13 @@ export interface TutorBubbleProps {
 type Feedback = 'up' | 'down' | null;
 
 /** One chat message. Student → navy bubble on the end side; tutor → surface bubble on the start side. */
-export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubbleProps) {
+export const TutorBubble = memo(function TutorBubble({ message }: TutorBubbleProps) {
   const { colors, isDark } = useTheme();
   const { t, lang } = useI18n('tutor');
-  const message = useMemo(() => localizeMessage(raw, lang, t), [raw, lang, t]);
   const time = messageTime(message.date, lang);
-  const [feedback, setFeedback] = useState<Feedback>(null);
+  const [feedback, setFeedback] = useState<Feedback>(message.rating ?? null);
+  /** Only LaTeX needs the KaTeX WebView; everything else renders as native text. */
+  const hasMath = message.text.includes('$');
 
   const onCopy = useCallback(async () => {
     haptic.light();
@@ -37,11 +39,14 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
   const onFeedback = useCallback(
     (value: Exclude<Feedback, null>) => {
       haptic.selection();
+      const prev = feedback;
       const next = feedback === value ? null : value;
       setFeedback(next);
       if (next) toast.show({ message: t('bubble.thanks'), tone: 'success', icon: 'heart' });
+      // AIT-10 (optimistic; rolled back on failure).
+      if (isServerMessage(message)) void rateTutorMessage(message.id, next).catch(() => setFeedback(prev));
     },
-    [feedback, t],
+    [feedback, message, t],
   );
 
   if (message.role === 'student') {
@@ -64,10 +69,10 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
               accessibilityLabel={t('bubble.attachment')}
             />
           ) : null}
-          <Text variant="body" color={palette.white}>
+          <Text variant="body" color={palette.white} selectable>
             {message.text}
           </Text>
-          <Text variant="caption" color="rgba(255,255,255,0.62)" align="end" style={styles.time}>
+          <Text variant="caption" color="rgba(255,255,255,0.62)" align="end" tabular style={styles.time}>
             {time}
           </Text>
         </View>
@@ -77,13 +82,17 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
 
   const actionColor = colors.muted;
   return (
-    <Animated.View entering={FadeInUp.duration(300)} style={styles.tutorRow}>
+    <Animated.View entering={FadeInUp.duration(300)} style={[styles.tutorRow, hasMath && styles.tutorRowWide]}>
       <View style={styles.avatarWrap}>
-        <TutorAvatar size={28} />
+        <TutorAvatar size={AVATAR} />
       </View>
-      <View style={styles.tutorColumn}>
+      <View style={[styles.tutorColumn, hasMath && styles.tutorColumnWide]}>
         <View
-          style={[styles.tutorBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[
+            styles.tutorBubble,
+            hasMath && styles.tutorBubbleWide,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
           accessibilityLabel={t('bubble.tutor')}
         >
           {message.imageUri ? (
@@ -97,7 +106,11 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
               accessibilityLabel={t('bubble.attachment')}
             />
           ) : null}
-          <MathText text={message.text} color={colors.ink} size={15} />
+          {hasMath ? (
+            <MathText text={message.text} color={colors.ink} size={15} />
+          ) : (
+            <RichText text={message.text} color={colors.ink} accent={colors.accent} />
+          )}
         </View>
         <View style={styles.actions}>
           <Text variant="caption" color="muted" style={styles.actionsTime}>
@@ -106,7 +119,7 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
           <Pressable
             onPress={onCopy}
             hitSlop={HIT_SLOP}
-            style={styles.action}
+            style={({ pressed }) => [styles.action, pressed && { backgroundColor: colors.surfaceMuted }]}
             accessibilityRole="button"
             accessibilityLabel={t('bubble.copy')}
           >
@@ -115,7 +128,10 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
           <Pressable
             onPress={() => onFeedback('up')}
             hitSlop={HIT_SLOP}
-            style={[styles.action, feedback === 'up' && { backgroundColor: colors.accentSoft }]}
+            style={({ pressed }) => [
+              styles.action,
+              feedback === 'up' ? { backgroundColor: colors.accentSoft } : pressed && { backgroundColor: colors.surfaceMuted },
+            ]}
             accessibilityRole="button"
             accessibilityState={{ selected: feedback === 'up' }}
             accessibilityLabel={t('bubble.helpful')}
@@ -125,7 +141,10 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
           <Pressable
             onPress={() => onFeedback('down')}
             hitSlop={HIT_SLOP}
-            style={[styles.action, feedback === 'down' && { backgroundColor: colors.dangerSoft }]}
+            style={({ pressed }) => [
+              styles.action,
+              feedback === 'down' ? { backgroundColor: colors.dangerSoft } : pressed && { backgroundColor: colors.surfaceMuted },
+            ]}
             accessibilityRole="button"
             accessibilityState={{ selected: feedback === 'down' }}
             accessibilityLabel={t('bubble.notHelpful')}
@@ -143,22 +162,27 @@ export const TutorBubble = memo(function TutorBubble({ message: raw }: TutorBubb
   );
 });
 
+const AVATAR = 28;
+
 const styles = StyleSheet.create({
-  studentRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingStart: 48 },
+  // Column child: `flex-end` is the trailing edge under native RTL too (student → end).
+  studentRow: { alignSelf: 'flex-end', maxWidth: '80%' },
   studentBubble: {
-    maxWidth: '100%',
     paddingHorizontal: space.lg,
-    paddingTop: space.md,
+    paddingTop: space.md - 2,
     paddingBottom: space.sm,
     borderRadius: radius.lg,
     borderBottomEndRadius: radius.xs,
-    gap: space.xs,
+    gap: 2,
   },
   time: { marginTop: 2 },
-  attachment: { width: 200, height: 140, borderRadius: radius.md, marginBottom: space.xs },
-  tutorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  attachment: { width: '100%', minWidth: 180, aspectRatio: 10 / 7, borderRadius: radius.md, marginBottom: space.xs },
+  // Tutor → start edge with avatar; the bubble itself stays ≤ ~80% of the row.
+  tutorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, maxWidth: '90%', alignSelf: 'flex-start' },
+  tutorRowWide: { width: '90%' },
   avatarWrap: { paddingTop: 2 },
-  tutorColumn: { flex: 1, gap: space.xs },
+  tutorColumn: { flexShrink: 1, gap: space.xs, alignItems: 'flex-start' },
+  tutorColumnWide: { flex: 1 },
   tutorBubble: {
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
@@ -167,7 +191,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: space.sm,
   },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: space.xs },
+  /** WebView content needs a definite width. */
+  tutorBubbleWide: { alignSelf: 'stretch' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingStart: space.xs },
   actionsTime: { marginEnd: space.xs },
-  action: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  action: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });

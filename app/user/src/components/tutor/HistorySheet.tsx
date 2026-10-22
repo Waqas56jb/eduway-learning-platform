@@ -4,11 +4,13 @@ import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated'
 import { Icon, SubjectIcon } from '@/components/icons';
 import { BottomSheet, Button, EmptyState, Text, toast } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { useTutorStore, type Conversation } from '@/store';
+import { useConversations, useDeleteConversation } from '@/api/tutor';
+import type { ConversationSummary } from '@/api/types';
+import type { SubjectId } from '@/types';
 import { HIT_SLOP, radius, space, subjectColors, useTheme } from '@/theme';
 import { haptic } from '@/utils/haptics';
 import { timeAgo } from '@/utils/format';
-import { conversationTitle } from './seed';
+import { conversationTitle } from './messages';
 
 interface HistorySheetProps {
   visible: boolean;
@@ -25,7 +27,7 @@ const Row = memo(function Row({
   onOpen,
   onDelete,
 }: {
-  conversation: Conversation;
+  conversation: ConversationSummary;
   active: boolean;
   index: number;
   onOpen: (id: string) => void;
@@ -33,43 +35,48 @@ const Row = memo(function Row({
 }) {
   const { colors } = useTheme();
   const { t, lang } = useI18n('tutor');
-  const color = subjectColors[conversation.subjectId];
+  const sid = conversation.subjectSlug as SubjectId;
+  const color = subjectColors[sid] ?? colors.accent;
   const title = conversationTitle(conversation, t);
-  const subject = t(`common:subjects.${conversation.subjectId}`);
+  const subject = t(`common:subjects.${sid}`);
   return (
     <Animated.View entering={FadeInDown.duration(220).delay(Math.min(index, 8) * 35)} layout={LinearTransition}>
-      <Pressable
-        onPress={() => onOpen(conversation.id)}
-        accessibilityRole="button"
-        accessibilityState={{ selected: active }}
-        accessibilityLabel={`${title}, ${subject}`}
-        style={({ pressed }) => [
+      <View
+        style={[
           styles.row,
           {
-            backgroundColor: active ? colors.accentSoft : pressed ? colors.surfaceMuted : 'transparent',
+            backgroundColor: active ? colors.accentSoft : colors.surface,
             borderColor: active ? colors.accent : colors.border,
           },
         ]}
       >
-        <View style={[styles.subjectIcon, { backgroundColor: `${color}1F` }]}>
-          <SubjectIcon subjectId={conversation.subjectId} size={18} color={color} />
-        </View>
-        <View style={styles.body}>
-          <Text variant="bodyMedium" numberOfLines={1}>
-            {title}
-          </Text>
-          <View style={styles.meta}>
-            <View style={[styles.dot, { backgroundColor: color }]} />
-            <Text variant="caption" color="muted" numberOfLines={1}>
-              {`${subject} · ${timeAgo(conversation.updatedAt, lang)}`}
-            </Text>
-            {active ? (
-              <Text variant="caption" color="accent">
-                {` · ${t('history.active')}`}
-              </Text>
-            ) : null}
+        <Pressable
+          onPress={() => onOpen(conversation.id)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: active }}
+          accessibilityLabel={`${title}, ${subject}`}
+          style={({ pressed }) => [styles.main, pressed && { opacity: 0.6 }]}
+        >
+          <View style={[styles.subjectIcon, { backgroundColor: `${color}1F` }]}>
+            <SubjectIcon subjectId={sid} size={18} color={color} />
           </View>
-        </View>
+          <View style={styles.body}>
+            <Text variant="bodyMedium" numberOfLines={1}>
+              {title}
+            </Text>
+            <View style={styles.meta}>
+              <View style={[styles.dot, { backgroundColor: color }]} />
+              <Text variant="caption" color="muted" numberOfLines={1} style={styles.shrink}>
+                {`${subject} · ${timeAgo(conversation.updatedAt, lang)}`}
+              </Text>
+              {active ? (
+                <Text variant="caption" color="accent" numberOfLines={1}>
+                  {` · ${t('history.active')}`}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </Pressable>
         <Pressable
           onPress={() => onDelete(conversation.id)}
           hitSlop={HIT_SLOP}
@@ -77,9 +84,9 @@ const Row = memo(function Row({
           accessibilityLabel={t('history.delete')}
           style={({ pressed }) => [styles.delete, pressed && { backgroundColor: colors.dangerSoft }]}
         >
-          <Icon name="trash" size={18} color={colors.muted} />
+          {({ pressed }) => <Icon name="trash" size={18} color={pressed ? colors.danger : colors.muted} />}
         </Pressable>
-      </Pressable>
+      </View>
     </Animated.View>
   );
 });
@@ -87,21 +94,20 @@ const Row = memo(function Row({
 /** Conversation history: list of past chats (subject color, title, time) + "New chat". */
 export const HistorySheet = memo(function HistorySheet({ visible, onClose, activeId, onNewChat, onOpen }: HistorySheetProps) {
   const { t } = useI18n('tutor');
-  const conversations = useTutorStore((s) => s.conversations);
-  const deleteConversation = useTutorStore((s) => s.deleteConversation);
+  const { data: conversations } = useConversations();
+  const { mutate: deleteConversation } = useDeleteConversation();
 
   const sorted = useMemo(
     () =>
-      conversations
-        .filter((c) => c.messages.length > 0 || c.id === activeId)
+      (conversations ?? [])
+        .filter((c) => c.messageCount > 0 || c.id === activeId)
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [conversations, activeId],
   );
 
   const onDelete = (id: string) => {
     haptic.warning();
-    deleteConversation(id);
-    toast.show({ message: t('history.deleted'), icon: 'trash' });
+    deleteConversation(id, { onSuccess: () => toast.show({ message: t('history.deleted'), icon: 'trash' }) });
   };
 
   return (
@@ -130,16 +136,18 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.md,
-    minHeight: 64,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.md,
+    gap: space.xs,
+    minHeight: 68,
+    paddingStart: space.md,
+    paddingEnd: space.xs,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  main: { flex: 1, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  shrink: { flexShrink: 1 },
   subjectIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  body: { flex: 1, gap: 2 },
+  body: { flex: 1, minWidth: 0, gap: 2 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  delete: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  delete: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

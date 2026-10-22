@@ -1,10 +1,10 @@
 import { memo, useCallback, useState, type ReactNode } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { PressableScale, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { palette, radius, space, useTheme } from '@/theme';
+import { SCREEN_PADDING, palette, radius, space, useTheme } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
 export interface QuestionNavigatorProps {
@@ -16,8 +16,10 @@ export interface QuestionNavigatorProps {
   onJump(i: number): void;
 }
 
-const CELL = 44;
+const MIN_CELL = 44;
+const MAX_CELL = 60;
 const GAP = 10;
+const MAX_COLUMNS = 8;
 
 const has = (v: Set<number> | boolean[], i: number) => (v instanceof Set ? v.has(i) : !!v[i]);
 
@@ -31,12 +33,20 @@ export const QuestionNavigator = memo(function QuestionNavigator({
 }: QuestionNavigatorProps) {
   const { colors, isDark } = useTheme();
   const { t, isAr } = useI18n('exams');
-  const [width, setWidth] = useState(0);
+  const window = useWindowDimensions();
+  // Start from the sheet's content width so the first frame is already laid out; refine on layout.
+  const [measured, setMeasured] = useState(0);
+  const width = measured || window.width - SCREEN_PADDING * 2;
 
-  const onLayout = useCallback((e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width), []);
-  // 5–6 columns depending on available width.
-  const columns = width >= 6 * CELL + 5 * GAP + 24 ? 6 : 5;
-  const cellSize = width > 0 ? Math.max(CELL, Math.floor((width - GAP * (columns - 1)) / columns)) : CELL;
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = Math.floor(e.nativeEvent.layout.width);
+    setMeasured((prev) => (Math.abs(prev - w) > 1 ? w : prev));
+  }, []);
+  // As many columns as fit with cells ≥ 44pt; cells grow to fill the row exactly (square, capped).
+  const columns = Math.max(1, Math.min(MAX_COLUMNS, Math.floor((width + GAP) / (MIN_CELL + GAP))));
+  const cellSize = Math.min(MAX_CELL, Math.floor((width - GAP * (columns - 1)) / columns));
+  // When capped, keep the grid centred instead of leaving a ragged end gap.
+  const gridWidth = cellSize * columns + GAP * (columns - 1);
 
   return (
     <View>
@@ -55,7 +65,8 @@ export const QuestionNavigator = memo(function QuestionNavigator({
         </LegendItem>
       </View>
 
-      <View style={[styles.grid, { gap: GAP }]} onLayout={onLayout}>
+      <View onLayout={onLayout}>
+      <Animated.View entering={FadeIn.duration(200)} style={[styles.grid, { gap: GAP, width: gridWidth }]}>
         {Array.from({ length: total }, (_, i) => {
           const isAnswered = has(answered, i);
           const isFlagged = has(flagged, i);
@@ -67,8 +78,8 @@ export const QuestionNavigator = memo(function QuestionNavigator({
             .filter(Boolean)
             .join(isAr ? '، ' : ', ');
           return (
-            <Animated.View key={i} entering={FadeIn.duration(200).delay(Math.min(i, 30) * 12)}>
               <PressableScale
+                key={i}
                 onPress={() => {
                   haptic.selection();
                   onJump(i);
@@ -81,7 +92,7 @@ export const QuestionNavigator = memo(function QuestionNavigator({
                   styles.cell,
                   {
                     width: cellSize,
-                    height: CELL,
+                    height: cellSize,
                     backgroundColor: isAnswered ? colors.accent : colors.surface,
                     borderColor: isAnswered ? colors.accent : colors.border,
                   },
@@ -99,9 +110,9 @@ export const QuestionNavigator = memo(function QuestionNavigator({
                   </View>
                 ) : null}
               </PressableScale>
-            </Animated.View>
           );
         })}
+      </Animated.View>
       </View>
     </View>
   );
@@ -127,7 +138,7 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 },
   legendSwatch: { width: 14, height: 14, borderRadius: 4, borderWidth: 1.5 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', alignSelf: 'center', paddingVertical: 6 },
   cell: {
     borderRadius: radius.sm,
     borderWidth: 1.5,

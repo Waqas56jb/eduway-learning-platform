@@ -3,7 +3,6 @@ import { ChevronsLeft, Crown, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Logo, LogoMark, ProgressBar } from '@/components/ui';
-import { getPackage } from '@/data';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
 import { useStudent } from '@/hooks/useProgress';
@@ -13,10 +12,12 @@ import { STUDENT_NAV } from './studentNav';
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { t } = useTranslation();
   const { l } = useLang();
-  const { user, logout } = useAuth();
+  const { user, me, logout } = useAuth();
   const { unreadCount } = useStudent();
   const navigate = useNavigate();
-  const pkg = getPackage(user?.packageId);
+  const sub = me?.subscription;
+  const pkg = sub && (sub.status === 'active' || sub.status === 'trial') ? sub.package : null;
+  const totalDays = Math.max(1, sub?.totalDays ?? 30);
   const groups = ['learn', 'practice', 'account'] as const;
 
   return (
@@ -90,15 +91,14 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               {l(pkg.name)}
             </div>
             <p className="mt-1 text-xs text-white/60">{t('student.plan.daysLeft', { count: user.daysRemaining })}</p>
-            <ProgressBar value={((30 - user.daysRemaining) / 30) * 100} gold size="xs" className="mt-3 bg-white/10" />
+            <ProgressBar value={((totalDays - user.daysRemaining) / totalDays) * 100} gold size="xs" className="mt-3 bg-white/10" />
           </div>
         )}
         <div className={cn('flex gap-2', collapsed ? 'flex-col items-center' : 'items-center')}>
           <button
             type="button"
             onClick={() => {
-              logout();
-              navigate('/');
+              void logout().then(() => navigate('/'));
             }}
             className={cn(
               'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/60 transition hover:bg-white/5 hover:text-white',

@@ -12,7 +12,7 @@ export interface GlassButtonProps {
   color?: string;
 }
 
-const SIZE = 40;
+const SIZE = 44;
 
 /** Round frosted button for use over imagery / the navy compact bar. */
 export function GlassButton({ icon, onPress, accessibilityLabel, filled, color = '#FFFFFF' }: GlassButtonProps) {
@@ -26,7 +26,7 @@ export function GlassButton({ icon, onPress, accessibilityLabel, filled, color =
       style={styles.btn}
     >
       {Platform.OS === 'ios' ? <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} /> : null}
-      <View style={[StyleSheet.absoluteFill, styles.tint]} />
+      <View style={[StyleSheet.absoluteFill, styles.tint]} pointerEvents="none" />
       <Icon name={icon} size={20} color={color} filled={filled} />
     </PressableScale>
   );

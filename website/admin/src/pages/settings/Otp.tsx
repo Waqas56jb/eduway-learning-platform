@@ -1,24 +1,23 @@
-import { useState } from 'react';
-import { KeyRound, ShieldCheck, Smartphone } from 'lucide-react';
+import { Bug, KeyRound, ShieldCheck, Smartphone } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useOtpSettings } from '@/store/settings';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useSaveSettings, useSettingsSection, type OtpSettings } from '@/api/settings';
 import { fmtNumber } from '@/utils/format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Field, Input, Segmented, Select, SkeletonCard } from '@/components/ui';
-import type { OtpSettings } from '@/data/settings';
-import { mockSave, ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
+import { QueryError } from '@/components/ui/QueryError';
+import { ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
 
 const PROVIDERS: OtpSettings['provider'][] = ['korek', 'twilio', 'whatsapp'];
+const EMPTY: OtpSettings = { expirySeconds: 120, codeLength: 6, resendLimit: 3, resendCooldownSeconds: 60, maxAttempts: 5, lockoutMinutes: 30, provider: 'korek', fallbackProvider: 'none', devBypassCode: null };
 
 export default function Otp() {
   const { t } = useTranslation();
-  const loading = useMockLoading();
-  const value = useOtpSettings((s) => s.value);
-  const save = useOtpSettings((s) => s.save);
+  const q = useSettingsSection('otp');
+  const save = useSaveSettings('otp');
+  const loading = q.isLoading;
+  const value = q.data ?? EMPTY;
   const { draft, set, dirty, reset } = useDraft(value);
   const editable = useCanEditSettings();
-  const [saving, setSaving] = useState(false);
 
   const num = (key: keyof OtpSettings, min: number, max: number) => ({
     type: 'number' as const,
@@ -29,10 +28,10 @@ export default function Otp() {
     onBlur: () => set(key, Math.max(min, Math.min(max, (draft[key] as number) || min)) as never),
   });
 
-  const onSave = async () => {
-    setSaving(true);
-    await mockSave(() => save(draft), t);
-    setSaving(false);
+  const badBypass = !!draft.devBypassCode && !(/^\d+$/.test(draft.devBypassCode) && draft.devBypassCode.length === draft.codeLength);
+  const onSave = () => {
+    if (badBypass) return;
+    save.mutate(draft);
   };
 
   const sample = '4829130'.slice(0, draft.codeLength);
@@ -41,7 +40,9 @@ export default function Otp() {
     <div>
       <PageHeader title={t('settings.otp.title')} subtitle={t('settings.otp.subtitle')} />
       {!editable && <ReadOnlyNotice />}
-      {loading ? (
+      {q.error && !q.data ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : loading ? (
         <div className="grid gap-6 xl:grid-cols-3">
           <SkeletonCard lines={6} className="xl:col-span-2" />
           <SkeletonCard lines={4} />
@@ -102,6 +103,19 @@ export default function Otp() {
                 </Field>
               </div>
             </Section>
+            <Section title={t('settings.otp.devSection')} subtitle={t('settings.otp.devSectionHint')} icon={<Bug className="h-4 w-4" />}>
+              <Field label={t('settings.otp.devBypassCode')} hint={t('settings.otp.devBypassHint')} error={badBypass ? t('settings.otp.devBypassInvalid', { count: draft.codeLength }) : undefined} className="max-w-xs">
+                <Input
+                  dir="ltr"
+                  inputMode="numeric"
+                  maxLength={draft.codeLength}
+                  invalid={badBypass}
+                  placeholder={t('settings.otp.devBypassPlaceholder')}
+                  value={draft.devBypassCode ?? ''}
+                  onChange={(e) => set('devBypassCode', e.target.value.replace(/\D/g, '') || null)}
+                />
+              </Field>
+            </Section>
           </div>
 
           <Section title={t('settings.otp.policyPreview')} icon={<ShieldCheck className="h-4 w-4" />}>
@@ -141,7 +155,7 @@ export default function Otp() {
           </Section>
         </fieldset>
       )}
-      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={saving} />}
+      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={save.isPending} />}
     </div>
   );
 }

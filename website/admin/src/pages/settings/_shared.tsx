@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Lock, RotateCcw, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import toast from 'react-hot-toast';
 import { useCan } from '@/store/auth';
+import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 
@@ -63,10 +63,43 @@ export function SaveBar({ dirty, onSave, onReset, saving }: { dirty: boolean; on
   );
 }
 
-/** Simulated save with latency + toast. */
-export async function mockSave(fn: () => boolean, t: (k: string) => string) {
-  await new Promise((r) => setTimeout(r, 450));
-  if (fn()) toast.success(t('toast.saved'));
+/** Toggleable pill chips (platforms, placements…). */
+export function ChipToggle<K extends string>({
+  options,
+  value,
+  onChange,
+  disabled,
+  min = 0,
+}: {
+  options: { value: K; label: ReactNode }[];
+  value: K[];
+  onChange: (next: K[]) => void;
+  disabled?: boolean;
+  /** Minimum number of selected chips (prevents deselecting the last one). */
+  min?: number;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const on = value.includes(o.value);
+        return (
+          <button
+            key={o.value}
+            type="button"
+            disabled={disabled || (on && value.length <= min)}
+            aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((v) => v !== o.value) : [...value, o.value])}
+            className={cn(
+              'rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition disabled:cursor-not-allowed disabled:opacity-60',
+              on ? 'bg-accent/15 text-primary ring-accent/50' : 'bg-surface text-muted ring-line hover:text-ink',
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function Section({ title, subtitle, icon, children, action }: { title: ReactNode; subtitle?: ReactNode; icon?: ReactNode; children: ReactNode; action?: ReactNode }) {

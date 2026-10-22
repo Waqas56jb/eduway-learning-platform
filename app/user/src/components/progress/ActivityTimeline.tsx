@@ -1,14 +1,14 @@
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Icon, type IconName } from '@/components/icons';
 import { Card, Text } from '@/components/ui';
-import { recentActivity } from '@/data';
+import { useActivity } from '@/api/progress';
+import type { ActivityItem } from '@/api/types';
 import { useI18n } from '@/hooks/useI18n';
 import { space, useTheme, type ThemeColors } from '@/theme';
 import { timeAgo } from '@/utils/format';
 
-type Kind = (typeof recentActivity)[number]['kind'];
+type Kind = ActivityItem['kind'];
 
 const KIND_ICON: Record<Kind, IconName> = { lesson: 'lesson', quiz: 'quiz', exam: 'exam', ai: 'sparkles' };
 
@@ -26,6 +26,17 @@ export const ActivityTimeline = memo(function ActivityTimeline() {
   const { colors } = useTheme();
   const { t, L, lang } = useI18n('progress');
   const palette = kindColors(colors);
+  const recentActivity = useActivity(10).data ?? [];
+
+  if (!recentActivity.length) {
+    return (
+      <Card variant="muted" elevated={false}>
+        <Text variant="body" color="muted">
+          {t('activity.empty')}
+        </Text>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -33,7 +44,7 @@ export const ActivityTimeline = memo(function ActivityTimeline() {
         const tone = palette[a.kind];
         const last = i === recentActivity.length - 1;
         return (
-          <Animated.View key={a.id} entering={FadeInDown.duration(300).delay(i * 60)} style={styles.item}>
+          <View key={a.id} style={styles.item}>
             <View style={styles.rail}>
               <View style={[styles.node, { backgroundColor: tone.bg }]}>
                 <Icon name={KIND_ICON[a.kind]} size={18} color={tone.fg} />
@@ -56,7 +67,7 @@ export const ActivityTimeline = memo(function ActivityTimeline() {
                 {L(a.meta)}
               </Text>
             </View>
-          </Animated.View>
+          </View>
         );
       })}
     </Card>

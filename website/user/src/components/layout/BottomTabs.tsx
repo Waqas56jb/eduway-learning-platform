@@ -78,8 +78,7 @@ export function BottomTabs() {
                 <button
                   type="button"
                   onClick={() => {
-                    logout();
-                    navigate('/');
+                    void logout().then(() => navigate('/'));
                   }}
                   className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-danger hover:bg-danger/5"
                 >

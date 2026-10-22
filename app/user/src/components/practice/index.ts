@@ -6,3 +6,5 @@ export { QuestionDetailSheet } from './QuestionDetailSheet';
 export { AnswerReviewItem } from './AnswerReviewItem';
 export { QuickStartCard } from './QuickStartCard';
 export { RecentAttemptRow } from './RecentAttemptRow';
+export { SessionHeader } from './SessionHeader';
+export { EntryCard } from './EntryCard';

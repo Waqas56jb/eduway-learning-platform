@@ -1,18 +1,19 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDays } from 'date-fns';
 import { KeyRound, Lock, LockOpen, School, ShieldAlert, Unlock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { Button, Card, CardBody, CardHeader, Field, Input, Select, Textarea, useConfirm } from '@/components/ui';
-import { logAudit } from '@/store/audit';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Select, Textarea, useConfirm } from '@/components/ui';
 import { useCan } from '@/store/auth';
-import { useSchools, useStudents, useSubjects } from '@/store/core';
-import type { Student } from '@/types';
-import { useLocalize } from '@/hooks/useLocale';
-import { MOCK_NOW } from '@/utils/random';
+import { useLang } from '@/hooks/useLocale';
+import { fmtDateTime } from '@/utils/format';
+import { errorMessage, isApiError } from '@/api/client';
+import { useApiMutation } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { studentsApi, useToggleLock, type AdminStudentDetail } from '@/api/students';
 
 const DURATIONS = [7, 14, 30, 60, 90];
 
@@ -25,16 +26,18 @@ function ActionCard({ icon, title, desc, children }: { icon: ReactNode; title: s
   );
 }
 
-export function ActionsTab({ student }: { student: Student }) {
+export function ActionsTab({ student }: { student: AdminStudentDetail }) {
   const { t } = useTranslation();
-  const L = useLocalize();
+  const lang = useLang();
   const can = useCan();
   const confirm = useConfirm();
-  const update = useStudents((s) => s.update);
-  const subjects = useSubjects((s) => s.items);
-  const schools = useSchools((s) => s.items);
-  const name = L(student, 'name');
+  const lookups = useLookups();
+  const subjects = lookups.subjects;
+  const schools = lookups.schools;
+  const name = student.name[lang];
   const canEdit = can('users', 'edit');
+  const detailKeys = [qk.students.detail(student.id), qk.students.sub('entitlement-logs', student.id), qk.students.list()];
+  const lockMut = useToggleLock(student.id);
 
   // ── Manual access grant ────────────────────────────────────────────────────
   const grantSchema = z.object({
@@ -44,39 +47,47 @@ export function ActionsTab({ student }: { student: Student }) {
   });
   type GrantForm = z.infer<typeof grantSchema>;
   const grant = useForm<GrantForm>({ resolver: zodResolver(grantSchema), defaultValues: { subjectId: subjects[0]?.id ?? '', days: 30, reason: '' } });
+  useEffect(() => {
+    if (!grant.getValues('subjectId') && subjects[0]) grant.setValue('subjectId', subjects[0].id);
+  }, [subjects, grant]);
 
-  const onGrant = (v: GrantForm) => {
-    const subject = subjects.find((s) => s.id === v.subjectId);
-    const expiresAt = addDays(MOCK_NOW, v.days).toISOString();
-    update(
-      student.id,
-      { entitlements: [...student.entitlements.filter((e) => !(e.subjectId === v.subjectId && e.source === 'manual')), { subjectId: v.subjectId, expiresAt, source: 'manual' }] },
-      { action: 'student.grant_access', summary: `Manual access to ${subject?.name_en} for ${v.days} days — ${v.reason}` },
-    );
-    toast.success(t('users.actions.granted', { subject: L(subject, 'name'), days: v.days }));
-    grant.reset({ subjectId: v.subjectId, days: 30, reason: '' });
-  };
+  const grantMut = useApiMutation((v: GrantForm) => studentsApi.grantAccess(student.id, v), {
+    invalidate: detailKeys,
+    onSuccess: (_d, v) => {
+      const subject = lookups.subject(v.subjectId);
+      toast.success(t('users.actions.granted', { subject: subject?.name[lang] ?? '', days: v.days }));
+      grant.reset({ subjectId: v.subjectId, days: 30, reason: '' });
+    },
+  });
+  const onGrant = (v: GrantForm) => grantMut.mutate(v);
 
   // ── Attribution ────────────────────────────────────────────────────────────
   const [schoolId, setSchoolId] = useState(student.schoolId ?? '');
   const [referral, setReferral] = useState(student.referralCode ?? '');
   const attrChanged = schoolId !== (student.schoolId ?? '') || referral.trim() !== (student.referralCode ?? '');
 
+  const [refError, setRefError] = useState<string | null>(null);
+  useEffect(() => {
+    setSchoolId(student.schoolId ?? '');
+    setReferral(student.referralCode ?? '');
+  }, [student.schoolId, student.referralCode]);
+  const attrMut = useApiMutation(
+    (reason: string) => studentsApi.attribution(student.id, { schoolId: schoolId || null, referralCode: referral.trim() || null, reason }),
+    {
+      invalidate: detailKeys,
+      success: 'users.actions.attrDone',
+      silentError: true,
+      onError: (e) => {
+        if (isApiError(e) && e.reason === 'REFERRAL_CODE_INVALID') setRefError(errorMessage(e));
+        else toast.error(errorMessage(e));
+      },
+    },
+  );
   const saveAttribution = async () => {
+    setRefError(null);
     const ok = await confirm({ title: t('users.actions.attrConfirm', { name }), body: t('users.actions.attrBody'), tone: 'warning', confirmText: t('users.actions.saveAttr'), reason: true });
     if (!ok) return;
-    const school = schools.find((s) => s.id === schoolId);
-    update(
-      student.id,
-      {
-        schoolId: schoolId || null,
-        referralCode: referral.trim() || null,
-        marketerId: school?.marketerId ?? student.marketerId,
-        source: schoolId ? 'school' : referral.trim() ? 'referral' : student.source,
-      },
-      { action: 'student.change_attribution', summary: `Changed attribution for ${student.name_en} — ${ok.reason}` },
-    );
-    toast.success(t('users.actions.attrDone'));
+    attrMut.mutate(ok.reason);
   };
 
   // ── Lock / OTP ─────────────────────────────────────────────────────────────
@@ -90,18 +101,14 @@ export function ActionsTab({ student }: { student: Student }) {
       reason: true,
     });
     if (!ok) return;
-    update(student.id, lock ? { locked: true, sessions: [] } : { locked: false }, {
-      action: lock ? 'student.lock' : 'student.unlock',
-      summary: `${lock ? 'Locked' : 'Unlocked'} account of ${student.name_en} — ${ok.reason}`,
-    });
-    toast.success(t(lock ? 'users.actions.lockedToast' : 'users.actions.unlockedToast'));
+    lockMut.mutate({ lock, reason: ok.reason });
   };
 
+  const otpMut = useApiMutation(() => studentsApi.resetOtp(student.id), { invalidate: [qk.students.detail(student.id)], success: 'users.actions.otpDone' });
   const resetOtp = async () => {
     const ok = await confirm({ title: t('users.actions.otpConfirm', { name }), body: t('users.actions.otpDesc'), tone: 'warning', confirmText: t('users.actions.otpReset') });
     if (!ok) return;
-    logAudit({ action: 'student.reset_otp', entity: 'student', entityId: student.id, summary: `Reset OTP attempts and lockout for ${student.name_en}`, before: { otpFailures: 5, otpLocked: true }, after: { otpFailures: 0, otpLocked: false } });
-    toast.success(t('users.actions.otpDone'));
+    otpMut.mutate();
   };
 
   if (!canEdit) {
@@ -119,15 +126,24 @@ export function ActionsTab({ student }: { student: Student }) {
           <span className="text-sm text-ink">
             {t('common.status')}: <strong>{student.locked ? t('status.locked') : t('status.active')}</strong>
           </span>
-          <Button variant={student.locked ? 'primary' : 'danger'} icon={student.locked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />} onClick={toggleLock}>
+          <Button variant={student.locked ? 'primary' : 'danger'} loading={lockMut.isPending} icon={student.locked ? <LockOpen className="h-4 w-4" /> : <Lock className="h-4 w-4" />} onClick={toggleLock}>
             {t(student.locked ? 'users.actions.unlockAccount' : 'users.actions.lockAccount')}
           </Button>
         </div>
       </ActionCard>
 
       <ActionCard icon={<KeyRound className="h-4 w-4" />} title={t('users.actions.otpTitle')} desc={t('users.actions.otpDesc')}>
-        <div className="flex justify-end">
-          <Button variant="secondary" icon={<KeyRound className="h-4 w-4" />} onClick={resetOtp}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="flex flex-wrap items-center gap-2 text-sm text-ink">
+            {t('users.actions.otpFailures', { count: student.otp?.failures ?? 0 })}
+            {student.otp?.locked && (
+              <Badge tone="danger">
+                {t('users.actions.otpLocked')}
+                {student.otp.lockedUntil ? ` · ${fmtDateTime(student.otp.lockedUntil)}` : ''}
+              </Badge>
+            )}
+          </span>
+          <Button variant="secondary" loading={otpMut.isPending} icon={<KeyRound className="h-4 w-4" />} onClick={resetOtp}>
             {t('users.actions.otpReset')}
           </Button>
         </div>
@@ -137,7 +153,7 @@ export function ActionsTab({ student }: { student: Student }) {
         <form onSubmit={grant.handleSubmit(onGrant)} className="space-y-4" noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t('users.actions.subject')} error={grant.formState.errors.subjectId?.message} htmlFor="grant-subject" required>
-              <Select id="grant-subject" options={subjects.map((s) => ({ value: s.id, label: L(s, 'name') }))} {...grant.register('subjectId')} />
+              <Select id="grant-subject" options={subjects.map((s) => ({ value: s.id, label: s.name[lang] }))} {...grant.register('subjectId')} />
             </Field>
             <Field label={t('users.actions.duration')} error={grant.formState.errors.days?.message} htmlFor="grant-days" required>
               <Select id="grant-days" options={DURATIONS.map((d) => ({ value: String(d), label: t('users.actions.durationDays', { count: d }) }))} {...grant.register('days')} />
@@ -147,7 +163,7 @@ export function ActionsTab({ student }: { student: Student }) {
             <Textarea id="grant-reason" rows={3} placeholder={t('users.actions.reasonPlaceholder')} invalid={!!grant.formState.errors.reason} {...grant.register('reason')} />
           </Field>
           <div className="flex justify-end">
-            <Button type="submit">{t('users.actions.grant')}</Button>
+            <Button type="submit" loading={grantMut.isPending}>{t('users.actions.grant')}</Button>
           </div>
         </form>
       </ActionCard>
@@ -159,14 +175,14 @@ export function ActionsTab({ student }: { student: Student }) {
               id="attr-school"
               value={schoolId}
               onChange={(e) => setSchoolId(e.target.value)}
-              options={[{ value: '', label: t('users.filters.noSchool') }, ...schools.map((s) => ({ value: s.id, label: `${L(s, 'name')} · ${s.code}` }))]}
+              options={[{ value: '', label: t('users.filters.noSchool') }, ...schools.map((s) => ({ value: s.id, label: `${s.name[lang]} · ${s.code}` }))]}
             />
           </Field>
-          <Field label={t('users.actions.referral')} htmlFor="attr-ref">
-            <Input id="attr-ref" value={referral} onChange={(e) => setReferral(e.target.value.toUpperCase())} placeholder="REF-XXX00" dir="ltr" />
+          <Field label={t('users.actions.referral')} htmlFor="attr-ref" error={refError ?? undefined}>
+            <Input id="attr-ref" value={referral} invalid={!!refError} onChange={(e) => { setReferral(e.target.value.toUpperCase()); setRefError(null); }} placeholder="REF-XXX00" dir="ltr" />
           </Field>
           <div className="flex justify-end">
-            <Button onClick={saveAttribution} disabled={!attrChanged}>
+            <Button onClick={saveAttribution} loading={attrMut.isPending} disabled={!attrChanged}>
               {t('users.actions.saveAttr')}
             </Button>
           </div>

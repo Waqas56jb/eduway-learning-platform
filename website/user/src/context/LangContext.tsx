@@ -13,7 +13,8 @@ export interface LangContextValue {
   l: (v: Localized | undefined) => string;
   fmtNumber: (n: number, opts?: Intl.NumberFormatOptions) => string;
   fmtDate: (iso: string | Date, opts?: Intl.DateTimeFormatOptions) => string;
-  fmtRelative: (iso: string) => string;
+  /** Relative time ("3 hours ago", "yesterday"). `clampFuture` shows future timestamps as "now" (for past events). */
+  fmtRelative: (iso: string, opts?: { clampFuture?: boolean }) => string;
 }
 
 export const LangContext = createContext<LangContextValue | null>(null);
@@ -55,12 +56,14 @@ export function LangProvider({ children }: { children: ReactNode }) {
         new Intl.DateTimeFormat(loc, opts ?? { day: 'numeric', month: 'short', year: 'numeric' }).format(
           typeof iso === 'string' ? new Date(iso) : iso,
         ),
-      fmtRelative: (iso) => {
-        const diff = (new Date(iso).getTime() - Date.now()) / 1000;
+      fmtRelative: (iso, opts) => {
+        const raw = (new Date(iso).getTime() - Date.now()) / 1000;
+        const diff = opts?.clampFuture ? Math.min(0, raw) : raw;
         const abs = Math.abs(diff);
         if (abs < 60) return rtf.format(Math.round(diff), 'second');
         if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
-        if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
+        // Switch to days as soon as the rounded hours reach 24 (→ "yesterday" / "أمس").
+        if (Math.abs(Math.round(diff / 3600)) < 24) return rtf.format(Math.round(diff / 3600), 'hour');
         if (abs < 86400 * 30) return rtf.format(Math.round(diff / 86400), 'day');
         return rtf.format(Math.round(diff / (86400 * 30)), 'month');
       },

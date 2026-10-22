@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { Difficulty, Lang, Question, QuestionOption, QuestionStatus, QuestionType } from '@/types';
 import { cn } from '@/utils/cn';
 import { uid } from '@/utils/id';
-import { useSubjects, useTopics, useUnits } from '@/store/core';
+import { useLookups } from '@/api/lookups';
 import { useLocalize } from '@/hooks/useLocale';
 import { Badge, Button, Field, Img, Input, Latex, Select, Textarea, type Tone } from '@/components/ui';
 
@@ -33,6 +33,9 @@ export function QuestionText({ text, className, block }: { text: string; classNa
     </Tag>
   );
 }
+
+/** Allowed question sources (contract QuestionWriteDto.source). */
+export const QUESTION_SOURCES = ['Ministerial Exam', 'EDUWAY Original', 'Teacher Submission', 'Textbook Exercise'] as const;
 
 export const DIFFICULTY_TONE: Record<Difficulty, Tone> = { easy: 'success', medium: 'warning', hard: 'danger' };
 
@@ -195,9 +198,10 @@ export function CurriculumSelects({
 }) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
-  const topics = useTopics((s) => s.items);
+  const lookups = useLookups();
+  const subjects = lookups.subjects;
+  const units = lookups.units;
+  const topics = lookups.topics;
   const unitOpts = units.filter((u) => u.subjectId === value.subjectId).sort((a, b) => a.order - b.order);
   const topicOpts = topics.filter((tp) => tp.unitId === value.unitId).sort((a, b) => a.order - b.order);
 
@@ -369,8 +373,7 @@ type PreviewQuestion = Pick<Question, 'type' | 'body_en' | 'body_ar' | 'options'
 export function QuestionPreview({ question, lang, reveal, compact }: { question: PreviewQuestion; lang: Lang; reveal?: boolean; compact?: boolean }) {
   const { t, i18n } = useTranslation();
   const tl = i18n.getFixedT(lang);
-  const subjects = useSubjects((s) => s.items);
-  const subject = subjects.find((s) => s.id === question.subjectId);
+  const subject = useLookups().subject(question.subjectId);
   const [selected, setSelected] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
   const [checked, setChecked] = useState(false);
@@ -531,15 +534,6 @@ export function similarity(a: string, b: string) {
   return inter / (A.size + B.size - inter);
 }
 
-/** Questions in the same topic with a near-identical stem. */
-export function findSimilar(q: Pick<Question, 'id' | 'topicId' | 'body_en'>, all: Question[], threshold = 0.72) {
-  return all
-    .filter((o) => o.id !== q.id && o.topicId === q.topicId)
-    .map((o) => ({ q: o, score: similarity(q.body_en, o.body_en) }))
-    .filter((x) => x.score >= threshold)
-    .sort((a, b) => b.score - a.score);
-}
-
 export function emptyQuestion(authorId: string): Question {
   const now = new Date().toISOString();
   return {
@@ -569,15 +563,6 @@ export function emptyQuestion(authorId: string): Question {
     createdAt: now,
     updatedAt: now,
   };
-}
-
-/** Next sequential code like `PHYS-CA-0151`. */
-export function nextQuestionCode(all: Question[], subjectKey: string, unitName: string) {
-  const SUBJ: Record<string, string> = { math: 'MATH', physics: 'PHYS', chemistry: 'CHEM', biology: 'BIO', english: 'ENG' };
-  const words = unitName.split(/\s+/).filter((w) => !['&', 'and', 'of'].includes(w.toLowerCase()));
-  const abbr = words.length === 1 ? words[0].slice(0, 2).toUpperCase() : words.map((w) => w[0]).join('').toUpperCase();
-  const max = all.reduce((m, q) => Math.max(m, Number(q.code.split('-').pop()) || 0), 0);
-  return `${SUBJ[subjectKey] ?? 'GEN'}-${abbr}-${String(max + 1).padStart(4, '0')}`;
 }
 
 export function TextareaField(props: ComponentProps<typeof Textarea> & { label: ReactNode; error?: string; required?: boolean }) {

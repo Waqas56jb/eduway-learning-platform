@@ -1,16 +1,18 @@
 import { Check, Clock3, Lock, Play } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AccordionItem, ProgressBar, ProgressRing, SmartImage } from '@/components/ui';
-import { lessonsBySubject } from '@/data';
+import type { SubjectDetail } from '@/api/types';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { cn, formatClock, toMinutes } from '@/lib/utils';
-import type { Lesson, LessonStatus, Subject } from '@/types';
+import type { Lesson, LessonStatus } from '@/types';
+
+const getLessonProgress = (l: Lesson) => ({ status: l.status, progress: l.progress });
 
 interface LessonListProps {
-  subject: Subject;
+  /** Subject detail (CAT-02): units/chapters + ordered lessons with the caller's progress and lock state. */
+  subject: SubjectDetail;
   /** Subject not included in the student's package. */
   locked?: boolean;
   /** Restrict to these lessons (defaults to all of the subject's lessons). */
@@ -24,14 +26,14 @@ interface LessonListProps {
 
 /** Curriculum list: Units (accordion) → Chapters → Lesson rows, or a flat compact list. */
 export function LessonList({ subject, locked, lessons, currentLessonId, compact, className }: LessonListProps) {
-  const items = useMemo(() => lessons ?? lessonsBySubject(subject.id), [lessons, subject.id]);
+  const items = lessons ?? subject.lessons;
 
   if (compact) {
     return (
       <ol className={cn('space-y-1.5', className)}>
         {items.map((lesson) => (
           <li key={lesson.id}>
-            <LessonRow lesson={lesson} color={subject.color} locked={locked} current={lesson.id === currentLessonId} compact />
+            <LessonRow lesson={lesson} color={subject.color} locked={locked || lesson.locked} current={lesson.id === currentLessonId} compact />
           </li>
         ))}
       </ol>
@@ -47,7 +49,7 @@ function UnitAccordion({
   currentLessonId,
   className,
 }: {
-  subject: Subject;
+  subject: SubjectDetail;
   lessons: Lesson[];
   locked?: boolean;
   currentLessonId?: string;
@@ -55,10 +57,9 @@ function UnitAccordion({
 }) {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
-  const { getLessonProgress } = useStudent();
 
   const [open, setOpen] = useState<Set<string>>(() => {
-    const byStatus = (s: LessonStatus) => lessons.find((x) => getLessonProgress(x.id).status === s);
+    const byStatus = (s: LessonStatus) => lessons.find((x) => getLessonProgress(x).status === s);
     const first = (currentLessonId && lessons.find((x) => x.id === currentLessonId)) || byStatus('in-progress') || byStatus('not-started');
     return new Set([first?.unitId ?? subject.units[0]?.id ?? '']);
   });
@@ -76,7 +77,7 @@ function UnitAccordion({
       {subject.units.map((unit, ui) => {
         const unitLessons = lessons.filter((x) => x.unitId === unit.id);
         if (!unitLessons.length) return null;
-        const done = unitLessons.filter((x) => getLessonProgress(x.id).status === 'completed').length;
+        const done = unitLessons.filter((x) => getLessonProgress(x).status === 'completed').length;
         const pct = Math.round((done / unitLessons.length) * 100);
         const totalMin = unitLessons.reduce((sum, x) => sum + toMinutes(x.duration), 0);
         return (
@@ -130,7 +131,7 @@ function UnitAccordion({
                     <ol className="space-y-1.5">
                       {chLessons.map((lesson) => (
                         <li key={lesson.id}>
-                          <LessonRow lesson={lesson} color={subject.color} locked={locked} current={lesson.id === currentLessonId} />
+                          <LessonRow lesson={lesson} color={subject.color} locked={locked || lesson.locked} current={lesson.id === currentLessonId} />
                         </li>
                       ))}
                     </ol>
@@ -190,8 +191,7 @@ function LessonRow({
 }) {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
-  const { getLessonProgress } = useStudent();
-  const prog = getLessonProgress(lesson.id);
+  const prog = getLessonProgress(lesson);
   const statusLabel = locked
     ? t('common.locked')
     : prog.status === 'completed'

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { directionStyle, isRTL } from '@/utils/rtl';
 import { Modal as RNModal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -116,7 +117,7 @@ export function Dialog({
 
   return (
     <RNModal visible={mounted} transparent statusBarTranslucent navigationBarTranslucent animationType="none" onRequestClose={onClose}>
-      <View style={styles.root}>
+      <View style={[styles.root, directionStyle(isRTL())]}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }, backdropStyle]}>
           <Pressable
             style={StyleSheet.absoluteFill}

@@ -8,13 +8,15 @@ import { radius, space, useTheme } from '@/theme';
 interface AllowancePillProps {
   remaining: number;
   quota: number;
+  /** Show only the remaining count (narrow screens). */
+  compact?: boolean;
 }
 
 const RING = 18;
 const STROKE = 3;
 
 /** "73 / 100" remaining AI questions with a mini progress ring. Gold → warning (<10) → danger (0). */
-export const AllowancePill = memo(function AllowancePill({ remaining, quota }: AllowancePillProps) {
+export const AllowancePill = memo(function AllowancePill({ remaining, quota, compact = false }: AllowancePillProps) {
   const { colors } = useTheme();
   const { t } = useI18n('tutor');
   const tone = remaining <= 0 ? colors.danger : remaining < 10 ? colors.warning : colors.accent;
@@ -44,8 +46,8 @@ export const AllowancePill = memo(function AllowancePill({ remaining, quota }: A
           strokeDashoffset={circumference * (1 - ratio)}
         />
       </Svg>
-      <Text variant="label" color={tone} tabular style={styles.label}>
-        {`${Math.max(0, remaining)} / ${quota}`}
+      <Text variant="label" color={tone} tabular numberOfLines={1} style={styles.label}>
+        {compact ? `${Math.max(0, remaining)}` : `${Math.max(0, remaining)} / ${quota}`}
       </Text>
     </View>
   );
@@ -56,8 +58,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 32,
-    paddingHorizontal: space.sm + 2,
+    height: 34,
+    paddingStart: space.sm,
+    paddingEnd: space.md - 2,
     borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },

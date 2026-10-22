@@ -1,7 +1,14 @@
 import { motion } from 'framer-motion';
 import { ArrowUpRight, Bot, CalendarCheck2, CalendarClock, Check, Crown, Download, RefreshCw, Sparkles } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
+import { useSubjectLookup } from '@/api/catalog';
+import { errorMessage } from '@/api/client';
+import { usePackages } from '@/api/packages';
+import { useDownloadReceipt, useMyPayments, waitForPayment } from '@/api/payments';
+import { useMySubscription, useRefreshEntitlements } from '@/api/subscriptions';
+import type { PaymentDetailDto, StudentPaymentDto } from '@/api/types';
 import {
   Badge,
   Button,
@@ -17,85 +24,122 @@ import {
   SkeletonList,
   SubjectIcon,
   Tabs,
-  useMockLoading,
   useToast,
+  ErrorState,
 } from '@/components/ui';
 import { MethodLogo, PaymentModal } from '@/components/student/account/PaymentModal';
-import {
-  BILLING_STORE_KEY,
-  seedBilling,
-  toLocalMobile,
-  type BillingPeriod,
-  type BillingRecord,
-} from '@/components/student/account/billing';
-import { getPackage, getSubject, packages } from '@/data';
+import { toLocalMobile, type BillingPeriod } from '@/components/student/account/billing';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
-import { readStore, writeStore } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import type { Package } from '@/types';
 
 const DAY = 86_400_000;
+const STATUS_TONE: Record<StudentPaymentDto['status'], 'success' | 'warning' | 'danger' | 'muted'> = {
+  paid: 'success',
+  pending: 'warning',
+  initiated: 'warning',
+  failed: 'danger',
+  cancelled: 'muted',
+  refunded: 'muted',
+  partially_refunded: 'warning',
+};
 
 export default function Subscription() {
   const { t } = useTranslation();
   const { l, fmtNumber, fmtDate } = useLang();
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const toast = useToast();
-  const ready = useMockLoading(600);
   const compareRef = useRef<HTMLElement>(null);
+  const [params, setParams] = useSearchParams();
+  const subjectOf = useSubjectLookup();
+  // PAY-03 current subscription, PAY-01 packages (+isCurrent), PAY-09 billing history.
+  const subQ = useMySubscription();
+  const packagesQ = usePackages();
+  const paymentsQ = useMyPayments();
+  const refreshEntitlements = useRefreshEntitlements();
+  const receipt = useDownloadReceipt();
+  const packages = packagesQ.data ?? [];
+  const history = (paymentsQ.data?.items ?? []).filter((p) => p.status !== 'initiated');
+  const ready = !subQ.isLoading && !packagesQ.isLoading;
 
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
-  const [history, setHistory] = useState<BillingRecord[]>(() => readStore(BILLING_STORE_KEY, seedBilling));
   const [checkout, setCheckout] = useState<{ pkg: Package; period: BillingPeriod } | null>(null);
   const [lastPkg, setLastPkg] = useState<Package | null>(null);
-
-  if (!user) return null;
-  const current = getPackage(user.packageId) ?? packages[packages.length - 1];
-  const totalDays = Math.max(
-    1,
-    Math.round((new Date(user.subscriptionEnd).getTime() - new Date(user.subscriptionStart).getTime()) / DAY),
-  );
-  const remainingPct = (user.daysRemaining / totalDays) * 100;
-  const money = (n: number) => `${fmtNumber(n)} ${t('common.currency')}`;
 
   const openCheckout = (pkg: Package, p: BillingPeriod = period) => {
     setLastPkg(pkg);
     setCheckout({ pkg, period: p });
   };
 
-  const onPaid = (r: BillingRecord) => {
-    const pkg = getPackage(r.packageId);
-    if (!pkg) return;
-    const days = r.period === 'monthly' ? 30 : 365;
-    const start = new Date();
-    updateUser({
-      packageId: pkg.id,
-      daysRemaining: days,
-      subscriptionStart: start.toISOString(),
-      subscriptionEnd: new Date(start.getTime() + days * DAY).toISOString(),
-      aiQuota: pkg.aiQuota,
-    });
-    const next = [r, ...history];
-    setHistory(next);
-    writeStore(BILLING_STORE_KEY, next);
+  const onPaid = (r: PaymentDetailDto) => {
+    void refreshEntitlements();
     toast.success(
       t('account.subscription.pay.toast'),
-      t('account.subscription.pay.toastBody', { plan: l(pkg.name), period: t(`account.subscription.periods.${r.period}`) }),
+      t('account.subscription.pay.toastBody', { plan: l(r.package.name), period: t(`account.subscription.periods.${r.cycle}`) }),
     );
   };
 
-  const downloadReceipt = (receipt: string) =>
-    toast.success(t('account.subscription.downloadDone'), t('account.subscription.downloadBody', { receipt }));
+  // Deep links: ?package=&cycle= (pricing CTA / locked content) opens checkout; ?payment= is the
+  // return from a hosted gateway page → poll PAY-08 until it settles.
+  useEffect(() => {
+    const pkgId = params.get('package');
+    const paymentId = params.get('payment');
+    if (pkgId && packages.length) {
+      const pkg = packages.find((p) => p.id === pkgId);
+      if (pkg) openCheckout(pkg, params.get('cycle') === 'yearly' ? 'yearly' : 'monthly');
+      params.delete('package');
+      params.delete('cycle');
+      setParams(params, { replace: true });
+    }
+    if (paymentId) {
+      params.delete('payment');
+      setParams(params, { replace: true });
+      const controller = new AbortController();
+      waitForPayment(paymentId, controller.signal)
+        .then((p) => {
+          if (p.status === 'paid') onPaid(p);
+          else toast.error(t('account.subscription.pay.failed'));
+          void paymentsQ.refetch();
+        })
+        .catch((e) => toast.error(errorMessage(e)));
+      return () => controller.abort();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packages.length]);
 
-  const methodName = (r: BillingRecord) => t(`account.subscription.methods.${r.method}`);
+  if (!user) return null;
+  const sub = subQ.data ?? null;
+  const activeSub = sub && (sub.status === 'active' || sub.status === 'trial') ? sub : null;
+  const current: Package | undefined = sub?.package ?? packages.find((p) => p.isCurrent) ?? undefined;
+  const startIso = sub?.startedAt ?? user.subscriptionStart;
+  const endIso = sub?.endsAt ?? user.subscriptionEnd;
+  const daysRemaining = sub?.daysRemaining ?? user.daysRemaining;
+  const totalDays = Math.max(1, sub?.totalDays ?? (startIso && endIso ? Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / DAY) : 30));
+  const remainingPct = sub?.remainingPct ?? (daysRemaining / totalDays) * 100;
+  const money = (n: number) => `${fmtNumber(n)} ${t('common.currency')}`;
+
+  const downloadReceipt = (r: StudentPaymentDto) =>
+    receipt.mutate(
+      { id: r.id, receiptNumber: r.receiptNumber },
+      { onSuccess: () => toast.success(t('account.subscription.downloadDone'), t('account.subscription.downloadBody', { receipt: r.receiptNumber ?? r.ref })) },
+    );
+
+  const methodName = (r: StudentPaymentDto) => t(`account.subscription.methods.${r.gateway}`, { defaultValue: r.gateway });
 
   return (
     <>
       <Seo title={t('account.subscription.seoTitle')} description={t('account.subscription.seoDescription')} />
       <PageHeader title={t('account.subscription.title')} subtitle={t('account.subscription.subtitle')} />
 
-      {!ready ? (
+      {subQ.isError || packagesQ.isError ? (
+        <ErrorState
+          onRetry={() => {
+            void subQ.refetch();
+            void packagesQ.refetch();
+          }}
+        />
+      ) : !ready ? (
         <div className="space-y-6" aria-hidden>
           <div className="grid gap-6 lg:grid-cols-2">
             <Skeleton className="aspect-[1.7/1] rounded-3xl" />
@@ -137,13 +181,19 @@ export default function Subscription() {
                   <p id="current-plan" className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-light/80">
                     {t('account.subscription.currentPlan')}
                   </p>
-                  <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">{l(current.name)}</h2>
-                  <p className="mt-1 text-sm text-white/60">{l(current.tagline)}</p>
+                  <h2 className="mt-2 text-2xl font-bold text-white sm:text-3xl">{current ? l(current.name) : t('student.plan.none')}</h2>
+                  <p className="mt-1 text-sm text-white/60">{current ? l(current.tagline) : t('account.subscription.noPlanBody')}</p>
                 </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-success/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" aria-hidden />
-                  {t('student.plan.active')}
-                </span>
+                {activeSub ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" aria-hidden />
+                    {t('student.plan.active')}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-danger/20 px-2.5 py-1 text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-300/30">
+                    {t(sub?.status === 'expired' ? 'student.plan.expired' : 'student.plan.none')}
+                  </span>
+                )}
               </div>
 
               <div className="relative mt-6 flex items-center gap-3">
@@ -165,7 +215,7 @@ export default function Subscription() {
                 </div>
                 <div className="text-end">
                   <p className="text-[10px] uppercase tracking-[0.2em] text-white/50">{t('account.subscription.ends')}</p>
-                  <p className="font-semibold num">{fmtDate(user.subscriptionEnd)}</p>
+                  <p className="font-semibold num">{endIso ? fmtDate(endIso) : '—'}</p>
                 </div>
                 <span className="hidden sm:block">
                   <LogoMark className="h-9 w-9" />
@@ -180,24 +230,24 @@ export default function Subscription() {
                     <CalendarCheck2 className="h-3.5 w-3.5" aria-hidden />
                     {t('account.subscription.starts')}
                   </p>
-                  <p className="mt-1 font-semibold text-primary num">{fmtDate(user.subscriptionStart)}</p>
+                  <p className="mt-1 font-semibold text-primary num">{startIso ? fmtDate(startIso) : '—'}</p>
                 </div>
                 <div>
                   <p className="flex items-center gap-1.5 text-xs text-muted">
                     <CalendarClock className="h-3.5 w-3.5" aria-hidden />
                     {t('account.subscription.ends')}
                   </p>
-                  <p className="mt-1 font-semibold text-primary num">{fmtDate(user.subscriptionEnd)}</p>
+                  <p className="mt-1 font-semibold text-primary num">{endIso ? fmtDate(endIso) : '—'}</p>
                 </div>
               </div>
 
               <div className="mt-5 rounded-2xl bg-cream p-4">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-sm font-bold text-primary">
-                    {t('account.subscription.daysRemaining', { count: user.daysRemaining })}
+                    {t('account.subscription.daysRemaining', { count: daysRemaining })}
                   </p>
                   <span className="text-xs text-muted num">
-                    {fmtNumber(user.daysRemaining)} / {fmtNumber(totalDays)}
+                    {fmtNumber(daysRemaining)} / {fmtNumber(totalDays)}
                   </span>
                 </div>
                 <ProgressBar
@@ -205,23 +255,19 @@ export default function Subscription() {
                   gold
                   size="md"
                   className="mt-3"
-                  label={t('account.subscription.daysRemaining', { count: user.daysRemaining })}
+                  label={t('account.subscription.daysRemaining', { count: daysRemaining })}
                 />
               </div>
 
               <div className="mt-5">
                 <p className="text-xs font-semibold text-muted">{t('account.subscription.subjectsIncluded')}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {current.subjects.map((sid) => {
-                    const s = getSubject(sid);
-                    if (!s) return null;
-                    return (
-                      <Badge key={sid} color={s.color}>
-                        <SubjectIcon id={sid} className="h-3.5 w-3.5" />
-                        {l(s.name)}
-                      </Badge>
-                    );
-                  })}
+                  {(sub?.subjects ?? (current?.subjects ?? []).map((sid) => subjectOf(sid)).filter((x): x is NonNullable<typeof x> => !!x)).map((s) => (
+                    <Badge key={s.slug} color={s.color}>
+                      <SubjectIcon id={s.slug} className="h-3.5 w-3.5" />
+                      {l(s.name)}
+                    </Badge>
+                  ))}
                 </div>
               </div>
 
@@ -232,7 +278,7 @@ export default function Subscription() {
                 <div>
                   <p className="text-xs text-muted">{t('account.subscription.aiQuota')}</p>
                   <p className="text-sm font-semibold text-primary">
-                    {t('account.subscription.aiQuotaValue', { n: fmtNumber(current.aiQuota) })}
+                    {t('account.subscription.aiQuotaValue', { n: fmtNumber(sub?.aiAllowance.quota ?? current?.aiQuota ?? 0) })}
                   </p>
                 </div>
               </div>
@@ -242,7 +288,8 @@ export default function Subscription() {
                   variant="gold"
                   className="flex-1"
                   leftIcon={<RefreshCw className="h-4 w-4" aria-hidden />}
-                  onClick={() => openCheckout(current)}
+                  disabled={!current}
+                  onClick={() => current && openCheckout(current, sub?.cycle ?? period)}
                 >
                   {t('account.subscription.renew')}
                 </Button>
@@ -268,10 +315,14 @@ export default function Subscription() {
                 <p className="mt-1 text-sm text-muted">{t('account.subscription.compareSub')}</p>
               </div>
               <Tabs<BillingPeriod>
-                items={[
-                  { id: 'monthly', label: t('common.monthly') },
-                  { id: 'yearly', label: t('common.yearly') },
-                ]}
+                items={
+                  packages.some((p) => p.priceYearly)
+                    ? [
+                        { id: 'monthly', label: t('common.monthly') },
+                        { id: 'yearly', label: t('common.yearly') },
+                      ]
+                    : [{ id: 'monthly', label: t('common.monthly') }]
+                }
                 value={period}
                 onChange={setPeriod}
                 className="self-start sm:self-auto"
@@ -279,9 +330,10 @@ export default function Subscription() {
             </div>
             <Reveal staggerChildren={0.1} className="grid gap-5 md:grid-cols-3">
               {packages.map((p) => {
-                const isCurrent = p.id === current.id;
-                const price = period === 'monthly' ? p.priceMonthly : p.priceYearly;
-                const save = Math.round((1 - p.priceYearly / (p.priceMonthly * 12)) * 100);
+                const isCurrent = !!activeSub && p.id === current?.id;
+                const yearly = period === 'yearly' && !!p.priceYearly;
+                const price = yearly ? (p.priceYearly as number) : p.priceMonthly;
+                const save = p.yearlySavingPct ?? (p.priceYearly ? Math.round((1 - p.priceYearly / (p.priceMonthly * 12)) * 100) : 0);
                 return (
                   <RevealItem
                     key={p.id}
@@ -311,16 +363,16 @@ export default function Subscription() {
                     <div className="mt-5 flex items-baseline gap-1.5">
                       <span className="text-3xl font-bold text-primary num">{fmtNumber(price)}</span>
                       <span className="text-sm text-muted">
-                        {t('common.currency')} {period === 'monthly' ? t('common.perMonth') : t('common.perYear')}
+                        {t('common.currency')} {!yearly ? t('common.perMonth') : t('common.perYear')}
                       </span>
                     </div>
                     <p className="mt-1 h-5 text-xs font-semibold text-success">
-                      {period === 'yearly' && (
+                      {yearly && (
                         <>
                           {t('account.subscription.save', { pct: save })} ·{' '}
                           <span className="font-normal text-muted num">
                             {t('account.subscription.perMonthEquiv', {
-                              price: fmtNumber(Math.round(p.priceYearly / 12)),
+                              price: fmtNumber(Math.round((p.priceYearly ?? 0) / 12)),
                               currency: t('common.currency'),
                             })}
                           </span>
@@ -329,7 +381,7 @@ export default function Subscription() {
                     </p>
                     <div className="mt-4 flex flex-wrap gap-1.5">
                       {p.subjects.map((sid) => {
-                        const s = getSubject(sid);
+                        const s = subjectOf(sid);
                         return (
                           <span
                             key={sid}
@@ -343,8 +395,8 @@ export default function Subscription() {
                       })}
                     </div>
                     <ul className="mt-5 flex-1 space-y-2.5 border-t border-primary/5 pt-5">
-                      {p.features.map((f) => (
-                        <li key={f.en} className="flex items-start gap-2.5 text-sm text-ink">
+                      {p.features.map((f, fi) => (
+                        <li key={`${fi}-${f.en}`} className="flex items-start gap-2.5 text-sm text-ink">
                           <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
                             <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
                           </span>
@@ -356,7 +408,7 @@ export default function Subscription() {
                       className="mt-6"
                       fullWidth
                       variant={isCurrent ? 'outline' : p.popular ? 'gold' : 'primary'}
-                      onClick={() => openCheckout(p)}
+                      onClick={() => openCheckout(p, yearly ? 'yearly' : 'monthly')}
                     >
                       {isCurrent ? t('account.subscription.renewThis') : t('account.subscription.choose')}
                     </Button>
@@ -373,8 +425,12 @@ export default function Subscription() {
                 <CardHeader title={<span id="history-title">{t('account.subscription.historyTitle')}</span>} subtitle={t('account.subscription.historySub')} />
               </div>
 
+              {paymentsQ.isLoading && <SkeletonList rows={3} className="px-5 pb-5" />}
+              {!paymentsQ.isLoading && history.length === 0 && (
+                <p className="px-6 pb-6 text-sm text-muted">{t('account.subscription.historyEmpty')}</p>
+              )}
               {/* Desktop table */}
-              <div className="hidden md:block">
+              <div className={cn('hidden', history.length > 0 && 'md:block')}>
                 <table className="w-full text-sm">
                   <thead className="border-y border-primary/5 bg-cream/70 text-xs text-muted">
                     <tr>
@@ -391,32 +447,33 @@ export default function Subscription() {
                   <tbody className="divide-y divide-primary/5">
                     {history.map((r) => (
                       <tr key={r.id} className="transition-colors hover:bg-cream/50">
-                        <td className="px-6 py-4 text-primary num">{fmtDate(r.date)}</td>
+                        <td className="px-6 py-4 text-primary num">{fmtDate(r.paidAt ?? r.createdAt)}</td>
                         <td className="px-6 py-4">
-                          <p className="font-semibold text-primary">{l(getPackage(r.packageId)?.name)}</p>
-                          <p className="text-xs text-muted">{t(`account.subscription.periods.${r.period}`)}</p>
+                          <p className="font-semibold text-primary">{l(r.package.name)}</p>
+                          <p className="text-xs text-muted">{t(`account.subscription.periods.${r.cycle}`)}</p>
                         </td>
                         <td className="px-6 py-4">
                           <span className="flex items-center gap-2">
-                            <MethodLogo id={r.method} size={26} />
+                            <MethodLogo id={r.gateway} size={26} />
                             {methodName(r)}
                           </span>
                         </td>
                         <td className="px-6 py-4 font-semibold text-primary num">{money(r.amount)}</td>
                         <td className="px-6 py-4 font-mono text-xs text-muted" dir="ltr">
-                          <span className="block text-start">{r.receipt}</span>
+                          <span className="block text-start">{r.receiptNumber ?? r.ref}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <Badge tone="success" dot>
-                            {t('account.subscription.paid')}
+                          <Badge tone={STATUS_TONE[r.status]} dot>
+                            {r.status === 'paid' ? t('account.subscription.paid') : t(`account.subscription.status.${r.status}`)}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 text-end">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => downloadReceipt(r.receipt)}
-                            aria-label={`${t('account.subscription.download')} ${r.receipt}`}
+                            disabled={!r.receiptNumber}
+                            onClick={() => downloadReceipt(r)}
+                            aria-label={`${t('account.subscription.download')} ${r.receiptNumber ?? r.ref}`}
                           >
                             <Download className="h-4 w-4" aria-hidden />
                           </Button>
@@ -433,29 +490,30 @@ export default function Subscription() {
                   <li key={r.id} className="rounded-2xl border border-primary/5 bg-cream/50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <MethodLogo id={r.method} size={36} />
+                        <MethodLogo id={r.gateway} size={36} />
                         <div>
-                          <p className="font-semibold text-primary">{l(getPackage(r.packageId)?.name)}</p>
+                          <p className="font-semibold text-primary">{l(r.package.name)}</p>
                           <p className="text-xs text-muted num">
-                            {fmtDate(r.date)} · {methodName(r)}
+                            {fmtDate(r.paidAt ?? r.createdAt)} · {methodName(r)}
                           </p>
                         </div>
                       </div>
-                      <Badge tone="success" dot>
-                        {t('account.subscription.paid')}
+                      <Badge tone={STATUS_TONE[r.status]} dot>
+                        {r.status === 'paid' ? t('account.subscription.paid') : t(`account.subscription.status.${r.status}`)}
                       </Badge>
                     </div>
                     <div className="mt-3 flex items-center justify-between border-t border-primary/5 pt-3">
                       <div>
                         <p className="font-bold text-primary num">{money(r.amount)}</p>
                         <p className="font-mono text-[11px] text-muted" dir="ltr">
-                          {r.receipt}
+                          {r.receiptNumber ?? r.ref}
                         </p>
                       </div>
                       <Button
                         variant="subtle"
                         size="sm"
-                        onClick={() => downloadReceipt(r.receipt)}
+                        disabled={!r.receiptNumber}
+                        onClick={() => downloadReceipt(r)}
                         leftIcon={<Download className="h-4 w-4" aria-hidden />}
                       >
                         {t('account.subscription.download')}

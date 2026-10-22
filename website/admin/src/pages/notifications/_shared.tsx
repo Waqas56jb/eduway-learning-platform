@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { Bell, ChevronLeft, Mail, MessageCircle, MessageSquare, Smartphone, Wifi, BatteryFull, SignalHigh } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NotifChannel } from '@/types';
-import { TEMPLATE_VARIABLES } from '@/data/messaging';
+import { useApiQuery } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { notificationsApi, type TemplateVariableDto } from '@/api/notifications';
 import { cn } from '@/utils/cn';
 import { LogoMark } from '@/components/layout/Logo';
 import type { Tone } from '@/components/ui';
@@ -28,9 +30,19 @@ export function ChannelIcon({ channel, className }: { channel: NotifChannel; cla
 /** Channels that render a subject/title line. */
 export const HAS_SUBJECT: Record<NotifChannel, boolean> = { push: true, in_app: true, email: true, sms: false, whatsapp: false };
 
+export type VariableSamples = Record<string, { en: string; ar: string }>;
+
+/** Template variable catalogue (ADM-NTT-08) → `{ key: sample }` map + full list. Cached for the session. */
+export function useTemplateVariables() {
+  const q = useApiQuery(qk.templates.sub('variables'), notificationsApi.variables, { staleTime: 10 * 60_000 });
+  const list: TemplateVariableDto[] = q.data ?? [];
+  const samples: VariableSamples = Object.fromEntries(list.map((v) => [v.key, v.sample]));
+  return { list, samples, isLoading: q.isLoading, error: q.error, refetch: q.refetch };
+}
+
 /** Replace {variables} with sample values for previews. */
-export function renderTemplate(text: string, lang: 'en' | 'ar') {
-  return text.replace(/\{(\w+)\}/g, (m, k: string) => TEMPLATE_VARIABLES[k]?.[lang] ?? m);
+export function renderTemplate(text: string, lang: 'en' | 'ar', samples: VariableSamples = {}) {
+  return text.replace(/\{(\w+)\}/g, (m, k: string) => samples[k]?.[lang] ?? m);
 }
 
 /** Variables referenced in a text. */
@@ -50,14 +62,16 @@ interface PhonePreviewProps {
   lang: 'en' | 'ar';
   subject: string;
   body: string;
+  /** Sample values for {variables} (from `useTemplateVariables`). */
+  samples?: VariableSamples;
 }
 
 /** Phone mockup rendering a template the way students will see it on each channel. */
-export function PhonePreview({ channel, lang, subject, body }: PhonePreviewProps) {
+export function PhonePreview({ channel, lang, subject, body, samples }: PhonePreviewProps) {
   const { t } = useTranslation();
   const rtl = lang === 'ar';
-  const s = renderTemplate(subject, lang);
-  const b = renderTemplate(body, lang);
+  const s = renderTemplate(subject, lang, samples);
+  const b = renderTemplate(body, lang, samples);
   const font = rtl ? 'Tajawal, sans-serif' : 'Inter, sans-serif';
   const appName = rtl ? 'إيدوواي' : 'EDUWAY';
 

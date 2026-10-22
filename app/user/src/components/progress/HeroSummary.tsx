@@ -1,10 +1,10 @@
 import { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, type IconName } from '@/components/icons';
 import { ProgressRing, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { gradients, palette, radius, shadows, space } from '@/theme';
+import { gradients, palette, radius, SCREEN_PADDING, shadows, space } from '@/theme';
 import { formatNumber } from '@/utils/format';
 
 interface HeroSummaryProps {
@@ -20,6 +20,9 @@ const ON_NAVY_MUTED = 'rgba(255,255,255,0.68)';
 /** Navy gradient summary card: overall completion ring + key study stats. */
 export const HeroSummary = memo(function HeroSummary({ completion, streak, activeDays, hours, lessonsDone }: HeroSummaryProps) {
   const { t, lang } = useI18n('progress');
+  const { width } = useWindowDimensions();
+  // Ring scales with the card: ~30% of the content width, clamped for SE → Pro Max.
+  const ringSize = Math.round(Math.max(92, Math.min(120, (width - SCREEN_PADDING * 2) * 0.3)));
 
   const stats: { icon: IconName; value: string; label: string }[] = [
     { icon: 'flame', value: formatNumber(streak, lang), label: t('hero.streak') },
@@ -37,14 +40,14 @@ export const HeroSummary = memo(function HeroSummary({ completion, streak, activ
         <View style={styles.top}>
           <ProgressRing
             progress={completion}
-            size={112}
-            strokeWidth={10}
+            size={ringSize}
+            strokeWidth={ringSize >= 110 ? 10 : 8}
             color={palette.gold}
             trackColor="rgba(255,255,255,0.12)"
             label=""
           >
             <View style={styles.ringCenter}>
-              <Text variant="h1" display color={palette.white} tabular align="center">
+              <Text variant={ringSize >= 110 ? 'h1' : 'h2'} display color={palette.white} tabular align="center" numberOfLines={1}>
                 {`${completion}%`}
               </Text>
               <Text variant="caption" color={palette.goldLight} align="center" numberOfLines={1}>
@@ -57,12 +60,12 @@ export const HeroSummary = memo(function HeroSummary({ completion, streak, activ
             <Text variant="overline" color={palette.goldLight}>
               {t('hero.eyebrow')}
             </Text>
-            <Text variant="h3" color={palette.white} style={styles.headline}>
+            <Text variant="h3" color={palette.white} numberOfLines={3} style={styles.headline}>
               {t('hero.headline', { value: completion })}
             </Text>
             <View style={styles.pill}>
               <Icon name="check-circle" size={14} color={palette.goldLight} />
-              <Text variant="caption" color={palette.white} numberOfLines={1}>
+              <Text variant="caption" color={palette.white} numberOfLines={1} style={styles.shrink}>
                 {t('hero.lessonsDone', { value: lessonsDone })}
               </Text>
             </View>
@@ -77,7 +80,7 @@ export const HeroSummary = memo(function HeroSummary({ completion, streak, activ
               <View style={styles.statIcon}>
                 <Icon name={s.icon} size={16} color={palette.gold} filled={s.icon === 'flame'} />
               </View>
-              <Text variant="h2" display color={palette.white} tabular align="center">
+              <Text variant="h2" display color={palette.white} tabular align="center" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
                 {s.value}
               </Text>
               <Text variant="caption" color={ON_NAVY_MUTED} align="center" numberOfLines={1}>
@@ -92,8 +95,8 @@ export const HeroSummary = memo(function HeroSummary({ completion, streak, activ
 });
 
 const styles = StyleSheet.create({
-  shadow: { borderRadius: radius.xl },
-  card: { borderRadius: radius.xl, padding: space.xl, overflow: 'hidden' },
+  shadow: { borderRadius: radius.lg },
+  card: { borderRadius: radius.lg, padding: space.xl, overflow: 'hidden' },
   glow: {
     position: 'absolute',
     top: -80,
@@ -114,10 +117,12 @@ const styles = StyleSheet.create({
   },
   top: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   flex: { flex: 1, gap: space.xs },
-  ringCenter: { alignItems: 'center', justifyContent: 'center' },
+  ringCenter: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
+  shrink: { flexShrink: 1 },
   headline: { marginBottom: space.xs },
   pill: {
     alignSelf: 'flex-start',
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,

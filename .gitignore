@@ -1,0 +1,7 @@
+# EDUWAY monorepo — each app also has its own .gitignore
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

@@ -55,6 +55,7 @@
   "health": {
     "operational": "يعمل",
     "degraded": "أداء منخفض",
-    "services": "الخدمات"
+    "services": "الخدمات",
+    "down": "متوقف"
   }
 }

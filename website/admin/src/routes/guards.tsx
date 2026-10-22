@@ -1,18 +1,75 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ShieldOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import type { ModuleKey, PermAction } from '@/types';
 import { useAuth, useCan, useCurrentRole } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { ButtonLink } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
+import { adminMeApi, authApi } from '@/api/auth';
+import { qk } from '@/api/keys';
+import { errorMessage, isApiError } from '@/api/client';
+import { Logo } from '@/components/layout/Logo';
 
-/** Requires a fully authenticated (password + 2FA) session. */
+/** Loads GET /auth/me for the stored session (permissions, role, preferences). */
+function useBootstrapMe() {
+  const stage = useAuth((s) => s.stage);
+  const setMe = useAuth((s) => s.setMe);
+  const logout = useAuth((s) => s.logout);
+  const q = useQuery({ queryKey: qk.me, queryFn: authApi.me, enabled: stage === 'auth', staleTime: 60_000, meta: { silentError: true } });
+  useEffect(() => {
+    if (q.data) setMe(q.data);
+  }, [q.data, setMe]);
+  // Persist the language choice server-side (ADM-ME-04).
+  const { i18n } = useTranslation();
+  useEffect(() => {
+    if (stage !== 'auth') return;
+    const on = (lng: string) => {
+      adminMeApi.preferences({ language: lng === 'ar' ? 'ar' : 'en' }).catch(() => undefined);
+    };
+    i18n.on('languageChanged', on);
+    return () => i18n.off('languageChanged', on);
+  }, [stage, i18n]);
+  useEffect(() => {
+    if (q.error && isApiError(q.error) && (q.error.status === 401 || q.error.status === 403)) logout({ silent: true });
+  }, [q.error, logout]);
+  return q;
+}
+
+function BootScreen({ error, onRetry }: { error?: unknown; onRetry?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="grid min-h-screen place-items-center bg-app px-6">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="text-primary">
+          <Logo />
+        </div>
+        {error ? (
+          <>
+            <p className="max-w-sm text-sm text-muted">{errorMessage(error)}</p>
+            <Button variant="secondary" size="sm" onClick={onRetry}>
+              {t('api.retry')}
+            </Button>
+          </>
+        ) : (
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-label={t('common.loading')} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Requires a fully authenticated (password + optional MFA) session with `/auth/me` loaded. */
 export function ProtectedRoute() {
   const stage = useAuth((s) => s.stage);
+  const me = useAuth((s) => s.me);
   const location = useLocation();
-  if (stage !== 'auth') return <Navigate to={stage === '2fa' ? '/verify-2fa' : '/login'} replace state={{ from: location.pathname }} />;
+  const q = useBootstrapMe();
+  if (stage !== 'auth')
+    return <Navigate to={stage === '2fa' || stage === 'enroll' ? '/verify-2fa' : '/login'} replace state={{ from: location.pathname }} />;
+  if (!me) return <BootScreen error={q.error} onRetry={() => q.refetch()} />;
   return <Outlet />;
 }
 
@@ -52,7 +109,7 @@ export function RequirePermission({ module, action = 'view', children }: { modul
   return can(module, action) ? <>{children}</> : <Forbidden />;
 }
 
-/** Hide UI that the current role cannot use. */
+/** Hide UI that the current role cannot use. (Also see `<Can perm="module.action">` in src/api/permissions.ts.) */
 export function Can({ module, action = 'view', children, fallback = null }: { module: ModuleKey; action?: PermAction; children: ReactNode; fallback?: ReactNode }) {
   const can = useCan();
   return <>{can(module, action) ? children : fallback}</>;

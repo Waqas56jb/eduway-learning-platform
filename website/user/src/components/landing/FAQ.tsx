@@ -2,16 +2,16 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Clock, MessagesSquare } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccordionItem, Button, Reveal, SectionHeading, SkeletonList, fadeUp, stagger, useMockLoading } from '@/components/ui';
-import { faq } from '@/data';
+import { useFaq } from '@/api/public';
+import { AccordionItem, Button, ErrorState, Reveal, SectionHeading, SkeletonList, fadeUp, stagger } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 
 /** FAQ accordion (one item open at a time) with a contact side panel. */
-export function FaqSection({ className }: { className?: string }) {
+export function FaqSection({ className, placement = 'landing' }: { className?: string; placement?: 'landing' | 'pricing' | 'contact' }) {
   const { t } = useTranslation();
   const { l } = useLang();
-  const ready = useMockLoading(450);
+  const { data: faq = [], isLoading, isError, refetch } = useFaq(placement);
   const [open, setOpen] = useState<number | null>(0);
 
   return (
@@ -20,7 +20,9 @@ export function FaqSection({ className }: { className?: string }) {
         <SectionHeading eyebrow={t('landing.faq.eyebrow')} title={t('landing.faq.title')} subtitle={t('landing.faq.subtitle')} />
 
         <div className="mx-auto mt-14 grid max-w-6xl gap-8 lg:grid-cols-[1fr_340px] lg:items-start">
-          {ready ? (
+          {isError ? (
+            <ErrorState onRetry={() => void refetch()} />
+          ) : !isLoading ? (
             <motion.ul
               className="space-y-3"
               variants={stagger(0.06)}
@@ -32,7 +34,7 @@ export function FaqSection({ className }: { className?: string }) {
                 const isOpen = open === i;
                 return (
                   <motion.li
-                    key={item.q.en}
+                    key={item.id}
                     variants={fadeUp}
                     className={cn(
                       'rounded-2xl border bg-white transition-all duration-300',

@@ -17,7 +17,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -35,32 +35,29 @@ import {
   Skeleton,
   SkeletonList,
   Switch,
-  useMockLoading,
   useToast,
 } from '@/components/ui';
-import { BILLING_STORE_KEY } from '@/components/student/account/billing';
-import { TUTOR_STORE_KEY } from '@/components/student/tutor/tutorEngine';
-import { demoUser, getGovernorate, getPackage, governorates } from '@/data';
+import { authApi } from '@/api/auth';
+import { errorMessage } from '@/api/client';
+import {
+  useNotificationPrefs,
+  useRevokeOtherSessions,
+  useRevokeSession,
+  useSessions,
+  useUpdateMe,
+  useUpdateNotificationPrefs,
+} from '@/api/me';
+import { useGovernorates, useSchools } from '@/api/public';
+import { uploadFile } from '@/api/storage';
+import { normalizeMobile } from '@/components/auth/mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
-import { readStore, writeStore } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import type { Lang, Session } from '@/types';
 
-const PREFS_KEY = 'eduway.notifPrefs.v1';
-const MEMBER_SINCE = '2025-09-01T00:00:00Z';
-
+/** The web profile shows these 6 of the 9 NotificationPrefs toggles (ME-09/10). */
 const PREF_KEYS = ['lessons', 'exams', 'payments', 'weekly', 'sms', 'whatsapp'] as const;
 type PrefKey = (typeof PREF_KEYS)[number];
-const DEFAULT_PREFS: Record<PrefKey, boolean> = {
-  lessons: true,
-  exams: true,
-  payments: true,
-  weekly: true,
-  sms: false,
-  whatsapp: true,
-};
 
 interface FormValues {
   name: string;
@@ -70,8 +67,11 @@ interface FormValues {
 
 type Confirm = { kind: 'session'; session: Session } | { kind: 'others' } | { kind: 'reset' } | null;
 
-const deviceIcon = (device: string) => {
-  if (/iphone|android|app/i.test(device)) return Smartphone;
+/** Never let a server timestamp read as "in 2 minutes" on a device whose clock is behind. */
+const pastIso = (iso: string) => new Date(Math.min(new Date(iso).getTime(), Date.now() - 60_000)).toISOString();
+
+const deviceIcon = (device: string, platform?: string) => {
+  if (platform === 'ios' || platform === 'android' || /iphone|android|app/i.test(device)) return Smartphone;
   if (/ipad|tablet/i.test(device)) return Tablet;
   return Monitor;
 };
@@ -91,13 +91,22 @@ function Section({ icon, title, subtitle, children, className }: { icon: ReactNo
 export default function Profile() {
   const { t, i18n } = useTranslation();
   const { l, lang, setLang, fmtDate, fmtRelative } = useLang();
-  const { user, updateUser, logout } = useAuth();
-  const { resetDemo } = useStudent();
+  const { user, me, logout } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const ready = useMockLoading(550);
-
-  const [prefs, setPrefs] = useState<Record<PrefKey, boolean>>(() => ({ ...DEFAULT_PREFS, ...readStore(PREFS_KEY, {}) }));
+  // ME-01 (via /auth/me), ME-02 update, ME-03/04/05 sessions, ME-09/10 notification prefs, PUB-02/03 lookups.
+  const updateMe = useUpdateMe();
+  const sessionsQ = useSessions();
+  const revokeSession = useRevokeSession();
+  const revokeOthers = useRevokeOtherSessions();
+  const prefsQ = useNotificationPrefs();
+  const updatePrefs = useUpdateNotificationPrefs();
+  const { data: governorates = [] } = useGovernorates();
+  const ready = !!user && !sessionsQ.isLoading;
+  const prefs = prefsQ.data ?? me?.notificationPrefs;
+  const sessions = sessionsQ.data ?? [];
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const ask = (c: NonNullable<Confirm>) => {
@@ -109,81 +118,109 @@ export default function Profile() {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isDirty, isSubmitting },
   } = useForm<FormValues>({
     defaultValues: {
-      name: user ? user.name[lang] : '',
+      name: user ? user.name[lang] || user.name.en : '',
       governorate: user?.governorate ?? '',
-      school: user ? user.school[lang] : '',
+      school: user?.school ? user.school[lang] || user.school.en : '',
     },
   });
+  const governorate = watch('governorate');
+  const { data: schools = [] } = useSchools(governorate || undefined, undefined, !!governorate);
+
+  // Re-sync the form when the profile is refetched (e.g. after saving) and nothing is being edited.
+  useEffect(() => {
+    if (!user || isDirty) return;
+    reset({
+      name: user.name[lang] || user.name.en,
+      governorate: user.governorate,
+      school: user.school ? user.school[lang] || user.school.en : '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.name.en, user?.governorate, user?.school?.en, lang]);
 
   if (!user) return null;
 
   const onSave = async (v: FormValues) => {
-    await new Promise((r) => setTimeout(r, 600));
     const name = v.name.trim().replace(/\s+/g, ' ');
-    const first = name.split(' ')[0] ?? name;
     const school = v.school.trim();
-    updateUser({
-      name: { en: name, ar: name },
-      firstName: { en: first, ar: first },
-      governorate: v.governorate,
-      school: { en: school, ar: school },
-    });
-    reset({ name, governorate: v.governorate, school });
-    toast.success(t('toast.saved'));
+    const match = schools.find((s) => s.name.en.toLowerCase() === school.toLowerCase() || s.name.ar === school);
+    try {
+      await updateMe.mutateAsync({
+        name,
+        governorateId: v.governorate,
+        schoolId: match ? match.id : null,
+        schoolName: match ? null : school || null,
+      });
+      reset({ name, governorate: v.governorate, school });
+      toast.success(t('toast.saved'));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   };
 
   const changeLang = (next: Lang) => {
     if (next === lang) return;
     setLang(next);
-    updateUser({ language: next });
+    updateMe.mutate({ language: next });
     toast.success(i18n.getFixedT(next)('account.profile.languageChanged'));
   };
 
   const togglePref = (k: PrefKey, v: boolean) => {
-    const next = { ...prefs, [k]: v };
-    setPrefs(next);
-    writeStore(PREFS_KEY, next);
-    toast.success(t('account.profile.notifSaved'));
+    updatePrefs.mutate({ [k]: v }, { onSuccess: () => toast.success(t('account.profile.notifSaved')) });
   };
 
-  const others = user.sessions.filter((s) => !s.current);
+  // STO-01 (purpose student_avatar) → PATCH /me { avatarFileKey }.
+  const onPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fileKey = await uploadFile(file, 'student_avatar');
+      await updateMe.mutateAsync({ avatarFileKey: fileKey });
+      toast.success(t('toast.saved'));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
 
-  const runConfirm = () => {
+  const others = sessions.filter((s) => !s.current);
+
+  const runConfirm = async () => {
     if (!confirm) return;
-    if (confirm.kind === 'session') {
-      updateUser({ sessions: user.sessions.filter((s) => s.id !== confirm.session.id) });
-      toast.success(t('account.profile.deviceRemoved'));
-    } else if (confirm.kind === 'others') {
-      updateUser({ sessions: user.sessions.filter((s) => s.current) });
-      toast.success(t('account.profile.othersRemoved'));
-    } else {
-      resetDemo();
-      // Also restore the demo subscription (a mock purchase changes the plan and AI allowance).
-      updateUser({
-        packageId: demoUser.packageId,
-        aiQuota: demoUser.aiQuota,
-        daysRemaining: demoUser.daysRemaining,
-        subscriptionStart: demoUser.subscriptionStart,
-        subscriptionEnd: demoUser.subscriptionEnd,
-        sessions: demoUser.sessions,
-      });
-      writeStore(TUTOR_STORE_KEY, null);
-      writeStore(BILLING_STORE_KEY, null);
-      toast.success(t('account.profile.resetDone'));
+    try {
+      if (confirm.kind === 'session') {
+        await revokeSession.mutateAsync(confirm.session.id);
+        toast.success(t('account.profile.deviceRemoved'));
+      } else if (confirm.kind === 'others') {
+        await revokeOthers.mutateAsync();
+        toast.success(t('account.profile.othersRemoved'));
+      } else {
+        // AUTH-06: sign out of every device, this one included.
+        await authApi.logoutAll(false).catch(() => undefined);
+        await logout();
+        toast.success(t('account.profile.resetDone'));
+        navigate('/');
+      }
+    } catch (e) {
+      toast.error(errorMessage(e));
     }
     setConfirmOpen(false);
   };
 
   const onLogout = () => {
-    logout();
-    toast.info(t('toast.loggedOut'));
-    navigate('/');
+    void logout().then(() => {
+      toast.info(t('toast.loggedOut'));
+      navigate('/');
+    });
   };
 
-  const pkg = getPackage(user.packageId);
+  const sub = me?.subscription;
+  const pkg = sub && (sub.status === 'active' || sub.status === 'trial') ? sub.package : null;
   const confirmCopy =
     confirm?.kind === 'session'
       ? { title: t('account.profile.confirmDeviceTitle'), body: t('account.profile.confirmDeviceBody', { device: confirm.session.device }) }
@@ -221,14 +258,25 @@ export default function Profile() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
                 <div className="relative -mt-12 w-fit shrink-0 sm:-mt-14">
                   <Avatar src={user.avatar} alt={l(user.name)} size={104} className="ring-4 ring-white shadow-lift" />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    aria-hidden
+                    tabIndex={-1}
+                    onChange={(e) => void onPhoto(e.target.files?.[0])}
+                  />
                   <button
                     type="button"
-                    onClick={() => toast.info(t('account.profile.photoSoon'))}
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    aria-busy={uploading}
                     aria-label={t('account.profile.changePhoto')}
                     title={t('account.profile.changePhoto')}
                     className="absolute bottom-1 end-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-gold-grad text-primary shadow-soft transition hover:scale-110"
                   >
-                    <Camera className="h-4 w-4" aria-hidden />
+                    <Camera className={cn('h-4 w-4', uploading && 'animate-pulse')} aria-hidden />
                   </button>
                 </div>
                 <div className="min-w-0 flex-1 sm:pt-4">
@@ -245,21 +293,21 @@ export default function Profile() {
                     <li className="flex items-center gap-1.5">
                       <Phone className="h-4 w-4 text-accent" aria-hidden />
                       <span dir="ltr" className="num">
-                        {user.mobile}
+                        {normalizeMobile(user.mobile)}
                       </span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <MapPin className="h-4 w-4 text-accent" aria-hidden />
-                      {l(getGovernorate(user.governorate)?.name)}
+                      {l(user.governorateName ?? governorates.find((g) => g.id === user.governorate)?.name)}
                     </li>
                     <li className="flex min-w-0 items-center gap-1.5">
                       <GraduationCap className="h-4 w-4 shrink-0 text-accent" aria-hidden />
-                      <span className="truncate">{l(user.school)}</span>
+                      <span className="truncate">{user.school ? l(user.school) : '—'}</span>
                     </li>
                   </ul>
                 </div>
                 <p className="text-xs font-medium text-muted sm:pt-5">
-                  {t('account.profile.memberSince', { date: fmtDate(MEMBER_SINCE, { month: 'long', year: 'numeric' }) })}
+                  {t('account.profile.memberSince', { date: fmtDate(user.memberSince, { month: 'long', year: 'numeric' }) })}
                 </p>
               </div>
             </div>
@@ -283,7 +331,7 @@ export default function Profile() {
                   />
                   <Input
                     label={t('account.profile.mobile')}
-                    value={user.mobile}
+                    value={normalizeMobile(user.mobile)}
                     readOnly
                     icon={<Lock className="h-4 w-4" />}
                     hint={t('account.profile.mobileLocked')}
@@ -301,8 +349,14 @@ export default function Profile() {
                     placeholder={t('account.profile.schoolPlaceholder')}
                     optional={t('common.optional')}
                     wrapperClassName="sm:col-span-2"
-                    {...register('school')}
+                    list="profile-schools"
+                    {...register('school', { maxLength: { value: 80, message: t('validation.maxLength', { count: 80 }) } })}
                   />
+                  <datalist id="profile-schools">
+                    {schools.map((s) => (
+                      <option key={s.id} value={l(s.name)} />
+                    ))}
+                  </datalist>
                   <div className="flex justify-end sm:col-span-2">
                     <Button
                       type="submit"
@@ -325,7 +379,7 @@ export default function Profile() {
                         <p className="text-sm font-semibold text-primary">{t(`account.profile.notif.${k}`)}</p>
                         <p className="text-xs text-muted">{t(`account.profile.notif.${k}Hint`)}</p>
                       </div>
-                      <Switch checked={prefs[k]} onChange={(v) => togglePref(k, v)} label={t(`account.profile.notif.${k}`)} />
+                      <Switch checked={!!prefs?.[k]} onChange={(v) => togglePref(k, v)} label={t(`account.profile.notif.${k}`)} />
                     </li>
                   ))}
                 </ul>
@@ -386,8 +440,8 @@ export default function Profile() {
               <Section icon={<ShieldCheck className="h-5 w-5" />} title={t('account.profile.sessionsTitle')} subtitle={t('account.profile.sessionsSub')}>
                 <ul className="space-y-2.5">
                   <AnimatePresence initial={false}>
-                    {user.sessions.map((s) => {
-                      const Icon = deviceIcon(s.device);
+                    {sessions.map((s) => {
+                      const Icon = deviceIcon(s.device, s.platform);
                       return (
                         <motion.li
                           key={s.id}
@@ -411,7 +465,10 @@ export default function Profile() {
                               {s.current && <Badge tone="gold">{t('account.profile.thisDevice')}</Badge>}
                             </p>
                             <p className="truncate text-xs text-muted">
-                              {l(s.location)} · {t('account.profile.lastActive', { time: fmtRelative(s.lastActive) })}
+                              {l(s.location)} ·{' '}
+                              {s.current
+                                ? t('account.profile.activeNow')
+                                : t('account.profile.lastActive', { time: fmtRelative(pastIso(s.lastActive)) })}
                             </p>
                           </div>
                           {!s.current && (
@@ -486,7 +543,7 @@ export default function Profile() {
             <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
               {t('common.cancel')}
             </Button>
-            <Button variant="danger" onClick={runConfirm}>
+            <Button variant="danger" onClick={() => void runConfirm()} loading={revokeSession.isPending || revokeOthers.isPending}>
               {confirm?.kind === 'reset' ? t('account.profile.reset') : t('account.profile.logoutDevice')}
             </Button>
           </>

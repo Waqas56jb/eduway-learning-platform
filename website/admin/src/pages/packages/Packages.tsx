@@ -4,17 +4,20 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import toast from 'react-hot-toast';
 import { Archive, ArchiveRestore, CalendarClock, Copy, LayoutGrid, MoreHorizontal, Pencil, Plus, Receipt, RefreshCcw, Sparkles, Star, Table2, Trash2, Users } from 'lucide-react';
-import type { Package, Subject } from '@/types';
+import type { Package } from '@/types';
 import { cn } from '@/utils/cn';
-import { uid } from '@/utils/id';
 import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
-import { usePackages, useStudents, useSubjects } from '@/store/core';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { exportRequest, useExport } from '@/api/hooks';
+import { useLookups } from '@/api/lookups';
+import { usePackageMutations, usePackagesList, type PackageVM } from '@/api/packages';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { QueryError } from '@/components/ui/QueryError';
 import { Badge, Button, DataTable, EmptyState, FilterSelect, MenuDivider, MenuItem, Popover, Segmented, SkeletonCard, StatusBadge, useConfirm } from '@/components/ui';
 import { PackageEditor } from './PackageEditor';
+
+type SubjectChip = { id: string; color: string; name_en: string; name_ar: string };
 
 export function validityLabel(p: Package, t: TFunction) {
   if (p.validityType === 'until_date') return t('packages.validityUntil', { date: fmtDate(p.validUntil) });
@@ -22,7 +25,7 @@ export function validityLabel(p: Package, t: TFunction) {
   return t('packages.validityMonths', { count: p.validityValue });
 }
 
-export function SubjectChips({ ids, subjects, max = 5 }: { ids: string[]; subjects: Subject[]; max?: number }) {
+export function SubjectChips({ ids, subjects, max = 5 }: { ids: string[]; subjects: SubjectChip[]; max?: number }) {
   const L = useLocalize();
   const list = subjects.filter((s) => ids.includes(s.id));
   return (
@@ -45,51 +48,32 @@ export default function Packages() {
   const L = useLocalize();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const packages = usePackages((s) => s.items);
-  const add = usePackages((s) => s.add);
-  const update = usePackages((s) => s.update);
-  const remove = usePackages((s) => s.remove);
-  const students = useStudents((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
   const [view, setView] = useState<View>('cards');
   const [status, setStatus] = useState('');
-  const [editing, setEditing] = useState<Package | null>(null);
+  const [editing, setEditing] = useState<PackageVM | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const query = usePackagesList({ sort: 'order' });
+  const packages = useMemo(() => query.data ?? [], [query.data]);
+  const loading = query.isLoading;
+  const { subjects } = useLookups();
+  const m = usePackageMutations();
+  const exp = useExport('/admin/packages/export', 'packages');
 
-  // Live subscriber counts from the students store.
-  const subs = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const s of students) if (s.packageId && s.subscriptionStatus === 'active') m[s.packageId] = (m[s.packageId] ?? 0) + 1;
-    return m;
-  }, [students]);
-
-  const rows = useMemo(() => packages.map((p) => ({ ...p, subscribers: subs[p.id] ?? 0 })).filter((p) => !status || p.status === status), [packages, subs, status]);
+  const rows = useMemo(() => packages.filter((p) => !status || p.status === status), [packages, status]);
 
   const openNew = () => {
     setEditing(null);
     setDrawer(true);
   };
-  const openEdit = (p: Package) => {
+  const openEdit = (p: PackageVM) => {
     setEditing(p);
     setDrawer(true);
   };
 
-  const duplicate = (p: Package) => {
-    add({
-      ...p,
-      id: uid('pkg'),
-      name_en: `${p.name_en} ${t('packages.copySuffix')}`,
-      name_ar: `${p.name_ar} ${t('packages.copySuffixAr')}`,
-      status: 'draft',
-      featured: false,
-      subscribers: 0,
-    });
-    toast.success(t('packages.duplicated'));
-  };
+  const duplicate = (p: PackageVM) => m.duplicate.mutate(p.id);
 
-  const archive = async (p: Package) => {
-    const n = subs[p.id] ?? 0;
+  const archive = async (p: PackageVM) => {
+    const n = p.subscribers;
     const ok = await confirm({
       title: t('packages.archiveTitle', { name: L(p, 'name') }),
       body: (
@@ -102,17 +86,13 @@ export default function Packages() {
       confirmText: t('actions.archive'),
     });
     if (!ok) return;
-    update(p.id, { status: 'archived', featured: false }, { action: 'package.archive', summary: `Archived package “${p.name_en}”` });
-    toast.success(t('packages.archived'));
+    m.archive.mutate(p.id);
   };
 
-  const restore = (p: Package) => {
-    update(p.id, { status: 'active' }, { action: 'package.restore', summary: `Restored package “${p.name_en}”` });
-    toast.success(t('packages.restored'));
-  };
+  const restore = (p: PackageVM) => m.restore.mutate(p.id);
 
-  const del = async (p: Package) => {
-    if ((subs[p.id] ?? 0) > 0) {
+  const del = async (p: PackageVM) => {
+    if (p.subscribers > 0) {
       toast.error(t('packages.deleteBlocked'));
       return;
     }
@@ -123,11 +103,10 @@ export default function Packages() {
       typeToConfirm: 'DELETE',
     });
     if (!ok) return;
-    remove(p.id);
-    toast.success(t('toast.deleted', { entity: t('packages.entity') }));
+    m.remove.mutate(p.id);
   };
 
-  const actionsMenu = (p: Package) => (
+  const actionsMenu = (p: PackageVM) => (
     <Popover
       panelClassName="w-48"
       trigger={({ toggle, open }) => (
@@ -162,7 +141,7 @@ export default function Packages() {
     </Popover>
   );
 
-  const columns = useMemo<ColumnDef<Package>[]>(
+  const columns = useMemo<ColumnDef<PackageVM>[]>(
     () => [
       {
         id: 'name',
@@ -239,7 +218,7 @@ export default function Packages() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, L, subjects, subs, can],
+    [t, L, subjects, can],
   );
 
   const statusOptions = (['active', 'draft', 'archived'] as const).map((s) => ({ value: s, label: t(`status.${s}`) }));
@@ -277,11 +256,17 @@ export default function Packages() {
           data={rows}
           columns={columns}
           loading={loading}
+          error={query.error}
+          onRetry={() => query.refetch()}
+          initialSort={[]}
           onRowClick={can('packages', 'edit') ? openEdit : undefined}
-          exportName={can('packages', 'export') ? 'packages' : undefined}
+          onExport={can('packages', 'export') ? () => exp.mutate(exportRequest('csv', { status })) : undefined}
+          exporting={exp.isPending}
           searchText={(p) => `${p.name_en} ${p.name_ar}`}
           toolbar={<FilterSelect label={t('common.status')} value={status} onChange={setStatus} options={statusOptions} />}
         />
+      ) : query.error && !query.data ? (
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
       ) : loading ? (
         <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -320,10 +305,12 @@ export default function Packages() {
                 <div className="relative mt-3 flex items-baseline gap-1.5">
                   <span className="kpi-num bg-gold-grad bg-clip-text text-3xl text-transparent">{fmtMoney(p.price, p.currency)}</span>
                 </div>
+                {p.yearlyPrice != null && <p className="relative mt-1 text-[11px] text-white/70">{t('packages.yearlyPriceShort', { price: fmtMoney(p.yearlyPrice, p.currency) })}</p>}
                 <p className="relative mt-1 text-[11px] text-white/60">{t(`packages.tax.${p.taxBehavior}`)}</p>
               </div>
 
               <div className="flex flex-1 flex-col gap-4 p-5">
+                {(p.tagline_en || p.tagline_ar) && <p className="-mb-2 text-xs font-semibold text-accent">{L(p, 'tagline')}</p>}
                 <p className="line-clamp-3 text-sm text-muted">{L(p, 'description')}</p>
                 <div>
                   <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted rtl:tracking-normal">{t('packages.subjectsIncluded')}</div>
@@ -364,7 +351,7 @@ export default function Packages() {
         </div>
       )}
 
-      <PackageEditor open={drawer} onClose={() => setDrawer(false)} pkg={editing ? packages.find((p) => p.id === editing.id) : null} />
+      <PackageEditor open={drawer} onClose={() => setDrawer(false)} pkg={editing ? (packages.find((p) => p.id === editing.id) ?? editing) : null} />
     </div>
   );
 }

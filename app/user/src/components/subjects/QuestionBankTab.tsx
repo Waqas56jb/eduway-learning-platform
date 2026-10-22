@@ -4,7 +4,8 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { Button, Card, PressableScale, ProgressBar, SectionHeader, Text } from '@/components/ui';
-import { questionsBySubject } from '@/data';
+import { useQuestionStats } from '@/api';
+import { openSubscription } from '@/api/locked';
 import { useI18n } from '@/hooks/useI18n';
 import { radius, space, subjectColors, useTheme } from '@/theme';
 import type { Difficulty, Subject } from '@/types';
@@ -20,20 +21,19 @@ const DIFFS: Difficulty[] = ['easy', 'medium', 'hard'];
 export function QuestionBankTab({ subject, locked }: QuestionBankTabProps) {
   const { colors } = useTheme();
   const { t, L, lang } = useI18n(['subjects', 'common']);
-  const color = subjectColors[subject.id];
-  const qs = useMemo(() => questionsBySubject(subject.id), [subject.id]);
+  const color = subjectColors[subject.id] ?? subject.color;
+  const { data: stats } = useQuestionStats(subject.id);
 
-  const byDiff = useMemo(() => {
-    const c: Record<Difficulty, number> = { easy: 0, medium: 0, hard: 0 };
-    for (const q of qs) c[q.difficulty] += 1;
-    return c;
-  }, [qs]);
+  const byDiff = useMemo(
+    (): Record<Difficulty, number> => ({ easy: 0, medium: 0, hard: 0, ...(stats?.byDifficulty ?? {}) }),
+    [stats],
+  );
 
   const byUnit = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const q of qs) c[q.unitId] = (c[q.unitId] ?? 0) + 1;
+    for (const u of stats?.byUnit ?? []) c[u.unitId] = u.total;
     return c;
-  }, [qs]);
+  }, [stats]);
   const maxUnit = Math.max(1, ...Object.values(byUnit));
 
   const diffColor: Record<Difficulty, { fg: string; bg: string }> = {
@@ -43,7 +43,7 @@ export function QuestionBankTab({ subject, locked }: QuestionBankTabProps) {
   };
 
   const startPractice = (unitId?: string) => {
-    if (locked) return router.push('/subscription');
+    if (locked) return openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug: subject.id });
     router.push({
       pathname: '/question-bank/practice-session',
       params: unitId ? { subjectId: subject.id, unitId, count: '10' } : { subjectId: subject.id, count: '10' },

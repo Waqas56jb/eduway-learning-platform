@@ -73,14 +73,25 @@ export function fontFor(weight: FontWeightKey, isAr: boolean): string {
   }
 }
 
+/**
+ * Line height for a font size in the current language. Tajawal has tall ascenders and stacked
+ * diacritics (shadda + fatha etc.) that clip with Latin-tight leading, so Arabic gets ≥ 1.45×.
+ * Use this whenever you override `fontSize` on a Text so the line box never clips glyphs.
+ */
+export function lineHeightFor(size: number, isAr: boolean, latinLineHeight?: number): number {
+  const latin = latinLineHeight ?? Math.round(size * 1.3);
+  return isAr ? Math.max(Math.round(latin * 1.12), Math.ceil(size * 1.45)) : latin;
+}
+
 export function textStyle(variant: TypeVariant, isAr: boolean): TextStyle {
   const s = typeScale[variant];
   return {
     fontFamily: fontFor(s.weight, isAr),
     fontSize: s.size,
-    // Tajawal sits higher; give Arabic a touch more line height.
-    lineHeight: isAr ? Math.round(s.lineHeight * 1.12) : s.lineHeight,
+    lineHeight: lineHeightFor(s.size, isAr, s.lineHeight),
     letterSpacing: isAr ? 0 : s.letterSpacing,
+    // Android adds extra top/bottom font padding that breaks vertical centering; iOS ignores this.
+    includeFontPadding: false,
   };
 }
 

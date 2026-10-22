@@ -22,15 +22,17 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { ContentStatus, Lesson } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import type { ContentStatus } from '@/types';
 import { cn } from '@/utils/cn';
-import { uid } from '@/utils/id';
 import { fmtDateTime, fmtRelative } from '@/utils/format';
-import { useLessons } from '@/store/core';
 import { useUi } from '@/store/ui';
-import { useCan, useCurrentAdmin } from '@/store/auth';
+import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { errorMessage, isApiError } from '@/api/client';
+import { useApiQuery } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { curriculumKeys, lessonsApi } from '@/api/content';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, SkeletonCard, StatusBadge, useConfirm } from '@/components/ui';
 import {
@@ -39,12 +41,22 @@ import {
   LessonPlacementSection,
   LessonResourcesSection,
   LessonRulesSection,
-  formToLesson,
+  attachPendingMedia,
+  formToWrite,
   lessonSchema,
   lessonToForm,
   type LessonFormValues,
 } from '@/components/forms/LessonForm';
-import { ScheduleModal, STATUS_COLOR, nextVersion } from './shared';
+import { ScheduleModal, STATUS_COLOR, useLessonStatus } from './shared';
+
+/** RHF field names for server validation paths (`title.en` → `title_en`). */
+const FIELD_MAP: Record<string, keyof LessonFormValues> = {
+  'title.en': 'title_en',
+  'title.ar': 'title_ar',
+  'description.en': 'description_en',
+  'description.ar': 'description_ar',
+  durationSec: 'durationMin',
+};
 
 const PIPELINE: ContentStatus[] = ['draft', 'in_review', 'approved', 'scheduled', 'published'];
 
@@ -56,9 +68,11 @@ export default function LessonEditor() {
   const can = useCan();
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const admin = useCurrentAdmin();
-  const loading = useMockLoading(350, [id]);
-  const lesson = useLessons((s) => (id ? s.items.find((l) => l.id === id) : undefined));
+  const qc = useQueryClient();
+  const { move } = useLessonStatus();
+  const lessonQ = useApiQuery(qk.lessons.detail(id), () => lessonsApi.get(id as string), { enabled: !isNew });
+  const lesson = lessonQ.data;
+  const loading = !isNew && lessonQ.isLoading;
   const collapsed = useUi((s) => s.sidebarCollapsed);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,59 +85,57 @@ export default function LessonEditor() {
   const form = useForm<LessonFormValues>({
     resolver: zodResolver(schema),
     values: lessonToForm(lesson),
-    resetOptions: { keepDirtyValues: false },
+    // Server refreshes (video processed, resources attached) must not wipe the admin's unsaved edits.
+    resetOptions: { keepDirtyValues: true },
   });
   const { handleSubmit, formState, reset } = form;
   const dirty = formState.isDirty;
   const status: ContentStatus = lesson?.status ?? 'draft';
-  const videoBusy = form.watch('videoState') === 'uploading' || form.watch('videoState') === 'processing';
+  const videoBusy = form.watch('videoState') === 'uploading' || (!isNew && form.watch('videoState') === 'processing');
 
-  /** Persist form values, optionally moving to a new status. */
+  const applyServerErrors = (e: unknown) => {
+    if (isApiError(e) && Object.keys(e.fields).length) {
+      for (const [k, msg] of Object.entries(e.fields)) {
+        const f = FIELD_MAP[k] ?? (k as keyof LessonFormValues);
+        form.setError(f, { message: msg });
+      }
+      toast.error(t('apiErrors.VALIDATION_ERROR'));
+    } else if (isApiError(e) && e.details.reason === 'VIDEO_NOT_READY') {
+      toast.error(t('content.editor.videoNotReady'));
+    } else toast.error(errorMessage(e));
+  };
+
+  /** Persist form values, optionally moving to a new status (ADM-LSN-02/04/06). */
   const persist = async (values: LessonFormValues, to?: ContentStatus, publishAt?: string | null) => {
     setBusy(to ?? 'save');
-    await new Promise((r) => setTimeout(r, 400));
-    const author = admin?.name ?? 'System';
-    const fields = formToLesson(values);
-    const now = new Date().toISOString();
-    const targetStatus = to ?? status;
-    const note = (k: string) => t(`content.editor.versionNote.${k}`, { lng: 'en' });
-
-    if (isNew) {
-      const newId = uid('les');
-      const created: Lesson = {
-        id: newId,
-        ...fields,
-        status: targetStatus,
-        publishAt: targetStatus === 'scheduled' ? (publishAt ?? null) : targetStatus === 'published' ? now : null,
-        updatedAt: now,
-        views: 0,
-        versions: [{ id: uid('ver'), version: 1, author, note: to ? note(to) : note('created'), status: targetStatus, createdAt: now }],
-      };
-      useLessons.getState().add(created, { summary: `Created lesson “${created.title_en}” as ${targetStatus.replace('_', ' ')}` });
-      toast.success(t('content.editor.created'));
-      reset(lessonToForm(created));
+    const body = formToWrite(values);
+    try {
+      if (isNew) {
+        const created = await lessonsApi.create({ ...body, status: to === 'in_review' ? 'in_review' : 'draft', versionNote: t(`content.editor.versionNote.${to ?? 'created'}`, { lng: 'en' }) });
+        await attachPendingMedia(created.id, values).catch((e) => toast.error(errorMessage(e)));
+        if (to && to !== 'draft' && to !== 'in_review') await move(created, to, publishAt);
+        await Promise.all(curriculumKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+        toast.success(t('content.editor.created'));
+        reset(values);
+        navigate(`/content/lessons/${created.id}`, { replace: true });
+        return;
+      }
+      if (!lesson) return;
+      if (to && to !== lesson.status) {
+        await move(lesson, to, publishAt, dirty ? body : undefined);
+        toast.success(t('content.editor.statusChanged', { status: t(`status.${to}`) }));
+      } else {
+        const updated = await lessonsApi.update(lesson.id, { ...body, versionNote: t('content.editor.versionNote.saved', { lng: 'en' }) });
+        qc.setQueryData(qk.lessons.detail(lesson.id), updated);
+        await Promise.all(curriculumKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+        toast.success(t('content.editor.saved'));
+      }
+      reset({ ...values, thumbnailFileKey: undefined, captionsFileKey: undefined, pendingVideoKey: undefined });
+    } catch (e) {
+      applyServerErrors(e);
+    } finally {
       setBusy(null);
-      navigate(`/content/lessons/${newId}`, { replace: true });
-      return;
     }
-
-    if (!lesson) return;
-    const patch: Partial<Lesson> = {
-      ...fields,
-      status: targetStatus,
-      updatedAt: now,
-      versions: nextVersion(lesson, targetStatus, to && to !== lesson.status ? note(to) : note('saved'), author),
-    };
-    if (to === 'scheduled') patch.publishAt = publishAt ?? null;
-    if (to === 'published') patch.publishAt = now;
-    if (to === 'draft' || to === 'in_review' || to === 'approved') patch.publishAt = null;
-    useLessons.getState().update(lesson.id, patch, {
-      action: to && to !== lesson.status ? `lesson.${to === 'in_review' ? 'submit' : to}` : 'lesson.update',
-      summary: to && to !== lesson.status ? `Moved lesson “${fields.title_en}” to ${to.replace('_', ' ')}` : `Updated lesson “${fields.title_en}”`,
-    });
-    reset(values);
-    toast.success(to && to !== lesson.status ? t('content.editor.statusChanged', { status: t(`status.${to}`) }) : t('content.editor.saved'));
-    setBusy(null);
   };
 
   const onInvalid = () => toast.error(t('toast.error'));
@@ -141,23 +153,36 @@ export default function LessonEditor() {
     if (!lesson) return;
     const ok = await confirm({ title: t('content.editor.deleteTitle'), body: t('confirm.deleteBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    useLessons.getState().remove(lesson.id);
-    toast.success(t('toast.deleted', { entity: L(lesson, 'title') }));
-    navigate('/content/lessons');
+    try {
+      await lessonsApi.remove(lesson.id);
+      await Promise.all(curriculumKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+      qc.removeQueries({ queryKey: qk.lessons.detail(lesson.id) });
+      toast.success(t('toast.deleted', { entity: L(lesson, 'title') }));
+      navigate('/content/lessons');
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   };
 
   if (!isNew && !lesson && !loading) {
+    const notFound = !lessonQ.error || (isApiError(lessonQ.error) && lessonQ.error.status === 404);
     return (
       <div>
-        <PageHeader title={t('content.editor.notFound')} />
+        <PageHeader title={notFound ? t('content.editor.notFound') : t('api.loadFailed')} />
         <div className="card">
           <EmptyState
-            title={t('content.editor.notFound')}
-            hint={t('content.editor.notFoundHint')}
+            title={notFound ? t('content.editor.notFound') : t('api.loadFailed')}
+            hint={notFound ? t('content.editor.notFoundHint') : errorMessage(lessonQ.error)}
             action={
-              <ButtonLink to="/content/lessons" variant="secondary" icon={<ArrowLeft className="h-4 w-4 flip-rtl" />}>
-                {t('content.editor.backToLessons')}
-              </ButtonLink>
+              notFound ? (
+                <ButtonLink to="/content/lessons" variant="secondary" icon={<ArrowLeft className="h-4 w-4 flip-rtl" />}>
+                  {t('content.editor.backToLessons')}
+                </ButtonLink>
+              ) : (
+                <Button variant="secondary" onClick={() => lessonQ.refetch()}>
+                  {t('api.retry')}
+                </Button>
+              )
             }
           />
         </div>
@@ -229,8 +254,8 @@ export default function LessonEditor() {
               )}
               <LessonBasicsSection form={form} icon={<BookOpen className="h-4 w-4" />} />
               <LessonPlacementSection form={form} icon={<GitBranch className="h-4 w-4" />} />
-              <LessonMediaSection form={form} icon={<Clapperboard className="h-4 w-4" />} disabled={readOnly} />
-              <LessonResourcesSection form={form} icon={<FileStack className="h-4 w-4" />} disabled={readOnly} />
+              <LessonMediaSection form={form} icon={<Clapperboard className="h-4 w-4" />} disabled={readOnly} lesson={lesson} />
+              <LessonResourcesSection form={form} icon={<FileStack className="h-4 w-4" />} disabled={readOnly} lesson={lesson} />
               <LessonRulesSection form={form} icon={<ListChecks className="h-4 w-4" />} lessonId={lesson?.id} disabled={readOnly} />
             </fieldset>
 

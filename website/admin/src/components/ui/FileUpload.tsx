@@ -17,10 +17,12 @@ interface FileUploadProps {
   className?: string;
   compact?: boolean;
   disabled?: boolean;
+  /** Upload progress 0–100 (signed-URL upload in flight); `null`/undefined hides the bar. */
+  progress?: number | null;
 }
 
-/** Drag-and-drop file picker with image preview. Nothing is uploaded — files stay in the browser. */
-export function FileUpload({ accept, maxSizeMb = 20, onFile, preview, onClear, label, hint, className, compact, disabled }: FileUploadProps) {
+/** Drag-and-drop file picker with image preview. Pair with `useUpload()` (src/api/storage.ts) and pass `progress`. */
+export function FileUpload({ accept, maxSizeMb = 20, onFile, preview, onClear, label, hint, className, compact, disabled, progress }: FileUploadProps) {
   const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -115,6 +117,14 @@ export function FileUpload({ accept, maxSizeMb = 20, onFile, preview, onClear, l
           e.target.value = '';
         }}
       />
+      {progress != null && (
+        <div className="mt-2" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+          <div className="h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
+            <div className="h-full rounded-full bg-gold-grad transition-[width] duration-200" style={{ width: `${progress}%` }} />
+          </div>
+          <div className="mt-1 text-end text-[11px] font-medium text-muted num">{progress}%</div>
+        </div>
+      )}
       {error && <p className="mt-1 text-xs font-medium text-danger">{error}</p>}
     </div>
   );

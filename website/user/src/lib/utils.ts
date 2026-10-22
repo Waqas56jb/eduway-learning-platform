@@ -45,3 +45,11 @@ export function dayPart(d = new Date()): 'morning' | 'afternoon' | 'evening' {
   if (h < 18) return 'afternoon';
   return 'evening';
 }
+
+/** 48213 → "48K+", 950 → "900+" (marketing counters; rounded down). */
+export function compactCount(n: number, fmt: (n: number) => string = (x) => x.toLocaleString('en-US')): string {
+  if (n >= 1_000_000) return `${fmt(Math.floor(n / 100_000) / 10)}M+`;
+  if (n >= 10_000) return `${fmt(Math.floor(n / 1000))}K+`;
+  if (n >= 100) return `${fmt(Math.floor(n / 100) * 100)}+`;
+  return fmt(n);
+}

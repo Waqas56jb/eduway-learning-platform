@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header, Screen } from '@/components/layout';
@@ -10,59 +10,79 @@ import { ScoreTrend } from '@/components/progress/ScoreTrend';
 import { SubjectRings } from '@/components/progress/SubjectRings';
 import { WeakTopics } from '@/components/progress/WeakTopics';
 import { StreakCalendar } from '@/components/student';
+import type { Achievement } from '@/components/progress/BadgesGrid';
+import { glyphs, type IconName } from '@/components/icons/paths';
 import { Card, SectionHeader } from '@/components/ui';
-import { activityHeatmap, demoUser, lessonsBySubject, subjects } from '@/data';
-import { achievements, minutesPerLevel } from '@/data/progress';
+import { toSubject, useSubjects } from '@/api';
+import {
+  useAchievements,
+  useProgressSubjects,
+  useProgressSummary,
+  useStreakCalendar,
+} from '@/api/progress';
+import type { AchievementDto } from '@/api/types';
 import { useI18n } from '@/hooks/useI18n';
-import { useAuthStore, useProgressStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { SCREEN_PADDING, space } from '@/theme';
+
+/** Vertical rhythm between sections (DESIGN.md: 28–32). */
+const SECTION_GAP = 28;
+/** Inner padding of the heatmap card. */
+const CALENDAR_PAD = space.lg;
+
+/** Server icon names map onto our glyph set; unknown names fall back to a medal. */
+const toAchievement = (a: AchievementDto): Achievement => ({
+  ...a,
+  icon: (a.icon in glyphs ? a.icon : 'medal') as IconName,
+  earnedAt: a.earnedAt ?? undefined,
+});
 
 function Section({ index, children }: { index: number; children: ReactNode }) {
   return (
-    <Animated.View entering={FadeInDown.duration(420).delay(60 + index * 70)} style={styles.section}>
-      {children}
-    </Animated.View>
+    <Animated.View entering={FadeInDown.duration(350).delay(Math.min(index * 60, 300))}>{children}</Animated.View>
   );
 }
 
 export default function ProgressScreen() {
   const { t } = useI18n('progress');
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
-  const streak = useAuthStore((s) => s.user?.streak ?? demoUser.streak);
-  const lessonProgress = useProgressStore((s) => s.lessonProgress);
-  const completion = useProgressStore((s) => s.subjectCompletion());
-  const lessonsDone = useProgressStore((s) => s.completedCount());
+  // Heatmap fills the card's inner width exactly; fewer weeks on narrow phones keep cells tappable.
+  const calendarWidth = width - SCREEN_PADDING * 2 - CALENDAR_PAD * 2 - StyleSheet.hairlineWidth * 2;
+  const weeks = width < 375 ? 12 : 16;
+
+  const userStreak = useAuthStore((s) => s.user?.streak ?? 0);
+  const summary = useProgressSummary().data;
+  const subjectsQuery = useSubjects();
+  const progressSubjects = useProgressSubjects().data;
+  const calendar = useStreakCalendar(16).data;
+  const achievementsData = useAchievements().data;
+
+  const streak = summary?.streak ?? userStreak;
+  const completion = Math.round(summary?.overallAvgPct ?? 0);
+  const lessonsDone = summary?.completedLessons ?? 0;
+  const activeDays = summary?.activeDays ?? calendar?.activeDays ?? 0;
+  const hours = Math.round(summary?.studyHours ?? 0);
 
   const subjectItems = useMemo(() => {
-    // Same formula as progressStore.subjectCompletion, recomputed whenever lesson progress changes.
-    return subjects.map((subject) => {
-      const list = lessonsBySubject(subject.id);
-      const sum = list.reduce((acc, l) => {
-        const p = lessonProgress[l.id];
-        return acc + (p?.status === 'completed' ? 100 : (p?.progress ?? 0));
-      }, 0);
-      return { subject, completion: list.length ? Math.round(sum / list.length) : 0 };
-    });
-  }, [lessonProgress]);
+    const bySlug = new Map((progressSubjects ?? []).map((p) => [p.slug, p]));
+    return (subjectsQuery.data ?? []).map((s) => ({
+      subject: toSubject(s),
+      completion: Math.round(bySlug.get(s.slug)?.avgPct ?? s.progress?.avgPct ?? 0),
+    }));
+  }, [subjectsQuery.data, progressSubjects]);
 
-  const { activeDays, hours } = useMemo(() => {
-    let days = 0;
-    let minutes = 0;
-    for (const d of activityHeatmap) {
-      if (d.level > 0) days += 1;
-      minutes += minutesPerLevel[Math.max(0, Math.min(4, d.level))] ?? 0;
-    }
-    return { activeDays: days, hours: Math.round(minutes / 60) };
-  }, []);
-
-  const earnedCount = useMemo(() => achievements.filter((a) => a.earned).length, []);
+  const heatmap = useMemo(() => (calendar?.days ?? []).map((d) => ({ date: d.date, level: d.level })), [calendar]);
+  const achievements = useMemo(() => (achievementsData ?? []).map(toAchievement), [achievementsData]);
+  const earnedCount = useMemo(() => achievements.filter((a) => a.earned).length, [achievements]);
 
   return (
     <Screen padded={false}>
       <Header title={t('title')} />
       <ScrollView
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.huge }]}
       >
         <Section index={0}>
@@ -91,9 +111,9 @@ export default function ProgressScreen() {
         </Section>
 
         <Section index={4}>
-          <SectionHeader title={t('calendar.title')} subtitle={t('calendar.subtitle')} />
-          <Card>
-            <StreakCalendar data={activityHeatmap} weeks={16} />
+          <SectionHeader title={t('calendar.title')} subtitle={t('calendar.subtitle', { count: weeks })} />
+          <Card style={styles.calendarCard}>
+            <StreakCalendar data={heatmap} weeks={weeks} width={calendarWidth} />
           </Card>
         </Section>
 
@@ -115,6 +135,6 @@ export default function ProgressScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: SCREEN_PADDING, paddingTop: space.sm, gap: space.xxl },
-  section: { gap: space.md },
+  content: { paddingHorizontal: SCREEN_PADDING, paddingTop: space.sm, gap: SECTION_GAP },
+  calendarCard: { padding: CALENDAR_PAD },
 });

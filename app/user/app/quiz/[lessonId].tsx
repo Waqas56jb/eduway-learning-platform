@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { isRTL } from '@/utils/rtl';
+import { BackHandler, ScrollView, StyleSheet, View } from 'react-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import Animated, {
   FadeInDown,
@@ -12,69 +13,114 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icons';
 import { goBackOrHome } from '@/components/layout/Header';
 import { Screen } from '@/components/layout';
-import { Badge, Button, Dialog, EmptyState, IconButton, Text } from '@/components/ui';
+import { Badge, Button, Dialog, EmptyState, IconButton, Skeleton, Text } from '@/components/ui';
 import { QuestionView, QuizResultSummary } from '@/components/student';
 import { QuizHeader } from '@/components/quiz/QuizHeader';
 import { QuizReviewList } from '@/components/quiz/QuizReviewList';
-import { getLesson } from '@/data';
 import { useI18n } from '@/hooks/useI18n';
-import { useMistakesStore, useProgressStore, type Attempt } from '@/store';
+import { useQueryClient } from '@tanstack/react-query';
+import { optionIdAt, toQuestion } from '@/api/adapters';
+import { useLesson } from '@/api/catalog';
+import { qk } from '@/api/keys';
+import { handleActionError } from '@/api/locked';
+import { answerQuiz, startQuiz, submitQuiz } from '@/api/quizzes';
 import { SCREEN_PADDING, radius, space, useTheme } from '@/theme';
 import type { Question } from '@/types';
 import { haptic } from '@/utils/haptics';
-import { makeOptionOrder, nextLessonOf, pickQuizQuestions, scoreAnswers, type QuizScore } from '@/utils/quiz';
+import { reviewFromAnswers, revealQuestion, type AnswerRecord } from '@/utils/quiz';
 
-interface QuizResult extends QuizScore {
-  attempt: Attempt;
+interface QuizRun {
+  attemptId: string;
+  attemptNo: number;
+  questions: Question[];
+}
+
+interface QuizResult {
+  attemptNo: number;
+  score: number;
+  correct: number;
+  total: number;
+  passed: boolean;
+  passMark: number;
   timeSpentSec: number;
+  mistakesAdded: number;
+  nextLessonId: string | null;
+  review: { questions: Question[]; answers: AnswerRecord[] };
 }
 
 export default function QuizScreen() {
   const { lessonId: rawId } = useLocalSearchParams<{ lessonId: string }>();
   const lessonId = String(rawId ?? '');
-  const lesson = getLesson(lessonId);
-  const { t, L, isAr } = useI18n('quiz');
+  const { data: lesson } = useLesson(lessonId || undefined);
+  const { t, L } = useI18n('quiz');
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
 
-  const addAttempt = useProgressStore((s) => s.addAttempt);
-  const addMistake = useMistakesStore((s) => s.addMistake);
-
-  // A new run (first open or retake) re-picks questions and option orders.
+  // A new run (first open or retake) starts a fresh server attempt (QUZ-01).
   const [runKey, setRunKey] = useState(0);
-  const quiz = useMemo(() => {
-    const qs = pickQuizQuestions(lessonId, 5);
-    const orders: Record<string, number[]> = {};
-    for (const q of qs) orders[q.id] = makeOptionOrder(q);
-    return { questions: qs, orders };
-    // runKey intentionally triggers a reshuffle
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonId, runKey]);
+  const [run, setRun] = useState<QuizRun | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [showExplanation, setShowExplanation] = useState(true);
 
   const [index, setIndex] = useState(0);
   const [chosen, setChosen] = useState<Record<string, number>>({});
+  const [answered, setAnswered] = useState<Record<string, true>>({});
+  const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [showTimer, setShowTimer] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const startedAt = useRef(Date.now());
-  const loggedAttempts = useRef(new Set<string>());
-  const scrollRef = useRef<ScrollViewInstance>(null);
+  const questionShownAt = useRef(Date.now());
+  const scrollRef = useRef<ScrollView>(null);
 
-  const total = quiz.questions.length;
-  const question: Question | undefined = quiz.questions[index];
+  useEffect(() => {
+    if (!lessonId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setStartError(null);
+    startQuiz(lessonId)
+      .then((res) => {
+        if (cancelled) return;
+        setRun({ attemptId: res.attemptId, attemptNo: res.attemptNo, questions: res.questions.map(toQuestion) });
+        setShowExplanation(res.rule.showExplanation);
+        startedAt.current = Date.now();
+        questionShownAt.current = Date.now();
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const e = handleActionError(err);
+        setStartError(e.message);
+        setRun(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId, runKey]);
+
+  const questions = run?.questions ?? [];
+  const total = questions.length;
+  const question: Question | undefined = questions[index];
   const selected = question ? (chosen[question.id] ?? null) : null;
-  const revealed = selected !== null;
-  const answeredCount = Object.keys(chosen).length;
+  const revealed = question ? !!answered[question.id] : false;
+  const answeredCount = Object.keys(answered).length;
   const inProgress = !result && answeredCount > 0;
   const isLast = index >= total - 1;
 
   // Elapsed-time ticker (runs until results).
   useEffect(() => {
-    if (result) return;
+    if (result || !run) return;
     const id = setInterval(() => setElapsed(Math.round((Date.now() - startedAt.current) / 1000)), 1000);
     return () => clearInterval(id);
-  }, [result, runKey]);
+  }, [result, run]);
 
   // Android hardware back → confirm while a quiz is in progress.
   useEffect(() => {
@@ -86,66 +132,86 @@ export default function QuizScreen() {
     return () => sub.remove();
   }, [inProgress]);
 
+  // QUZ-02: the answer is final; the server reveals the correct option + explanation.
   const onSelect = useCallback(
     (optIdx: number) => {
-      if (!question || chosen[question.id] !== undefined) return;
-      setChosen((c) => ({ ...c, [question.id]: optIdx }));
-      if (optIdx === question.correctIndex) haptic.success();
-      else haptic.error();
+      if (!run || !question || chosen[question.id] !== undefined) return;
+      const optionId = optionIdAt(question, optIdx);
+      if (!optionId) return;
+      const qid = question.id;
+      setChosen((c) => ({ ...c, [qid]: optIdx }));
+      const timeSec = Math.max(1, Math.round((Date.now() - questionShownAt.current) / 1000));
+      answerQuiz(run.attemptId, { questionId: qid, optionId, timeSec })
+        .then((fb) => {
+          setRun((r) => (r ? { ...r, questions: r.questions.map((x) => (x.id === qid ? revealQuestion(x, fb) : x)) } : r));
+          setAnswered((a) => ({ ...a, [qid]: true }));
+          if (fb.correct) haptic.success();
+          else haptic.error();
+        })
+        .catch((err: unknown) => {
+          handleActionError(err);
+          setChosen((c) => {
+            const { [qid]: _drop, ...rest } = c;
+            return rest;
+          });
+        });
     },
-    [question, chosen],
+    [run, question, chosen],
   );
 
-  /** Logs every wrong answer of an attempt to the mistakes notebook exactly once. */
-  const logMistakes = useCallback(
-    (r: QuizResult) => {
-      if (loggedAttempts.current.has(r.attempt.id)) return;
-      loggedAttempts.current.add(r.attempt.id);
-      for (const a of r.answers) {
-        if (!a.correct && a.chosenIndex >= 0) addMistake(a.questionId, a.chosenIndex, 'quiz');
-      }
-    },
-    [addMistake],
-  );
-
-  const finish = useCallback(() => {
-    const scored = scoreAnswers(quiz.questions, chosen);
+  // QUZ-03
+  const finish = useCallback(async () => {
+    if (!run || submitting) return;
+    setSubmitting(true);
     const timeSpentSec = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000));
-    const attempt = addAttempt({
-      kind: 'quiz',
-      refId: lessonId,
-      subjectId: lesson?.subjectId,
-      answers: scored.answers,
-      score: scored.score,
-      correct: scored.correct,
-      total: scored.total,
-      timeSpentSec,
-    });
-    const r: QuizResult = { ...scored, attempt, timeSpentSec };
-    logMistakes(r);
-    setElapsed(timeSpentSec);
-    setResult(r);
-    if (r.passed) haptic.success();
-    else haptic.warning();
-  }, [quiz.questions, chosen, addAttempt, lessonId, lesson?.subjectId, logMistakes]);
+    try {
+      const res = await submitQuiz(run.attemptId, timeSpentSec);
+      const r: QuizResult = {
+        attemptNo: res.attemptNo,
+        score: res.score,
+        correct: res.correct,
+        total: res.total,
+        passed: res.passed,
+        passMark: res.passThreshold,
+        timeSpentSec: res.timeSpentSec || timeSpentSec,
+        mistakesAdded: res.mistakesAdded,
+        nextLessonId: res.nextLessonId,
+        review: reviewFromAnswers(res.answers),
+      };
+      setElapsed(r.timeSpentSec);
+      setResult(r);
+      if (r.passed) haptic.success();
+      else haptic.warning();
+      void qc.invalidateQueries({ queryKey: qk.catalog.all });
+      void qc.invalidateQueries({ queryKey: qk.progress.all });
+      void qc.invalidateQueries({ queryKey: qk.mistakes.all });
+      void qc.invalidateQueries({ queryKey: qk.quizzes.all });
+    } catch (err) {
+      handleActionError(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [run, submitting, qc]);
 
   const goNext = useCallback(() => {
     if (!revealed) return;
     if (isLast) {
-      finish();
+      void finish();
       return;
     }
     haptic.light();
     setIndex((i) => i + 1);
+    questionShownAt.current = Date.now();
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [revealed, isLast, finish]);
 
   const retake = useCallback(() => {
-    startedAt.current = Date.now();
     setElapsed(0);
     setChosen({});
+    setAnswered({});
     setIndex(0);
     setResult(null);
+    setRun(null);
     setRunKey((k) => k + 1);
   }, []);
 
@@ -155,24 +221,49 @@ export default function QuizScreen() {
   }, [inProgress]);
 
   const reviewMistakes = useCallback(() => {
-    if (result) logMistakes(result);
     router.push('/mistakes');
-  }, [result, logMistakes]);
+  }, []);
 
-  const nextLesson = useMemo(() => nextLessonOf(lessonId), [lessonId]);
+  const nextLessonId = result?.nextLessonId ?? null;
   const goNextLesson = useCallback(() => {
-    if (!nextLesson) return;
-    router.replace({ pathname: '/lesson/[id]', params: { id: nextLesson.id } });
-  }, [nextLesson]);
+    if (!nextLessonId) return;
+    router.replace({ pathname: '/lesson/[id]', params: { id: nextLessonId } });
+  }, [nextLessonId]);
 
-  // Forward motion: new card comes from the reading-forward edge.
-  const entering = (isAr ? SlideInLeft : SlideInRight).duration(320);
-  const exiting = (isAr ? SlideOutRight : SlideOutLeft).duration(260);
+  // Forward motion: new card comes from the reading-forward edge (native layout direction).
+  const rtl = isRTL();
+  const entering = (rtl ? SlideInLeft : SlideInRight).duration(300);
+  const exiting = (rtl ? SlideOutRight : SlideOutLeft).duration(220);
 
   const lessonTitle = lesson ? L(lesson.title) : t('title');
 
+  // ─── Loading (starting the attempt) ──────────────────────────────────────────
+  if (loading && !result) {
+    return (
+      <Screen edges={['top', 'bottom']}>
+        <QuizHeader
+          title={lessonTitle}
+          current={0}
+          total={0}
+          answered={0}
+          elapsedSec={0}
+          showTimer={false}
+          onToggleTimer={() => setShowTimer((v) => !v)}
+          onClose={goBackOrHome}
+        />
+        <View style={styles.loading}>
+          <Skeleton width="40%" height={14} />
+          <Skeleton height={56} />
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} height={60} radius={16} />
+          ))}
+        </View>
+      </Screen>
+    );
+  }
+
   // ─── Empty state ────────────────────────────────────────────────────────────
-  if (!total || !question) {
+  if (!result && (!total || !question)) {
     return (
       <Screen edges={['top', 'bottom']}>
         <QuizHeader
@@ -189,7 +280,7 @@ export default function QuizScreen() {
           <EmptyState
             icon="quiz"
             title={t('empty.title')}
-            message={t('empty.message')}
+            message={startError ?? t('empty.message')}
             actionLabel={t('actions.backToLesson')}
             onAction={goBackOrHome}
           />
@@ -201,6 +292,7 @@ export default function QuizScreen() {
   // ─── Results ───────────────────────────────────────────────────────────────
   if (result) {
     const wrong = result.total - result.correct;
+    const added = result.mistakesAdded || wrong;
     return (
       <Screen scroll edges={['top', 'bottom']} contentContainerStyle={styles.resultContent}>
         <Stack.Screen options={{ gestureEnabled: true }} />
@@ -212,7 +304,7 @@ export default function QuizScreen() {
           <View style={styles.barSpacer} />
         </View>
         <View style={styles.resultTop}>
-          <Badge label={t('result.attempt', { n: result.attempt.attemptNo })} tone="navy" icon="history" size="sm" />
+          <Badge label={t('result.attempt', { n: result.attemptNo })} tone="navy" icon="history" size="sm" />
           <Text variant="label" color="muted" numberOfLines={1} style={styles.resultLesson}>
             {lessonTitle}
           </Text>
@@ -224,6 +316,7 @@ export default function QuizScreen() {
           total={result.total}
           timeSpentSec={result.timeSpentSec}
           passed={result.passed}
+          passMark={result.passMark}
         />
 
         <Animated.View
@@ -235,12 +328,12 @@ export default function QuizScreen() {
         >
           <Icon name={wrong ? 'mistakes' : 'medal'} size={18} color={wrong ? colors.danger : colors.success} />
           <Text variant="label" color={wrong ? colors.danger : colors.success} style={styles.flex}>
-            {wrong ? t('result.mistakesAdded', { count: wrong }) : t('result.allCorrect')}
+            {wrong ? t('result.mistakesAdded', { count: added }) : t('result.allCorrect')}
           </Text>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(300).delay(480)} style={styles.actions}>
-          {nextLesson ? (
+          {nextLessonId ? (
             <Button title={t('actions.nextLesson')} icon="arrow" iconPosition="end" fullWidth onPress={goNextLesson} />
           ) : (
             <Button title={t('actions.backToLesson')} icon="lesson" fullWidth onPress={goBackOrHome} />
@@ -257,7 +350,7 @@ export default function QuizScreen() {
             ) : null}
             <Button title={t('actions.retake')} icon="refresh" variant="secondary" style={styles.flex} onPress={retake} />
           </View>
-          {!nextLesson ? (
+          {!nextLessonId ? (
             <Text variant="caption" color="muted" align="center">
               {t('result.lastLesson')}
             </Text>
@@ -266,13 +359,14 @@ export default function QuizScreen() {
 
         <View style={styles.reviewSection}>
           <Text variant="h3">{t('result.review')}</Text>
-          <QuizReviewList questions={quiz.questions} answers={result.answers} />
+          <QuizReviewList questions={result.review.questions} answers={result.review.answers} />
         </View>
       </Screen>
     );
   }
 
   // ─── Question flow ─────────────────────────────────────────────────────────
+  if (!question) return null;
   return (
     <Screen edges={['top']} padded={false}>
       <Stack.Screen options={{ gestureEnabled: !inProgress }} />
@@ -292,6 +386,7 @@ export default function QuizScreen() {
         style={styles.flex}
         contentContainerStyle={styles.questionContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <Animated.View key={`${runKey}-${question.id}`} entering={index === 0 ? undefined : entering} exiting={exiting}>
           <QuestionView
@@ -299,8 +394,7 @@ export default function QuizScreen() {
             selectedIndex={selected}
             revealed={revealed}
             onSelect={onSelect}
-            showExplanation
-            optionOrder={quiz.orders[question.id]}
+            showExplanation={showExplanation}
           />
         </Animated.View>
       </ScrollView>
@@ -322,7 +416,8 @@ export default function QuizScreen() {
           variant="primary"
           size="lg"
           fullWidth
-          disabled={!revealed}
+          disabled={!revealed || submitting}
+          loading={submitting}
           onPress={goNext}
         />
       </View>
@@ -348,7 +443,8 @@ export default function QuizScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  questionContent: { paddingHorizontal: SCREEN_PADDING, paddingTop: space.sm, paddingBottom: space.xxxl },
+  loading: { gap: space.md, paddingTop: space.xl },
+  questionContent: { paddingHorizontal: SCREEN_PADDING, paddingTop: space.md, paddingBottom: space.xxxl },
   footer: {
     paddingHorizontal: SCREEN_PADDING,
     paddingTop: space.md,

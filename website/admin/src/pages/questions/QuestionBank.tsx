@@ -4,13 +4,14 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Archive, CheckCircle2, Copy, FileQuestion, FileUp, Plus, Send, ShieldCheck, Trash2, UploadCloud } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Question, QuestionStatus } from '@/types';
+import type { QuestionStatus } from '@/types';
 import { fmtNumber, fmtPercent, fmtRelative } from '@/utils/format';
-import { useQuestions } from '@/store/questions';
-import { useAdminUsers, useSubjects, useTopics, useUnits } from '@/store/core';
 import { useCan } from '@/store/auth';
-import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useLang, useLocalize } from '@/hooks/useLocale';
+import { exportRequest, useApiMutation, useApiQuery, useExport, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { questionsApi, type QuestionVM } from '@/api/questions';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar, Badge, Button, ButtonLink, DataTable, FilterSelect, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
 import { DifficultyBadge, QuestionText } from '@/components/forms/QuestionForm';
@@ -21,15 +22,10 @@ export default function QuestionBank() {
   const navigate = useNavigate();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const questions = useQuestions((s) => s.items);
-  const updateMany = useQuestions((s) => s.updateMany);
-  const removeMany = useQuestions((s) => s.removeMany);
-  const add = useQuestions((s) => s.add);
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
-  const topics = useTopics((s) => s.items);
-  const admins = useAdminUsers((s) => s.items);
+  const lang = useLang();
+  const lookups = useLookups();
+  const subjects = lookups.subjects;
+  const units = lookups.units;
 
   const [subject, setSubject] = useState('');
   const [unit, setUnit] = useState('');
@@ -38,36 +34,26 @@ export default function QuestionBank() {
   const [status, setStatus] = useState('');
   const [dupOnly, setDupOnly] = useState(false);
 
-  const subjectById = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
-  const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
-  const topicById = useMemo(() => new Map(topics.map((tp) => [tp.id, tp])), [topics]);
-  const adminById = useMemo(() => new Map(admins.map((a) => [a.id, a])), [admins]);
+  const list = usePagedList<QuestionVM>({
+    key: qk.questions.list,
+    fetcher: questionsApi.list,
+    filters: { subjectId: subject, unitId: unit, difficulty, type, status, duplicatesOnly: dupOnly || undefined },
+    initialSort: 'code',
+  });
+  const filtered = list.items;
+  const statsQ = useApiQuery(qk.questions.sub('stats'), questionsApi.stats);
+  const loading = statsQ.isLoading;
+  const stats = {
+    total: statsQ.data?.total ?? 0,
+    published: statsQ.data?.published ?? 0,
+    publishedPct: statsQ.data?.publishedPct ?? 0,
+    review: statsQ.data?.inReview ?? 0,
+    dups: statsQ.data?.duplicates ?? 0,
+    subjects: statsQ.data?.subjectCount ?? subjects.length,
+  };
+  const refName = (r: { name: { en: string; ar: string } } | null) => (r ? r.name[lang] : '—');
 
-  const filtered = useMemo(
-    () =>
-      questions.filter(
-        (q) =>
-          (!subject || q.subjectId === subject) &&
-          (!unit || q.unitId === unit) &&
-          (!difficulty || q.difficulty === difficulty) &&
-          (!type || q.type === type) &&
-          (!status || q.status === status) &&
-          (!dupOnly || q.duplicateOf),
-      ),
-    [questions, subject, unit, difficulty, type, status, dupOnly],
-  );
-
-  const stats = useMemo(
-    () => ({
-      total: questions.length,
-      published: questions.filter((q) => q.status === 'published').length,
-      review: questions.filter((q) => q.status === 'in_review').length,
-      dups: questions.filter((q) => q.duplicateOf).length,
-    }),
-    [questions],
-  );
-
-  const columns = useMemo<ColumnDef<Question, unknown>[]>(
+  const columns = useMemo<ColumnDef<QuestionVM, unknown>[]>(
     () => [
       {
         id: 'code',
@@ -80,7 +66,7 @@ export default function QuestionBank() {
               {row.original.code}
             </span>
             {row.original.duplicateOf && (
-              <Tooltip content={t('questions.bank.duplicateOf', { code: questions.find((q) => q.id === row.original.duplicateOf)?.code ?? '' })}>
+              <Tooltip content={t('questions.bank.duplicateOf', { code: row.original.duplicateCode ?? '' })}>
                 <Badge tone="warning" icon={<Copy className="h-3 w-3" />}>
                   {t('questions.bank.possibleDuplicate')}
                 </Badge>
@@ -94,7 +80,7 @@ export default function QuestionBank() {
         accessorFn: (q) => L(q, 'body'),
         header: t('questions.fields.question'),
         enableSorting: false,
-        meta: { label: t('questions.fields.question'), exportValue: (q) => q.body_en },
+        meta: { label: t('questions.fields.question') },
         cell: ({ row }) => (
           <div className="line-clamp-2 min-w-[16rem] max-w-md text-[13px] text-ink">
             <QuestionText text={L(row.original, 'body')} />
@@ -103,28 +89,30 @@ export default function QuestionBank() {
       },
       {
         id: 'subject',
-        accessorFn: (q) => L(subjectById.get(q.subjectId), 'name'),
+        accessorFn: (q) => refName(q.subject),
         header: t('common.subject'),
+        enableSorting: false,
         meta: { label: t('common.subject') },
         cell: ({ row }) => {
-          const s = subjectById.get(row.original.subjectId);
+          const s = row.original.subject;
           return (
             <span className="inline-flex items-center gap-2 whitespace-nowrap">
               <span className="h-2 w-2 rounded-full" style={{ background: s?.color }} />
-              {L(s, 'name')}
+              {refName(s)}
             </span>
           );
         },
       },
       {
         id: 'topic',
-        accessorFn: (q) => L(topicById.get(q.topicId), 'name'),
+        accessorFn: (q) => refName(q.topic),
         header: t('common.topic'),
+        enableSorting: false,
         meta: { label: t('common.topic') },
         cell: ({ row }) => (
           <div className="min-w-[10rem]">
-            <div className="text-[13px]">{L(topicById.get(row.original.topicId), 'name')}</div>
-            <div className="text-[11px] text-muted">{L(unitById.get(row.original.unitId), 'name')}</div>
+            <div className="text-[13px]">{refName(row.original.topic)}</div>
+            <div className="text-[11px] text-muted">{refName(row.original.unit)}</div>
           </div>
         ),
       },
@@ -133,7 +121,6 @@ export default function QuestionBank() {
         accessorKey: 'difficulty',
         header: t('questions.fields.difficulty'),
         meta: { label: t('questions.fields.difficulty') },
-        sortingFn: (a, b) => ['easy', 'medium', 'hard'].indexOf(a.original.difficulty) - ['easy', 'medium', 'hard'].indexOf(b.original.difficulty),
         cell: ({ row }) => <DifficultyBadge value={row.original.difficulty} />,
       },
       {
@@ -169,15 +156,16 @@ export default function QuestionBank() {
       },
       {
         id: 'author',
-        accessorFn: (q) => adminById.get(q.authorId)?.name ?? '',
+        accessorFn: (q) => refName(q.author),
         header: t('questions.fields.author'),
+        enableSorting: false,
         meta: { label: t('questions.fields.author') },
         cell: ({ row }) => {
-          const a = adminById.get(row.original.authorId);
+          const a = row.original.author;
           return a ? (
             <span className="inline-flex items-center gap-2 whitespace-nowrap text-xs">
-              <Avatar name={a.name} src={a.avatar} size="xs" />
-              {L(a, 'name') !== '—' ? L(a, 'name') : a.name}
+              <Avatar name={a.name.en} src={a.avatarUrl ?? undefined} size="xs" />
+              {a.name[lang]}
             </span>
           ) : (
             '—'
@@ -186,16 +174,16 @@ export default function QuestionBank() {
       },
       {
         id: 'reviewer',
-        accessorFn: (q) => adminById.get(q.reviewerId ?? '')?.name ?? '',
+        accessorFn: (q) => refName(q.reviewer),
         header: t('questions.fields.reviewer'),
+        enableSorting: false,
         meta: { label: t('questions.fields.reviewer') },
         cell: ({ row }) => {
-          const a = adminById.get(row.original.reviewerId ?? '');
-          return <span className="whitespace-nowrap text-xs text-muted">{a ? (L(a, 'name') !== '—' ? L(a, 'name') : a.name) : '—'}</span>;
+          return <span className="whitespace-nowrap text-xs text-muted">{refName(row.original.reviewer)}</span>;
         },
       },
       {
-        id: 'usage',
+        id: 'usageCount',
         accessorKey: 'usageCount',
         header: t('questions.fields.usage'),
         meta: { label: t('questions.fields.usage'), align: 'end' },
@@ -206,20 +194,45 @@ export default function QuestionBank() {
         accessorKey: 'accuracy',
         header: t('questions.fields.accuracy'),
         meta: { label: t('questions.fields.accuracy'), align: 'end' },
-        cell: ({ row }) => (row.original.usageCount ? fmtPercent(row.original.accuracy) : '—'),
+        cell: ({ row }) => (row.original.usageCount && row.original.accuracyKnown ? fmtPercent(row.original.accuracy) : '—'),
       },
       {
-        id: 'updated',
+        id: 'updatedAt',
         accessorKey: 'updatedAt',
         header: t('common.updated'),
         meta: { label: t('common.updated') },
         cell: ({ row }) => <span className="whitespace-nowrap text-xs text-muted">{fmtRelative(row.original.updatedAt)}</span>,
       },
     ],
-    [t, L, questions, subjectById, unitById, topicById, adminById],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, L, lang],
   );
 
-  const bulkStatus = async (rows: Question[], to: QuestionStatus, clear: () => void, action: string) => {
+  const invalidate = [qk.questions.all];
+  const bulkMut = useApiMutation((v: { ids: string[]; action: 'submit' | 'approve' | 'publish' | 'archive' }) => questionsApi.bulkTransition(v.ids, v.action), {
+    invalidate,
+    onSuccess: (r) => {
+      toast.success(t('toast.bulkDone', { count: r.succeeded.length }));
+      if (r.failed.length) toast.error(t('api.bulkPartial', { count: r.failed.length }));
+    },
+  });
+  const deleteMut = useApiMutation((ids: string[]) => questionsApi.bulkDelete(ids), {
+    invalidate,
+    onSuccess: (r) => {
+      toast.success(t('toast.deleted', { entity: t('questions.bank.countQuestions', { count: r.succeeded.length }) }));
+      if (r.failed.length) toast.error(t('api.bulkPartial', { count: r.failed.length }));
+    },
+  });
+  const dupMut = useApiMutation((id: string) => questionsApi.duplicate(id), {
+    invalidate,
+    onSuccess: (q) => {
+      toast.success(t('toast.created', { entity: t('questions.entity') }));
+      navigate(`/questions/${q.id}`);
+    },
+  });
+  const exp = useExport('/admin/questions/export', 'question-bank');
+
+  const bulkStatus = async (rows: QuestionVM[], to: QuestionStatus, clear: () => void, action: 'submit' | 'approve' | 'publish' | 'archive') => {
     const ok = await confirm({
       title: t('questions.bank.bulkConfirm', { count: rows.length, status: t(`status.${to}`) }),
       body: t('questions.bank.bulkConfirmBody'),
@@ -227,13 +240,8 @@ export default function QuestionBank() {
       confirmText: t('actions.confirm'),
     });
     if (!ok) return;
-    updateMany(
-      rows.map((r) => r.id),
-      { status: to, updatedAt: new Date().toISOString(), ...(to === 'approved' || to === 'published' ? { reviewerId: 'adm_3' } : {}) },
-      { action: `question.${action}`, summary: `${action} ${rows.length} questions → ${to}` },
-    );
+    await bulkMut.mutateAsync({ ids: rows.map((r) => r.id), action }).catch(() => undefined);
     clear();
-    toast.success(t('toast.bulkDone', { count: rows.length }));
   };
 
   const unitOptions = units.filter((u) => !subject || u.subjectId === subject).map((u) => ({ value: u.id, label: L(u, 'name') }));
@@ -259,8 +267,8 @@ export default function QuestionBank() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('questions.bank.statTotal')} value={fmtNumber(stats.total)} icon={<FileQuestion />} color="#0B1F3A" hint={t('questions.bank.statTotalHint', { count: subjects.length })} />
-        <StatCard loading={loading} label={t('questions.bank.statPublished')} value={fmtNumber(stats.published)} icon={<CheckCircle2 />} color="#16A34A" hint={fmtPercent((stats.published / Math.max(1, stats.total)) * 100) + ' ' + t('questions.bank.ofBank')} />
+        <StatCard loading={loading} label={t('questions.bank.statTotal')} value={fmtNumber(stats.total)} icon={<FileQuestion />} color="#0B1F3A" hint={t('questions.bank.statTotalHint', { count: stats.subjects })} />
+        <StatCard loading={loading} label={t('questions.bank.statPublished')} value={fmtNumber(stats.published)} icon={<CheckCircle2 />} color="#16A34A" hint={fmtPercent(stats.publishedPct) + ' ' + t('questions.bank.ofBank')} />
         <StatCard
           loading={loading}
           label={t('questions.bank.statReview')}
@@ -276,13 +284,15 @@ export default function QuestionBank() {
       <DataTable
         data={filtered}
         columns={columns}
-        loading={loading}
-        exportName={can('questions', 'export') ? 'question-bank' : undefined}
-        initialHidden={['accuracy', 'updated', 'reviewer']}
-        initialSort={[{ id: 'code', desc: false }]}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
+        onExport={can('questions', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
+        initialHidden={['accuracy', 'updatedAt', 'reviewer']}
         onRowClick={(q) => navigate(`/questions/${q.id}`)}
         searchPlaceholder={t('questions.bank.search')}
-        searchText={(q) => `${q.code} ${q.body_en} ${q.body_ar} ${q.tags.join(' ')} ${q.source} ${q.year ?? ''}`}
         toolbar={
           <>
             <FilterSelect
@@ -345,17 +355,11 @@ export default function QuestionBank() {
               <Button
                 size="sm"
                 variant="secondary"
+                loading={dupMut.isPending}
                 icon={<Copy className="h-3.5 w-3.5" />}
                 onClick={() => {
-                  const src = rows[0];
-                  const id = `q_${Date.now().toString(36)}`;
-                  add(
-                    { ...src, id, code: `${src.code}-C`, status: 'draft', usageCount: 0, accuracy: 0, reviewerId: null, duplicateOf: src.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), options: src.options.map((o, i) => ({ ...o, id: `${id}_o${i}` })) },
-                    { action: 'question.duplicate', summary: `Duplicated question ${src.code}` },
-                  );
+                  dupMut.mutate(rows[0].id);
                   clear();
-                  toast.success(t('toast.created', { entity: t('questions.entity') }));
-                  navigate(`/questions/${id}`);
                 }}
               >
                 {t('actions.duplicate')}
@@ -369,9 +373,8 @@ export default function QuestionBank() {
                 onClick={async () => {
                   const ok = await confirm({ title: t('confirm.deleteTitle', { entity: t('questions.bank.countQuestions', { count: rows.length }) }), body: t('confirm.deleteBody'), confirmText: t('actions.delete') });
                   if (!ok) return;
-                  removeMany(rows.map((r) => r.id));
+                  await deleteMut.mutateAsync(rows.map((r) => r.id)).catch(() => undefined);
                   clear();
-                  toast.success(t('toast.deleted', { entity: t('questions.bank.countQuestions', { count: rows.length }) }));
                 }}
               >
                 {t('actions.delete')}

@@ -84,3 +84,23 @@ export function RichText({ source, className }: { source: string; className?: st
     </div>
   );
 }
+
+/**
+ * Inline renderer for API question/option text (markdown-lite with `$…$` inline and `$$…$$` display LaTeX).
+ * Plain strings render unchanged, so it is safe to use for any bilingual content field.
+ */
+export function MathText({ text, className }: { text: string; className?: string }) {
+  const parts = useMemo(() => (text ?? '').split(/(\$\$[^$]+\$\$)/g), [text]);
+  if (!/[$*]/.test(text ?? '')) return <>{text}</>;
+  return (
+    <span className={className}>
+      {parts.map((p, i) =>
+        p.startsWith('$$') && p.endsWith('$$') && p.length > 4 ? (
+          <Formula key={i} tex={p.slice(2, -2)} block />
+        ) : (
+          <Fragment key={i}>{inline(p, `mt-${i}`)}</Fragment>
+        ),
+      )}
+    </span>
+  );
+}

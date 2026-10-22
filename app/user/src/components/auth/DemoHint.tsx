@@ -1,5 +1,4 @@
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { Text } from '@/components/ui';
 import { radius, space, useTheme } from '@/theme';
@@ -9,42 +8,57 @@ interface DemoHintProps {
   message: string;
 }
 
-/** Subtle gold card explaining the demo credentials. */
+/**
+ * Subtle gold pill explaining the dev OTP bypass (server setting `otp.devBypassCode`, seeded demo student).
+ * Rendered in development builds only.
+ */
 export function DemoHint({ title, message }: DemoHintProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  if (!__DEV__) return null;
   return (
-    <Animated.View
-      entering={FadeIn.duration(300).delay(150)}
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel={`${title}. ${message}`}
-      style={[styles.card, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}
-    >
-      <View style={[styles.icon, { backgroundColor: colors.accent }]}>
-        <Icon name="sparkles" size={16} color={colors.onAccent} />
-      </View>
-      <View style={styles.texts}>
-        <Text variant="label" color="ink">
-          {title}
+    <View style={styles.center}>
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={`${title}. ${message}`}
+        style={[
+          styles.pill,
+          {
+            backgroundColor: colors.accentSoft,
+            borderColor: isDark ? 'rgba(201,162,74,0.32)' : 'rgba(201,162,74,0.38)',
+          },
+        ]}
+      >
+        <View style={[styles.icon, { backgroundColor: colors.accent }]}>
+          <Icon name="sparkles" size={12} color={colors.onAccent} strokeWidth={2.2} />
+        </View>
+        <Text variant="caption" color="ink" style={styles.text}>
+          <Text variant="label" color={isDark ? colors.accentLight : colors.primary}>
+            {title}
+          </Text>
+          {'  ·  '}
+          <Text variant="caption" color="muted">
+            {message}
+          </Text>
         </Text>
-        <Text variant="caption" color="muted">
-          {message}
-        </Text>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  center: { alignItems: 'center' },
+  pill: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.md,
-    padding: space.md,
-    borderRadius: radius.md,
+    gap: space.sm,
+    paddingVertical: space.sm,
+    paddingStart: space.sm,
+    paddingEnd: space.md + 2,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderStyle: 'dashed',
   },
-  icon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  texts: { flex: 1, gap: 2 },
+  icon: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  text: { flexShrink: 1 },
 });

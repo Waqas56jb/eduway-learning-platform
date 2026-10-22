@@ -4,7 +4,8 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Icon, SubjectIcon } from '@/components/icons';
 import { ProgressBar, ProgressRing, Text } from '@/components/ui';
-import { getPackage } from '@/data';
+import { toPackage } from '@/api/adapters';
+import { useMySubscription } from '@/api/payments';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore } from '@/store';
 import { gradients, palette, radius, shadows, space } from '@/theme';
@@ -14,20 +15,61 @@ const NAVY_SOFT = 'rgba(11,31,58,0.10)';
 const NAVY_TRACK = 'rgba(11,31,58,0.16)';
 const NAVY_MUTED = 'rgba(11,31,58,0.72)';
 
+interface CurrentPlanCardProps {
+  /** `hero`: compact glass strip for use over a dark hero image. */
+  variant?: 'card' | 'hero';
+}
+
 /** Gold hero card summarising the user's active package. */
-export const CurrentPlanCard = memo(function CurrentPlanCard() {
+export const CurrentPlanCard = memo(function CurrentPlanCard({ variant = 'card' }: CurrentPlanCardProps) {
   const user = useAuthStore((s) => s.user);
+  const cached = useAuthStore((s) => s.me?.subscription ?? null);
+  const { data } = useMySubscription(!!user);
   const { t, L, lang } = useI18n('subscription');
   if (!user) return null;
 
-  const pkg = getPackage(user.packageId);
-  const startMs = new Date(user.subscriptionStart).getTime();
-  const endMs = new Date(user.subscriptionEnd).getTime();
-  const totalDays = Math.max(1, Math.round((endMs - startMs) / 86400000));
-  const daysLeft = Math.max(0, user.daysRemaining);
-  const daysPct = Math.min(100, Math.round((daysLeft / totalDays) * 100));
-  const aiPct = user.aiQuota > 0 ? Math.min(100, Math.round((user.aiUsed / user.aiQuota) * 100)) : 0;
-  const endDate = formatDate(user.subscriptionEnd, lang, { day: 'numeric', month: 'long', year: 'numeric' });
+  // PAY-03 (falls back to the subscription embedded in /auth/me while loading).
+  const sub = data !== undefined ? data : cached;
+  const pkg = sub && sub.status !== 'cancelled' ? toPackage(sub.package) : undefined;
+  const totalDays = Math.max(1, sub?.totalDays ?? 1);
+  const daysLeft = Math.max(0, sub?.daysRemaining ?? 0);
+  const daysPct = Math.min(100, Math.round(sub?.remainingPct ?? (daysLeft / totalDays) * 100));
+  const aiUsed = sub?.aiAllowance.used ?? user.aiUsed;
+  const aiQuota = sub?.aiAllowance.quota ?? user.aiQuota;
+  const aiPct = aiQuota > 0 ? Math.min(100, Math.round((aiUsed / aiQuota) * 100)) : 0;
+  const endDate = sub ? formatDate(sub.endsAt, lang, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+  if (variant === 'hero') {
+    return (
+      <View
+        style={styles.glass}
+        accessible
+        accessibilityLabel={`${t('current.overline')}: ${pkg ? L(pkg.name) : t('current.none')}`}
+      >
+        <View style={styles.glassIcon}>
+          <Icon name="crown" size={18} color={palette.navy} filled />
+        </View>
+        <View style={styles.glassText}>
+          <Text variant="caption" color="rgba(255,255,255,0.72)" numberOfLines={1}>
+            {pkg ? t('current.overline') : t('current.none')}
+          </Text>
+          <Text variant="bodyBold" color={palette.white} numberOfLines={1}>
+            {pkg ? L(pkg.name) : t('current.noneMsg')}
+          </Text>
+        </View>
+        {pkg ? (
+          <View style={styles.glassStat}>
+            <Text variant="h3" color={palette.goldLight} tabular numberOfLines={1}>
+              {String(daysLeft)}
+            </Text>
+            <Text variant="caption" color="rgba(255,255,255,0.72)" numberOfLines={1}>
+              {t('current.daysLeft')}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
 
   if (!pkg) {
     return (
@@ -119,7 +161,7 @@ export const CurrentPlanCard = memo(function CurrentPlanCard() {
               </Text>
             </View>
             <Text variant="label" color={palette.navy} tabular>
-              {t('current.aiUsage', { used: user.aiUsed, total: user.aiQuota })}
+              {t('current.aiUsage', { used: aiUsed, total: aiQuota })}
             </Text>
           </View>
           <ProgressBar progress={aiPct} height={6} color={palette.navy} trackColor={NAVY_TRACK} />
@@ -163,5 +205,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: NAVY_SOFT,
   },
+  glass: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.md,
+    paddingEnd: space.lg,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
+  glassIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glassText: { flex: 1, minWidth: 0, gap: 1 },
+  glassStat: { alignItems: 'center', minWidth: 56 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(11,31,58,0.25)', marginVertical: space.lg },
 });

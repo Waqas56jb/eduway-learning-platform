@@ -4,32 +4,31 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { NotifChannel, NotificationTemplate, NotifType } from '@/types';
-import { NOTIF_CHANNELS, NOTIF_TYPES } from '@/data/messaging';
-import { useTemplates } from '@/store/messaging';
+import { useQueryClient } from '@tanstack/react-query';
+import type { NotifChannel, NotifType } from '@/types';
+import { NOTIF_CHANNELS, NOTIF_TYPES, notificationsApi, type TemplateMatrix, type TemplateVM } from '@/api/notifications';
+import { qk } from '@/api/keys';
+import { exportRequest, useApiMutation, useApiQuery, useExport, usePagedList } from '@/api/hooks';
+import type { BulkResult } from '@/api/types';
 import { useCan } from '@/store/auth';
-import { useMockLoading } from '@/hooks/useMockLoading';
 import { useLang } from '@/hooks/useLocale';
 import { fmtRelative } from '@/utils/format';
-import { uid } from '@/utils/id';
 import { cn } from '@/utils/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { QueryError } from '@/components/ui/QueryError';
 import { Badge, Button, ButtonLink, Card, CardHeader, DataTable, FilterSelect, Skeleton, Switch, Tooltip, useConfirm } from '@/components/ui';
 import { CHANNEL_META, ChannelIcon } from './_shared';
+
+/** Any cached template query shape (paged list or matrix query) — both carry `items`. */
+type TemplatesCache = { items: TemplateVM[]; matrix?: TemplateMatrix | null };
 
 export default function Templates() {
   const { t } = useTranslation();
   const lang = useLang();
   const navigate = useNavigate();
-  const loading = useMockLoading();
   const can = useCan();
   const confirm = useConfirm();
-  const items = useTemplates((s) => s.items);
-  const add = useTemplates((s) => s.add);
-  const update = useTemplates((s) => s.update);
-  const remove = useTemplates((s) => s.remove);
-  const removeMany = useTemplates((s) => s.removeMany);
-  const updateMany = useTemplates((s) => s.updateMany);
+  const qc = useQueryClient();
   const [type, setType] = useState('');
   const [channel, setChannel] = useState('');
 
@@ -37,24 +36,60 @@ export default function Templates() {
   const canDelete = can('notifications', 'delete');
   const canCreate = can('notifications', 'create');
 
-  const rows = useMemo(() => items.filter((i) => (!type || i.type === type) && (!channel || i.channel === channel)), [items, type, channel]);
+  // Type × Channel coverage: `meta.matrix` of ADM-NTT-01 (falls back to counting the unfiltered rows).
+  const matrixQ = useApiQuery(qk.templates.sub('matrix'), () => notificationsApi.templatesWithMatrix());
+  const list = usePagedList({
+    key: qk.templates.list,
+    fetcher: notificationsApi.listTemplates,
+    filters: { type, channel },
+    initialSort: '-updatedAt',
+  });
+  const exp = useExport('/admin/notification-templates/export', 'notification-templates');
 
-  const duplicate = (tpl: NotificationTemplate) => {
-    const copy = add({ ...tpl, id: uid('tpl'), name: `${tpl.name} (${t('notifications.templates.copySuffix')})`, active: false, updatedAt: new Date().toISOString() }, { action: 'notification_template.duplicate', summary: `Duplicated template “${tpl.name}”` });
-    toast.success(t('notifications.templates.duplicated'));
-    navigate(`/notifications/templates/${copy.id}`);
+  /** Optimistically patch every cached template list. */
+  const patchCache = (id: string, patch: Partial<TemplateVM>) => {
+    qc.setQueriesData<TemplatesCache>({ queryKey: qk.templates.all }, (old) =>
+      old && Array.isArray(old.items) ? { ...old, items: old.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) } : old,
+    );
   };
 
-  const del = async (tpl: NotificationTemplate) => {
+  const toggle = useApiMutation((v: { id: string; active: boolean }) => notificationsApi.updateTemplate(v.id, { active: v.active }), {
+    invalidate: [qk.templates.all],
+    success: (_d, v) => (v.active ? 'notifications.templates.activated' : 'notifications.templates.deactivated'),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: qk.templates.all });
+      patchCache(v.id, { active: v.active });
+    },
+  });
+  const dup = useApiMutation((id: string) => notificationsApi.duplicateTemplate(id), {
+    invalidate: [qk.templates.all],
+    success: 'notifications.templates.duplicated',
+    onSuccess: (copy) => navigate(`/notifications/templates/${copy.id}`),
+  });
+  const removeM = useApiMutation((tpl: TemplateVM) => notificationsApi.deleteTemplate(tpl.id), {
+    invalidate: [qk.templates.all],
+    success: (_d, tpl) => t('toast.deleted', { entity: tpl.name }),
+  });
+  const bulk = useApiMutation((v: { ids: string[]; action: 'activate' | 'deactivate' | 'delete' }) => notificationsApi.bulkTemplates(v.ids, v.action), {
+    invalidate: [qk.templates.all],
+    onSuccess: (r: BulkResult) => {
+      if (r.succeeded.length) toast.success(t('toast.bulkDone', { count: r.succeeded.length }));
+      if (r.failed.length) toast.error(t('notifications.bulkFailed', { count: r.failed.length, message: r.failed[0].message }));
+    },
+  });
+
+  const duplicate = (tpl: TemplateVM) => dup.mutate(tpl.id);
+
+  const del = async (tpl: TemplateVM) => {
     const ok = await confirm({ title: t('confirm.deleteTitle', { entity: tpl.name }), body: t('confirm.deleteBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    remove(tpl.id);
-    toast.success(t('toast.deleted', { entity: tpl.name }));
+    removeM.mutate(tpl);
   };
 
-  const columns = useMemo<ColumnDef<NotificationTemplate>[]>(
+  const columns = useMemo<ColumnDef<TemplateVM>[]>(
     () => [
       {
+        id: 'name',
         accessorKey: 'name',
         header: t('common.name'),
         meta: { label: t('common.name') },
@@ -69,15 +104,17 @@ export default function Templates() {
         ),
       },
       {
+        id: 'type',
         accessorKey: 'type',
         header: t('common.type'),
-        meta: { label: t('common.type'), exportValue: (r) => t(`notifications.types.${r.type}`) },
+        meta: { label: t('common.type') },
         cell: ({ row }) => <span className="text-sm text-ink/80">{t(`notifications.types.${row.original.type}`)}</span>,
       },
       {
+        id: 'channel',
         accessorKey: 'channel',
         header: t('notifications.channel'),
-        meta: { label: t('notifications.channel'), exportValue: (r) => t(`notifications.channels.${r.channel}`) },
+        meta: { label: t('notifications.channel') },
         cell: ({ row }) => <Badge tone={CHANNEL_META[row.original.channel].tone}>{t(`notifications.channels.${row.original.channel}`)}</Badge>,
       },
       {
@@ -96,26 +133,20 @@ export default function Templates() {
         ),
       },
       {
+        id: 'active',
         accessorKey: 'active',
+        enableSorting: false,
         header: t('common.status'),
-        meta: { label: t('common.status'), exportValue: (r) => (r.active ? 'active' : 'inactive') },
+        meta: { label: t('common.status') },
         cell: ({ row }) => (
           <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2">
-            <Switch
-              size="sm"
-              checked={row.original.active}
-              disabled={!canEdit}
-              aria-label={row.original.name}
-              onChange={(v) => {
-                update(row.original.id, { active: v, updatedAt: new Date().toISOString() }, { action: v ? 'notification_template.activate' : 'notification_template.deactivate' });
-                toast.success(t(v ? 'notifications.templates.activated' : 'notifications.templates.deactivated'));
-              }}
-            />
+            <Switch size="sm" checked={row.original.active} disabled={!canEdit} aria-label={row.original.name} onChange={(v) => toggle.mutate({ id: row.original.id, active: v })} />
             <span className={cn('text-xs', row.original.active ? 'text-success' : 'text-muted')}>{row.original.active ? t('status.active') : t('status.inactive')}</span>
           </span>
         ),
       },
       {
+        id: 'updatedAt',
         accessorKey: 'updatedAt',
         header: t('common.updated'),
         meta: { label: t('common.updated') },
@@ -156,7 +187,14 @@ export default function Templates() {
     [t, lang, canEdit, canDelete, canCreate],
   );
 
-  const cell = (ty: NotifType, ch: NotifChannel) => items.filter((i) => i.type === ty && i.channel === ch);
+  const matrix = matrixQ.data?.matrix ?? null;
+  const allRows = matrixQ.data?.items ?? [];
+  const cell = (ty: NotifType, ch: NotifChannel) => {
+    const m = matrix?.[ty]?.[ch];
+    if (m) return { count: m.count, active: m.active };
+    const l = allRows.filter((i) => i.type === ty && i.channel === ch);
+    return { count: l.length, active: l.some((i) => i.active) };
+  };
 
   return (
     <div>
@@ -174,10 +212,12 @@ export default function Templates() {
 
       <Card className="mb-6 overflow-hidden">
         <CardHeader title={t('notifications.templates.matrix')} subtitle={t('notifications.templates.matrixHint')} />
-        {loading ? (
+        {matrixQ.isLoading ? (
           <div className="p-5">
             <Skeleton className="h-56 w-full" />
           </div>
+        ) : matrixQ.error ? (
+          <QueryError compact error={matrixQ.error} onRetry={() => matrixQ.refetch()} />
         ) : (
           <div className="scrollbar-thin overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
@@ -199,12 +239,11 @@ export default function Templates() {
                   <tr key={ty} className="border-t border-line">
                     <td className="px-4 py-2 font-medium text-ink">{t(`notifications.types.${ty}`)}</td>
                     {NOTIF_CHANNELS.map((ch) => {
-                      const list = cell(ty, ch);
-                      const active = list.some((l) => l.active);
+                      const c = cell(ty, ch);
                       const selected = type === ty && channel === ch;
                       return (
                         <td key={ch} className="px-3 py-1.5 text-center">
-                          {list.length ? (
+                          {c.count ? (
                             <button
                               onClick={() => {
                                 setType(selected ? '' : ty);
@@ -214,12 +253,12 @@ export default function Templates() {
                               aria-label={`${t(`notifications.types.${ty}`)} · ${t(`notifications.channels.${ch}`)}`}
                               className={cn(
                                 'inline-flex h-8 min-w-14 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition',
-                                active ? 'bg-success/10 text-success hover:bg-success/15' : 'bg-ink/5 text-muted hover:bg-ink/10',
+                                c.active ? 'bg-success/10 text-success hover:bg-success/15' : 'bg-ink/5 text-muted hover:bg-ink/10',
                                 selected && 'ring-2 ring-accent',
                               )}
                             >
-                              <span className={cn('h-1.5 w-1.5 rounded-full', active ? 'bg-success' : 'bg-muted')} />
-                              {list.length}
+                              <span className={cn('h-1.5 w-1.5 rounded-full', c.active ? 'bg-success' : 'bg-muted')} />
+                              {c.count}
                             </button>
                           ) : canCreate ? (
                             <button
@@ -244,13 +283,15 @@ export default function Templates() {
       </Card>
 
       <DataTable
-        data={rows}
+        data={list.items}
         columns={columns}
-        loading={loading}
-        exportName="notification-templates"
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
+        onExport={can('notifications', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         onRowClick={(r) => navigate(`/notifications/templates/${r.id}`)}
-        initialSort={[{ id: 'updatedAt', desc: true }]}
-        searchText={(r) => `${r.name} ${r.body_en} ${r.body_ar} ${r.type} ${r.channel}`}
         toolbar={
           <>
             <FilterSelect label={t('common.type')} value={type} onChange={setType} options={NOTIF_TYPES.map((v) => ({ value: v, label: t(`notifications.types.${v}`) }))} />
@@ -261,21 +302,21 @@ export default function Templates() {
           canEdit
             ? (sel, clear) => (
                 <>
-                  <Button size="sm" variant="secondary" onClick={() => { updateMany(sel.map((s) => s.id), { active: true }); toast.success(t('toast.bulkDone', { count: sel.length })); clear(); }}>
+                  <Button size="sm" variant="secondary" loading={bulk.isPending} onClick={() => { bulk.mutate({ ids: sel.map((s) => s.id), action: 'activate' }); clear(); }}>
                     {t('actions.activate')}
                   </Button>
-                  <Button size="sm" variant="secondary" onClick={() => { updateMany(sel.map((s) => s.id), { active: false }); toast.success(t('toast.bulkDone', { count: sel.length })); clear(); }}>
+                  <Button size="sm" variant="secondary" loading={bulk.isPending} onClick={() => { bulk.mutate({ ids: sel.map((s) => s.id), action: 'deactivate' }); clear(); }}>
                     {t('actions.deactivate')}
                   </Button>
                   {canDelete && (
                     <Button
                       size="sm"
                       variant="danger"
+                      loading={bulk.isPending}
                       onClick={async () => {
                         const ok = await confirm({ title: t('notifications.templates.bulkDeleteTitle', { count: sel.length }), body: t('confirm.deleteBody'), confirmText: t('actions.delete') });
                         if (!ok) return;
-                        removeMany(sel.map((s) => s.id));
-                        toast.success(t('toast.bulkDone', { count: sel.length }));
+                        bulk.mutate({ ids: sel.map((s) => s.id), action: 'delete' });
                         clear();
                       }}
                     >

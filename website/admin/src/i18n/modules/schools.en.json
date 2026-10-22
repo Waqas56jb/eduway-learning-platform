@@ -72,7 +72,10 @@
     "package": "Package",
     "subscription": "Subscription",
     "notFound": "School not found",
-    "back": "Back to schools"
+    "back": "Back to schools",
+    "periodPaid": "Verified paid students this period",
+    "allTimePaid": "{{count}} verified paid students all-time",
+    "noRule": "No active school incentive rule — create and activate one in Incentive Rules."
   },
   "rules": {
     "title": "Incentive Rules",
@@ -134,7 +137,10 @@
       "openNotLast": "Only the last tier can be open-ended",
       "firstFrom": "The first tier must start at the qualification threshold ({{threshold}})",
       "amount": "Reward must be greater than 0"
-    }
+    },
+    "scheduleBody": "This version starts on {{date}}. It will be scheduled and switch on automatically; the current active version stays in force until then.",
+    "scheduled": "Version v{{version}} is scheduled to start on {{date}}",
+    "noVersions": "No versions yet. Create the first version to start rewarding partners."
   },
   "settlements": {
     "title": "School Settlements",
@@ -165,6 +171,26 @@
       "paid": "Paid out",
       "count": "{{count}} settlements"
     },
-    "empty": "No settlements for this filter."
-  }
+    "empty": "No settlements for this filter.",
+    "generate": "Generate settlements",
+    "generateTitle": "Generate settlements for a period",
+    "generateBody": "Applies the incentive rule effective for the period to every qualifying partner.",
+    "generateNote": "Existing pending settlements for the same partner and period are recalculated. Approved and paid settlements are never changed.",
+    "generated": "{{created}} created · {{updated}} recalculated",
+    "periodHint": "Format: 2026-09 (month), 2026-Q3, 2026-S1 or 2026",
+    "allSchools": "All schools",
+    "allMarketers": "All marketers",
+    "result": {
+      "created": "Created",
+      "updated": "Recalculated",
+      "skipped": "Skipped"
+    },
+    "paymentRef": "Payment reference",
+    "paymentRefHint": "Bank transfer / wallet transaction number (optional)",
+    "paidOn": "Paid on",
+    "note": "Note",
+    "bulkPayTotal": "Total to be marked as paid: {{amount}}"
+  },
+  "bulkFailed": "{{count}} record(s) could not be updated: {{reason}}",
+  "codeTaken": "This code is already used by another school"
 }

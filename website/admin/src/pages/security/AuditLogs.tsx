@@ -3,15 +3,15 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Activity, Braces, Columns2, Fingerprint, Monitor, ShieldAlert, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { AuditLog } from '@/types';
-import { useAudit } from '@/store/audit';
 import { useCan } from '@/store/auth';
 import { rangeFromPreset, type DateRange } from '@/store/ui';
-import { useMockLoading } from '@/hooks/useMockLoading';
-import { MOCK_NOW } from '@/utils/random';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtNumber, fmtRelative } from '@/utils/format';
+import { exportRequest, useApiQuery, useExport, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { securityApi, useAuditFacets, type AuditLogVM, type AuditMeta } from '@/api/security';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Avatar, Badge, DataTable, DateRangePicker, Drawer, FilterSelect, Segmented, StatCard, type Tone } from '@/components/ui';
+import { Avatar, Badge, DataTable, DateRangePicker, Drawer, FilterSelect, Segmented, Skeleton, StatCard, type Tone } from '@/components/ui';
 
 const SENSITIVE = /role|admin|refund|settings|feature_flag|delete|grant|block|deactivate|mfa|session/;
 
@@ -25,35 +25,44 @@ const verbTone = (action: string): Tone => {
 
 const show = (v: unknown) => (v === undefined ? '—' : v === null ? 'null' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
+/** Live view: the list re-polls ADM-AUD-01 every 10 s (contract §33). */
+const LIVE_MS = 10_000;
+
 export default function AuditLogs() {
   const { t } = useTranslation();
   const can = useCan();
-  const loading = useMockLoading();
-  const logs = useAudit((s) => s.items);
   const [actor, setActor] = useState('');
   const [entity, setEntity] = useState('');
+  const [action, setAction] = useState('');
+  const [sensitive, setSensitive] = useState('');
   const [range, setRange] = useState<DateRange>(() => rangeFromPreset('30d'));
-  const [selected, setSelected] = useState<AuditLog | null>(null);
+  const [selected, setSelected] = useState<AuditLogVM | null>(null);
   const [view, setView] = useState<'diff' | 'json'>('diff');
 
-  const actors = useMemo(() => [...new Set(logs.map((l) => l.actor))].sort(), [logs]);
-  const entities = useMemo(() => [...new Set(logs.map((l) => l.entity))].sort(), [logs]);
+  // Presets are open-ended (no `to`) so actions taken "now" always appear.
+  const rangeParams = useMemo(
+    () => ({ from: range.from, to: range.preset === 'custom' ? range.to : undefined }),
+    [range],
+  );
+  const facets = useAuditFacets(rangeParams);
+  const list = usePagedList({
+    key: qk.audit.list,
+    fetcher: securityApi.auditLogs,
+    filters: { ...rangeParams, actor, entity, action, sensitive: sensitive === 'yes' ? true : undefined },
+    initialSort: '-at',
+    pageSize: 25,
+    refetchInterval: LIVE_MS,
+  });
+  const exp = useExport('/admin/audit-logs/export', 'audit-logs');
+  const logs = list.items;
+  const kpis = (list.meta as AuditMeta).kpis;
+  const loading = list.isLoading;
 
-  const filtered = useMemo(() => {
-    const from = range.from.slice(0, 10);
-    const to = range.to.slice(0, 10);
-    return logs.filter((l) => {
-      const d = l.at.slice(0, 10);
-      // Presets are open-ended so actions taken "now" always appear.
-      if (d < from || (range.preset === 'custom' && d > to)) return false;
-      return (!actor || l.actor === actor) && (!entity || l.entity === entity);
-    });
-  }, [logs, actor, entity, range]);
+  const actors = useMemo(() => (facets.data?.actors ?? []).map((a) => a.name).filter(Boolean).sort(), [facets.data]);
+  const entities = useMemo(() => [...(facets.data?.entities ?? [])].sort(), [facets.data]);
+  const actions = useMemo(() => [...(facets.data?.actions ?? [])].sort(), [facets.data]);
 
-  const ref = Math.max(Date.now(), MOCK_NOW.getTime());
-  const today = filtered.filter((l) => ref - new Date(l.at).getTime() < 86_400_000).length;
-
-  const columns = useMemo<ColumnDef<AuditLog, unknown>[]>(
+  const columns = useMemo<ColumnDef<AuditLogVM, unknown>[]>(
     () => [
       {
         id: 'at',
@@ -156,24 +165,33 @@ export default function AuditLogs() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('security.audit.kpiTotal')} value={fmtNumber(filtered.length)} icon={<Activity />} color="#0B1F3A" />
-        <StatCard loading={loading} label={t('security.audit.kpiToday')} value={fmtNumber(today)} icon={<Fingerprint />} color="#C9A24A" />
-        <StatCard loading={loading} label={t('security.audit.kpiActors')} value={fmtNumber(new Set(filtered.map((l) => l.actor)).size)} icon={<Users />} color="#2563EB" />
-        <StatCard loading={loading} label={t('security.audit.kpiSensitive')} value={fmtNumber(filtered.filter((l) => SENSITIVE.test(l.action)).length)} icon={<ShieldAlert />} color="#DC2626" />
+        <StatCard loading={loading} label={t('security.audit.kpiTotal')} value={fmtNumber(kpis?.total ?? list.meta.total)} icon={<Activity />} color="#0B1F3A" />
+        <StatCard loading={loading} label={t('security.audit.kpiToday')} value={fmtNumber(kpis?.last24h ?? 0)} icon={<Fingerprint />} color="#C9A24A" />
+        <StatCard loading={loading} label={t('security.audit.kpiActors')} value={fmtNumber(kpis?.actors ?? new Set(logs.map((l) => l.actor)).size)} icon={<Users />} color="#2563EB" />
+        <StatCard
+          loading={loading}
+          label={t('security.audit.kpiSensitive')}
+          value={fmtNumber(kpis?.sensitive ?? logs.filter((l) => SENSITIVE.test(l.action)).length)}
+          icon={<ShieldAlert />}
+          color="#DC2626"
+          onClick={() => setSensitive((v) => (v ? '' : 'yes'))}
+        />
       </div>
 
       <DataTable
-        data={filtered}
+        data={logs}
         columns={columns}
         loading={loading}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
         pageSize={25}
         onRowClick={(l) => {
           setView('diff');
           setSelected(l);
         }}
-        exportName={can('security', 'export') ? 'audit-logs' : undefined}
-        searchText={(l) => `${l.actor} ${l.action} ${l.entity} ${l.entityId} ${l.summary} ${l.ip}`}
-        initialSort={[{ id: 'at', desc: true }]}
+        onExport={can('security', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         initialHidden={['entityId']}
         toolbar={
           <>
@@ -184,6 +202,8 @@ export default function AuditLogs() {
               onChange={setEntity}
               options={entities.map((e) => ({ value: e, label: e.replace(/_/g, ' ') }))}
             />
+            <FilterSelect label={t('security.audit.action')} value={action} onChange={setAction} options={actions.map((a) => ({ value: a, label: a }))} />
+            <FilterSelect label={t('security.audit.sensitiveFilter')} value={sensitive} onChange={setSensitive} options={[{ value: 'yes', label: t('security.audit.sensitiveOnly') }]} />
           </>
         }
       />
@@ -195,10 +215,25 @@ export default function AuditLogs() {
         title={selected?.summary}
         description={selected ? `${fmtDateTime(selected.at)} · ${selected.actor}` : undefined}
       >
-        {selected && <AuditDetail log={selected} view={view} setView={setView} />}
+        {selected && <AuditDetailLoader row={selected} view={view} setView={setView} />}
       </Drawer>
     </>
   );
+}
+
+/** Fetches the full entry (ADM-AUD-02 — before/after diff); the list row renders meanwhile. */
+function AuditDetailLoader({ row, view, setView }: { row: AuditLogVM; view: 'diff' | 'json'; setView: (v: 'diff' | 'json') => void }) {
+  const q = useApiQuery(qk.audit.detail(row.id), () => securityApi.auditLog(row.id), { staleTime: 5 * 60_000 });
+  if (q.isLoading && !row.before && !row.after) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-full" />
+        ))}
+      </div>
+    );
+  }
+  return <AuditDetail log={q.data ?? row} view={view} setView={setView} />;
 }
 
 function AuditDetail({ log, view, setView }: { log: AuditLog; view: 'diff' | 'json'; setView: (v: 'diff' | 'json') => void }) {

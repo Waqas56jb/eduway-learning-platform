@@ -35,7 +35,7 @@ export const registerSchema = z.object({
   referral: z
     .string()
     .trim()
-    .refine((v) => v === '' || /^[A-Z0-9]{6,10}$/.test(v), 'referral.invalid'),
+    .refine((v) => v === '' || /^[A-Za-z0-9-]{4,20}$/.test(v), 'referral.invalid'),
   acceptTerms: z.boolean().refine((v) => v, 'terms.required'),
 });
 export type RegisterInput = z.input<typeof registerSchema>;

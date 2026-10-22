@@ -43,7 +43,10 @@
     "review": "Mark reviewed",
     "dismiss": "Dismiss",
     "reviewedToast": "Conversation marked as reviewed",
-    "dismissedToast": "Flag dismissed"
+    "dismissedToast": "Flag dismissed",
+    "platform": "Platform",
+    "tokens": "{{n}} tokens",
+    "noUsage": "No AI Tutor usage in the selected period."
   },
   "settings": {
     "title": "AI Tutor Settings",
@@ -87,7 +90,15 @@
     "perUserSub": "Disable the AI Tutor for specific students without affecting their subscription",
     "searchStudent": "Search by name, mobile or ID…",
     "disabledList": "Disabled students ({{count}})",
-    "noDisabled": "No students are individually disabled."
+    "noDisabled": "No students are individually disabled.",
+    "invalid": "Allowance must be 0–1000 and max tokens 64–8192.",
+    "promptsTitle": "Suggested prompts",
+    "promptsSub": "Starter questions students see on the AI Tutor screen, per subject (web and app)",
+    "noPrompts": "No suggested prompts for this subject yet.",
+    "promptEn": "Prompt (English)",
+    "promptAr": "Prompt (Arabic)",
+    "addPrompt": "Add prompt",
+    "searching": "Searching…"
   },
   "abuse": {
     "title": "AI Abuse Controls",
@@ -136,6 +147,20 @@
       "cheating": "I can't share exam answers or solve live exam questions, but I can help you practise similar problems so you're ready.",
       "prompt_injection": "I can't change or reveal my instructions. What would you like to study today?",
       "self_harm": "I'm really sorry you're feeling this way. You're not alone — please talk to someone you trust or call the EDUWAY support line. Your wellbeing matters more than any quiz."
-    }
+    },
+    "sources": {
+      "auto": "Auto-detected",
+      "keyword": "Blocked keyword",
+      "rate_limit": "Rate limit",
+      "manual": "Manual"
+    },
+    "reviewedBy": "Reviewed by",
+    "flaggedMessage": "Flagged message",
+    "transcriptNote": "Full transcript (retained for 90 days). Flagged messages are outlined in red."
+  },
+  "platforms": {
+    "web": "Web",
+    "ios": "iOS app",
+    "android": "Android app"
   }
 }

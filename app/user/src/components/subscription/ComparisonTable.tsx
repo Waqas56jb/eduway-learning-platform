@@ -5,25 +5,30 @@ import { Icon } from '@/components/icons';
 import { Card, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { space, useTheme } from '@/theme';
+import type { PackageComparison } from '@/api/types';
 import type { Package } from '@/types';
 
 type Cell = boolean | string;
 
-const ROWS: { key: string; value: (p: Package) => Cell }[] = [
-  { key: 'subjects', value: (p) => String(p.subjects.length) },
-  { key: 'lessons', value: () => true },
-  { key: 'quizzes', value: () => true },
-  { key: 'questionBank', value: () => true },
-  { key: 'mistakes', value: () => true },
-  { key: 'exams', value: (p) => p.subjects.length > 1 },
-  { key: 'ai', value: (p) => String(p.aiQuota) },
-  { key: 'pdf', value: (p) => p.subjects.length > 1 },
-  { key: 'analytics', value: (p) => p.subjects.length >= 5 },
-  { key: 'support', value: (p) => p.subjects.length >= 5 },
+/** A plan with the server comparison matrix (PAY-01 `comparison`). */
+type ComparedPackage = Package & { raw?: { comparison: PackageComparison } };
+const cmp = (p: ComparedPackage) => p.raw?.comparison;
+
+const ROWS: { key: string; value: (p: ComparedPackage) => Cell }[] = [
+  { key: 'subjects', value: (p) => String(cmp(p)?.subjectsCount ?? p.subjects.length) },
+  { key: 'lessons', value: (p) => cmp(p)?.lessons ?? true },
+  { key: 'quizzes', value: (p) => cmp(p)?.quizzes ?? true },
+  { key: 'questionBank', value: (p) => !!(cmp(p)?.questionBank ?? true) },
+  { key: 'mistakes', value: (p) => cmp(p)?.mistakes ?? true },
+  { key: 'exams', value: (p) => (cmp(p) ? cmp(p)!.examSimulator !== false : p.subjects.length > 1) },
+  { key: 'ai', value: (p) => String(cmp(p)?.aiQuota ?? p.aiQuota) },
+  { key: 'pdf', value: (p) => cmp(p)?.pdfResources ?? p.subjects.length > 1 },
+  { key: 'analytics', value: (p) => cmp(p)?.analytics ?? p.subjects.length >= 5 },
+  { key: 'support', value: (p) => cmp(p)?.prioritySupport ?? p.subjects.length >= 5 },
 ];
 
 interface ComparisonTableProps {
-  packages: Package[];
+  packages: ComparedPackage[];
   currentId?: string;
 }
 

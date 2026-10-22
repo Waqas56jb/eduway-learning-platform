@@ -1,5 +1,5 @@
 import { animate, motion, useInView, type Variants } from 'framer-motion';
-import { Star } from 'lucide-react';
+import { AlertTriangle, RotateCw, Star } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
@@ -110,11 +110,11 @@ export function Stars({ value = 5, className, size = 16 }: { value?: number; cla
   );
 }
 
-export function Avatar({ src, alt, size = 40, className, ring }: { src: string; alt: string; size?: number; className?: string; ring?: boolean }) {
+export function Avatar({ src, alt, size = 40, className, ring }: { src: string | null | undefined; alt: string; size?: number; className?: string; ring?: boolean }) {
   const [err, setErr] = useState(false);
   return (
     <img
-      src={err ? FALLBACK_IMAGE : src}
+      src={err || !src ? FALLBACK_IMAGE : src}
       onError={() => setErr(true)}
       alt={alt}
       width={size}
@@ -179,4 +179,28 @@ export function PageHeader({ title, subtitle, actions, className }: { title: Rea
 /** Mirrors directional icons (arrows, chevrons) in RTL. */
 export function Dir({ children }: { children: ReactNode }) {
   return <span className="inline-flex rtl:-scale-x-100">{children}</span>;
+}
+
+/** Error panel for failed reads — same visual language as EmptyState, with a retry action. */
+export function ErrorState({ title, body, onRetry, className }: { title?: ReactNode; body?: ReactNode; onRetry?: () => void; className?: string }) {
+  const { t } = useTranslation();
+  return (
+    <div role="alert" className={cn('card flex flex-col items-center px-6 py-14 text-center', className)}>
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-danger/10 text-danger">
+        <AlertTriangle className="h-7 w-7" aria-hidden />
+      </div>
+      <h3 className="mt-5 text-xl font-bold text-primary">{title ?? t('errors.title')}</h3>
+      <p className="mt-2 max-w-md text-muted">{body ?? t('errors.loadFailed')}</p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-6 inline-flex items-center gap-2 rounded-xl border border-primary/10 bg-white px-4 py-2.5 text-sm font-semibold text-primary transition hover:border-accent hover:text-accent"
+        >
+          <RotateCw className="h-4 w-4" aria-hidden />
+          {t('errors.retry')}
+        </button>
+      )}
+    </div>
+  );
 }

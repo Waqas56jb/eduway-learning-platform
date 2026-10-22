@@ -13,22 +13,27 @@ interface PickerRowProps {
   onPress: () => void;
 }
 
-/** Selectable row used inside the auth picker sheets (checkmark when selected). */
+/** Selectable row used inside the auth picker sheets (gold check when selected). */
 export const PickerRow = memo(function PickerRow({ title, subtitle, icon, selected, onPress }: PickerRowProps) {
   const { colors } = useTheme();
   return (
     <PressableScale
       onPress={onPress}
+      haptics={false}
+      scaleTo={0.98}
       accessibilityRole="radio"
       accessibilityState={{ selected: !!selected, checked: !!selected }}
       accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
       style={[
         styles.row,
-        { backgroundColor: selected ? colors.accentSoft : 'transparent', borderColor: selected ? colors.accent : 'transparent' },
+        {
+          backgroundColor: selected ? colors.accentSoft : colors.surface,
+          borderColor: selected ? colors.accent : colors.border,
+        },
       ]}
     >
       {icon ? (
-        <View style={[styles.iconWrap, { backgroundColor: colors.surfaceMuted }]}>
+        <View style={[styles.iconWrap, { backgroundColor: selected ? colors.surface : colors.surfaceMuted }]}>
           <Icon name={icon} size={18} color={selected ? colors.accent : colors.muted} />
         </View>
       ) : null}
@@ -42,27 +47,30 @@ export const PickerRow = memo(function PickerRow({ title, subtitle, icon, select
           </Text>
         ) : null}
       </View>
-      {selected ? (
-        <Animated.View entering={ZoomIn.duration(180)} style={[styles.check, { backgroundColor: colors.accent }]}>
-          <Icon name="check" size={14} color={colors.onAccent} strokeWidth={2.5} />
-        </Animated.View>
-      ) : null}
+      <View style={styles.checkSlot}>
+        {selected ? (
+          <Animated.View entering={ZoomIn.duration(180)} style={[styles.check, { backgroundColor: colors.accent }]}>
+            <Icon name="check" size={14} color={colors.onAccent} strokeWidth={2.5} />
+          </Animated.View>
+        ) : null}
+      </View>
     </PressableScale>
   );
 });
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 52,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   iconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   texts: { flex: 1, gap: 2 },
+  checkSlot: { width: 24, alignItems: 'center' },
   check: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { directionStyle, isRTL } from '@/utils/rtl';
 import {
   KeyboardAvoidingView,
   Modal as RNModal,
@@ -11,7 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { GestureDetector, GestureHandlerRootView, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -84,24 +85,30 @@ export function BottomSheet({
     onClose();
   }, [onClose]);
 
-  const pan = usePanGesture({
-    activeOffsetY: [-8, 8],
-    onUpdate: (e) => {
-      'worklet';
-      // Resist upward drag, follow downward drag.
-      translateY.value = e.translationY > 0 ? e.translationY : e.translationY * 0.2;
-      backdrop.value = Math.max(0, 1 - Math.max(0, e.translationY) / (screenH * 0.6));
-    },
-    onDeactivate: (e) => {
-      'worklet';
-      if (e.translationY > 120 || e.velocityY > 900) {
-        scheduleOnRN(requestClose);
-      } else {
-        translateY.value = withSpring(0, SPRING);
-        backdrop.value = withTiming(1, { duration: 160 });
-      }
-    },
-  });
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-8, 8])
+        .onUpdate((e) => {
+          'worklet';
+          // Resist upward drag, follow downward drag.
+          translateY.value = e.translationY > 0 ? e.translationY : e.translationY * 0.2;
+          backdrop.value = Math.max(0, 1 - Math.max(0, e.translationY) / (screenH * 0.6));
+        })
+        .onEnd((e) => {
+          'worklet';
+          if (e.translationY > 120 || e.velocityY > 900) {
+            // Keep moving down from the finger's position (no bounce), then let the parent close.
+            translateY.value = withTiming(screenH, { duration: 220, easing: Easing.out(Easing.cubic) });
+            backdrop.value = withTiming(0, { duration: 200 });
+            scheduleOnRN(requestClose);
+          } else {
+            translateY.value = withSpring(0, SPRING);
+            backdrop.value = withTiming(1, { duration: 160 });
+          }
+        }),
+    [translateY, backdrop, screenH, requestClose],
+  );
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
@@ -126,7 +133,7 @@ export function BottomSheet({
       animationType="none"
       onRequestClose={requestClose}
     >
-      <GestureHandlerRootView style={styles.flex}>
+      <GestureHandlerRootView style={[styles.flex, directionStyle(isRTL())]}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }, backdropStyle]}>
           <Pressable
             style={StyleSheet.absoluteFill}

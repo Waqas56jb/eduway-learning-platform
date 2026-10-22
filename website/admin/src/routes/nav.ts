@@ -94,6 +94,7 @@ export const NAV: NavGroup[] = [
         children: [
           { key: 'allPackages', path: '/packages', end: true },
           { key: 'promotions', path: '/packages/promotions' },
+          { key: 'subscriptions', path: '/packages/subscriptions' },
         ],
       },
       {
@@ -187,6 +188,11 @@ export const NAV: NavGroup[] = [
           { key: 'legal', path: '/settings/legal' },
           { key: 'support', path: '/settings/support' },
           { key: 'appSettings', path: '/settings/app' },
+          { key: 'paymentSettings', path: '/settings/payments' },
+          { key: 'learningSettings', path: '/settings/learning' },
+          { key: 'marketingSettings', path: '/settings/marketing' },
+          { key: 'securitySettings', path: '/settings/security' },
+          { key: 'cms', path: '/settings/cms' },
         ],
       },
       {

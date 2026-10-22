@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useState } from 'react';
-import { I18nManager, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { isRTL as getIsRTL } from '@/utils/rtl';
+import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { Text } from '@/components/ui';
@@ -22,7 +23,7 @@ export interface SeekBarProps {
 }
 
 /**
- * Draggable timeline (Gesture Handler 3 pan, runs on the UI thread).
+ * Draggable timeline (Gesture Handler 2 pan builder, runs on the UI thread).
  * Fills from the start edge (mirrors under RTL) and shows a floating time bubble while dragging.
  */
 export const SeekBar = memo(function SeekBar({
@@ -33,7 +34,7 @@ export const SeekBar = memo(function SeekBar({
   onScrubEnd,
   accessibilityLabel,
 }: SeekBarProps) {
-  const isRTL = I18nManager.isRTL;
+  const isRTL = getIsRTL();
   const width = useSharedValue(0);
   const progress = useSharedValue(0);
   const scrubbing = useSharedValue(false);
@@ -68,34 +69,37 @@ export const SeekBar = memo(function SeekBar({
     [onScrubEnd, safeDuration],
   );
 
-  const pan = usePanGesture({
-    minDistance: 0,
-    hitSlop: { top: 14, bottom: 14 },
-    onBegin: (e) => {
-      'worklet';
-      if (width.value <= 0) return;
-      const raw = Math.min(1, Math.max(0, e.x / width.value));
-      const ratio = isRTL ? 1 - raw : raw;
-      scrubbing.value = true;
-      progress.value = ratio;
-      scheduleOnRN(begin);
-      scheduleOnRN(updateBubble, ratio);
-    },
-    onUpdate: (e) => {
-      'worklet';
-      if (width.value <= 0) return;
-      const raw = Math.min(1, Math.max(0, e.x / width.value));
-      const ratio = isRTL ? 1 - raw : raw;
-      progress.value = ratio;
-      scheduleOnRN(updateBubble, ratio);
-    },
-    onFinalize: () => {
-      'worklet';
-      if (!scrubbing.value) return;
-      scrubbing.value = false;
-      scheduleOnRN(finish, progress.value);
-    },
-  });
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(0)
+        .hitSlop({ top: 14, bottom: 14 })
+        .onBegin((e) => {
+          'worklet';
+          if (width.value <= 0) return;
+          const raw = Math.min(1, Math.max(0, e.x / width.value));
+          const ratio = isRTL ? 1 - raw : raw;
+          scrubbing.value = true;
+          progress.value = ratio;
+          scheduleOnRN(begin);
+          scheduleOnRN(updateBubble, ratio);
+        })
+        .onUpdate((e) => {
+          'worklet';
+          if (width.value <= 0) return;
+          const raw = Math.min(1, Math.max(0, e.x / width.value));
+          const ratio = isRTL ? 1 - raw : raw;
+          progress.value = ratio;
+          scheduleOnRN(updateBubble, ratio);
+        })
+        .onFinalize(() => {
+          'worklet';
+          if (!scrubbing.value) return;
+          scrubbing.value = false;
+          scheduleOnRN(finish, progress.value);
+        }),
+    [begin, finish, isRTL, progress, scrubbing, updateBubble, width],
+  );
 
   const fillStyle = useAnimatedStyle(() => ({ width: `${progress.value * 100}%` }));
   const trackStyle = useAnimatedStyle(() => ({
@@ -142,7 +146,7 @@ export const SeekBar = memo(function SeekBar({
 });
 
 const styles = StyleSheet.create({
-  hit: { height: 28, justifyContent: 'center' },
+  hit: { height: 32, justifyContent: 'center' },
   track: {
     width: '100%',
     borderRadius: 3,

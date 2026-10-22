@@ -27,7 +27,7 @@
   "teacher": {
     "subjectTeacher": "أستاذ {{subject}}",
     "rating": "تقييم {{rating}}",
-    "students": "{{count}} طالب",
+    "students": "{{value}} طالب",
     "verified": "أستاذ موثّق"
   },
   "resources": {
@@ -35,7 +35,7 @@
     "pdf": "PDF",
     "openA11y": "فتح {{title}}",
     "openingTitle": "جارٍ الفتح…",
-    "openingMessage": "نجهّز «{{title}}» للقراءة دون إنترنت.",
+    "openingMessage": "جارٍ تجهيز «{{title}}» للقراءة.",
     "downloaded": "تم التنزيل — متاح دون إنترنت",
     "empty": "لا توجد ملفات لهذا الدرس بعد."
   },
@@ -43,7 +43,7 @@
     "placeholder": "اكتب الأفكار المهمة أو القوانين أو الأسئلة لمراجعتها لاحقاً…",
     "saving": "جارٍ الحفظ…",
     "saved": "تم الحفظ",
-    "hint": "ملاحظاتك خاصة ومحفوظة على هذا الجهاز.",
+    "hint": "ملاحظاتك خاصة وتُحفظ في حسابك.",
     "chars": "{{count}} حرف"
   },
   "actions": {

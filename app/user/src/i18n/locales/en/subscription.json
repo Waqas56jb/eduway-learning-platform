@@ -1,1 +1,156 @@
-{}
+{
+  "title": "Subscription",
+  "subtitle": "Plans & billing",
+  "current": {
+    "overline": "Your plan",
+    "active": "Active",
+    "daysLeft": "days left",
+    "renews": "Renews on {{date}}",
+    "expires": "Expired on {{date}}",
+    "aiQuota": "AI Tutor questions",
+    "aiUsage": "{{used}} / {{total}} used",
+    "none": "No active plan",
+    "noneMsg": "Choose a plan below to unlock lessons, exams and the AI Tutor."
+  },
+  "cycle": {
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "save": "Save {{pct}}%"
+  },
+  "plans": {
+    "title": "Choose your plan",
+    "subtitle": "Upgrade, switch or renew anytime",
+    "popular": "Most popular",
+    "perMonth": "/ month",
+    "perYear": "/ year",
+    "billedMonthly": "Billed monthly · cancel anytime",
+    "equivalent": "≈ {{price}} / month",
+    "save": "Save {{amount}}",
+    "aiQuota_one": "{{count}} AI Tutor question every month",
+    "aiQuota_other": "{{count}} AI Tutor questions every month",
+    "choose": "Choose plan",
+    "currentPlan": "Current plan"
+  },
+  "compare": {
+    "show": "Compare plans",
+    "hide": "Hide comparison",
+    "feature": "Feature",
+    "yours": "Your plan",
+    "included": "Included",
+    "notIncluded": "Not included",
+    "rows": {
+      "subjects": "Subjects",
+      "lessons": "HD video lessons",
+      "quizzes": "Post-lesson quizzes",
+      "questionBank": "Question bank",
+      "mistakes": "My Mistakes notebook",
+      "exams": "Exam simulator",
+      "ai": "AI Tutor / month",
+      "pdf": "PDF summaries",
+      "analytics": "Advanced analytics",
+      "support": "Priority support"
+    }
+  },
+  "faq": {
+    "title": "Frequently asked questions",
+    "q1": "Can I change my plan later?",
+    "a1": "Yes. You can upgrade at any time and the new plan starts immediately. The remaining days of your current plan are credited automatically.",
+    "q2": "Which payment methods do you accept?",
+    "a2": "You can pay with Zain Cash, FastPay and AsiaHawala wallets, or with Qi Card, Visa and Mastercard. Every payment is encrypted and processed by licensed gateways.",
+    "q3": "What happens when my subscription ends?",
+    "a3": "Your progress, notes and mistakes stay saved. Lessons are locked until you renew, and everything is back the moment you do."
+  },
+  "trust": {
+    "title": "Secure payments",
+    "subtitle": "Encrypted and processed by licensed Iraqi gateways"
+  },
+  "methods": {
+    "zaincash": "Zain Cash",
+    "fastpay": "FastPay",
+    "asiahawala": "AsiaHawala",
+    "qicard": "Qi Card",
+    "visa": "Visa",
+    "mastercard": "Mastercard",
+    "visaMastercard": "Visa / Mastercard",
+    "walletHint": "Pay from your mobile wallet",
+    "cardHint": "Debit or credit card"
+  },
+  "checkout": {
+    "title": "Checkout",
+    "subtitle": "Secure payment",
+    "summary": "Order summary",
+    "subtotal": "Subtotal",
+    "discount": "Discount {{code}} (−{{pct}}%)",
+    "access": "Access period",
+    "days30": "30 days",
+    "days365": "365 days",
+    "total": "Total",
+    "promo": {
+      "title": "Promo code",
+      "placeholder": "Enter promo code",
+      "hint": "Have a code from your school or teacher? Apply it here.",
+      "empty": "Please enter a promo code",
+      "invalid": "This code is invalid or has expired",
+      "applied": "Code {{code}} applied — {{pct}}% off!",
+      "remove": "Remove"
+    },
+    "payWith": "Payment method",
+    "wallets": "E-wallets",
+    "cards": "Cards",
+    "secureNote": "Payments are encrypted end to end. EDUWAY never stores your card details or PIN.",
+    "pay": "Pay {{amount}}"
+  },
+  "gateway": {
+    "title": "Secure payment gateway",
+    "secured": "256-bit SSL · PCI DSS compliant",
+    "payingWith": "Paying with",
+    "amount": "Amount",
+    "walletNumber": "Wallet number",
+    "pin": "Wallet PIN",
+    "pinHint": "The 4-digit PIN of your {{method}} wallet",
+    "cardNumber": "Card number",
+    "expiry": "Expiry (MM/YY)",
+    "cvv": "CVV",
+    "cardHolder": "Name on card",
+    "confirm": "Confirm payment · {{amount}}",
+    "disclaimer": "This is a secure demo gateway — no real money is charged.",
+    "processing": "Processing your payment…",
+    "approved": "Payment approved",
+    "doNotClose": "Please keep the app open",
+    "steps": {
+      "connecting": "Connecting securely to {{method}}",
+      "verifying": "Verifying payment details",
+      "activating": "Activating your plan"
+    },
+    "failed": "The payment didn't go through. You haven't been charged — please try again."
+  },
+  "success": {
+    "title": "You're all set!",
+    "subtitle": "Your {{plan}} plan is now active. Let's make this year count.",
+    "receiptTitle": "EDUWAY payment receipt",
+    "receiptNo": "Receipt number",
+    "package": "Package",
+    "cycle": "Billing",
+    "amount": "Amount paid",
+    "date": "Date",
+    "method": "Payment method",
+    "copy": "Copy receipt",
+    "copied": "Receipt copied to clipboard",
+    "footnote": "A copy of this receipt was added to your notifications.",
+    "start": "Start learning",
+    "manage": "View my subscription"
+  },
+  "notification": {
+    "title": "Payment successful",
+    "body": "We received {{amount}} for {{plan}}. Receipt #{{receipt}}."
+  },
+  "hero": {
+    "overline": "EDUWAY Premium",
+    "title": "Learn without limits",
+    "subtitle": "Every lesson, exam and AI Tutor answer you need to ace the ministerial exams."
+  },
+  "cta": {
+    "continue": "Continue with {{plan}}",
+    "renew": "Renew my plan"
+  }
+}

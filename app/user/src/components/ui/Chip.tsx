@@ -46,7 +46,9 @@ export const Chip = memo(function Chip({ label, selected = false, onPress, icon,
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled: !!disabled }}
+      hitSlop={CHIP_SLOP}
+      scaleTo={0.95}
       style={[
         styles.base,
         { backgroundColor: bg, borderColor: selected ? selBg : colors.border },
@@ -62,7 +64,8 @@ export const Chip = memo(function Chip({ label, selected = false, onPress, icon,
         variant="label"
         color={fg}
         numberOfLines={1}
-        style={{ fontFamily: fontFor(selected ? 'bold' : 'medium', isAr) }}
+        maxFontSizeMultiplier={1.2}
+        style={[styles.text, { fontFamily: fontFor(selected ? 'semibold' : 'medium', isAr) }]}
       >
         {label}
       </Text>
@@ -82,13 +85,18 @@ export const Chip = memo(function Chip({ label, selected = false, onPress, icon,
   );
 });
 
+/** 40pt chip + 2pt slop each side = 44pt touch target. */
+const CHIP_SLOP = { top: 2, bottom: 2, left: 2, right: 2 } as const;
+
 const styles = StyleSheet.create({
+  text: { flexShrink: 1 },
   base: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 38,
-    paddingHorizontal: 14,
+    height: 40,
+    paddingHorizontal: 16,
+    maxWidth: '100%',
     borderRadius: radius.pill,
     borderWidth: 1,
     alignSelf: 'flex-start',

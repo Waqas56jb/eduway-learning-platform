@@ -1,32 +1,49 @@
-import { useState } from 'react';
 import { Construction, MonitorSmartphone, Smartphone, Timer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useAppSettings } from '@/store/settings';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useSaveSettings, useSettingsSection, type AppSettings as AppSettingsValue } from '@/api/settings';
+import type { Platform } from '@/api/types';
 import { cn } from '@/utils/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Field, Input, Select, SkeletonCard, Switch, Textarea, useConfirm } from '@/components/ui';
-import { mockSave, ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
+import { QueryError } from '@/components/ui/QueryError';
+import { ChipToggle, ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
 const TIMEOUTS = [60, 240, 1440, 10080, 43200];
+const URL_RE = /^https?:\/\/\S+$/;
+const EMPTY: AppSettingsValue = {
+  minVersionIos: '0.0.0',
+  minVersionAndroid: '0.0.0',
+  latestVersion: '0.0.0',
+  forceUpdate: false,
+  maintenanceMode: false,
+  maintenanceMessage_en: '',
+  maintenanceMessage_ar: '',
+  deviceLimit: 2,
+  sessionTimeoutMinutes: 43200,
+  storeUrlIos: '',
+  storeUrlAndroid: '',
+  maintenanceAppliesTo: ['web', 'ios', 'android'],
+};
 
 export default function AppSettings() {
   const { t } = useTranslation();
-  const loading = useMockLoading();
-  const value = useAppSettings((s) => s.value);
-  const save = useAppSettings((s) => s.save);
+  const q = useSettingsSection('app');
+  const save = useSaveSettings('app');
+  const loading = q.isLoading;
+  const value = q.data ?? EMPTY;
   const { draft, set, dirty, reset } = useDraft(value);
   const editable = useCanEditSettings();
   const confirm = useConfirm();
-  const [saving, setSaving] = useState(false);
 
   const badIos = !SEMVER.test(draft.minVersionIos);
   const badAndroid = !SEMVER.test(draft.minVersionAndroid);
   const badLatest = !SEMVER.test(draft.latestVersion);
+  const badIosUrl = !!draft.storeUrlIos.trim() && !URL_RE.test(draft.storeUrlIos.trim());
+  const badAndroidUrl = !!draft.storeUrlAndroid.trim() && !URL_RE.test(draft.storeUrlAndroid.trim());
 
   const onSave = async () => {
-    if (badIos || badAndroid || badLatest) return;
+    if (badIos || badAndroid || badLatest || badIosUrl || badAndroidUrl) return;
     if (draft.maintenanceMode && !value.maintenanceMode) {
       const ok = await confirm({
         title: t('settings.app.enableMaintenanceTitle'),
@@ -41,9 +58,7 @@ export default function AppSettings() {
       const ok = await confirm({ title: t('settings.app.forceUpdateTitle'), body: t('settings.app.forceUpdateBody', { version: draft.minVersionAndroid }), tone: 'warning' });
       if (!ok) return;
     }
-    setSaving(true);
-    await mockSave(() => save(draft), t);
-    setSaving(false);
+    save.mutate(draft);
   };
 
   const timeoutLabel = (m: number) =>
@@ -57,7 +72,9 @@ export default function AppSettings() {
         meta={value.maintenanceMode ? <Badge tone="danger" dot>{t('settings.app.maintenanceLive')}</Badge> : <Badge tone="success" dot>{t('settings.app.appLive')}</Badge>}
       />
       {!editable && <ReadOnlyNotice />}
-      {loading ? (
+      {q.error && !q.data ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : loading ? (
         <div className="grid gap-6 xl:grid-cols-2">
           <SkeletonCard lines={5} />
           <SkeletonCard lines={5} />
@@ -74,6 +91,14 @@ export default function AppSettings() {
               </Field>
               <Field label={t('settings.app.latest')} error={badLatest ? t('settings.app.versionInvalid') : undefined}>
                 <Input dir="ltr" value={draft.latestVersion} invalid={badLatest} onChange={(e) => set('latestVersion', e.target.value)} />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label={t('settings.app.storeUrlIos')} error={badIosUrl ? t('settings.app.urlInvalid') : undefined}>
+                <Input dir="ltr" placeholder="https://apps.apple.com/…" value={draft.storeUrlIos} invalid={badIosUrl} onChange={(e) => set('storeUrlIos', e.target.value)} />
+              </Field>
+              <Field label={t('settings.app.storeUrlAndroid')} error={badAndroidUrl ? t('settings.app.urlInvalid') : undefined}>
+                <Input dir="ltr" placeholder="https://play.google.com/…" value={draft.storeUrlAndroid} invalid={badAndroidUrl} onChange={(e) => set('storeUrlAndroid', e.target.value)} />
               </Field>
             </div>
             <Switch checked={draft.forceUpdate} onChange={(v) => set('forceUpdate', v)} label={t('settings.app.forceUpdate')} description={t('settings.app.forceUpdateHint')} disabled={!editable} />
@@ -108,6 +133,15 @@ export default function AppSettings() {
               <Switch checked={draft.maintenanceMode} onChange={(v) => set('maintenanceMode', v)} disabled={!editable} aria-label={t('settings.app.maintenanceMode')} />
             </div>
             <div className="grid gap-4 p-5 md:grid-cols-2">
+              <Field label={t('settings.app.appliesTo')} hint={t('settings.app.appliesToHint')} className="md:col-span-2">
+                <ChipToggle<Platform>
+                  min={1}
+                  disabled={!editable}
+                  value={draft.maintenanceAppliesTo}
+                  onChange={(v) => set('maintenanceAppliesTo', v)}
+                  options={(['web', 'ios', 'android'] as Platform[]).map((p) => ({ value: p, label: t(`settings.platforms.${p}`) }))}
+                />
+              </Field>
               <Field label={t('settings.app.messageEn')}>
                 <Textarea dir="ltr" rows={3} value={draft.maintenanceMessage_en} onChange={(e) => set('maintenanceMessage_en', e.target.value)} />
               </Field>
@@ -126,7 +160,7 @@ export default function AppSettings() {
           </div>
         </fieldset>
       )}
-      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={saving} />}
+      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={save.isPending} />}
     </div>
   );
 }

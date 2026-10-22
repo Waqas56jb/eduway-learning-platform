@@ -1,34 +1,41 @@
-import { useContext, useMemo } from 'react';
-import { StudentContext } from '@/context/StudentContext';
-import { lessons, subjects } from '@/data';
-import type { SubjectId } from '@/types';
+import { useMemo } from 'react';
+import { useBookmarks } from '@/api/bookmarks';
+import { useUnreadCount } from '@/api/notifications';
+import { useProgressSummary, useSubjectProgress } from '@/api/progress';
+import type { SubjectProgressDto } from '@/api/types';
 
-/** Access to the student's mutable learning state (progress, mistakes, bookmarks, …). */
+/** Student-wide state shared by many widgets: unread badge (NTF-02) and bookmarks (BMK-02/03/04). */
 export function useStudent() {
-  const ctx = useContext(StudentContext);
-  if (!ctx) throw new Error('useStudent must be used inside <StudentProvider>');
-  return ctx;
+  const unread = useUnreadCount();
+  const bookmarks = useBookmarks();
+  return { unreadCount: unread.data?.unreadCount ?? 0, ...bookmarks };
 }
 
-/** Derived progress numbers per subject and overall. */
+/** Per-subject (PRG-05, keyed by slug) and overall (PRG-06) progress numbers. */
 export function useProgress() {
-  const student = useStudent();
-  const { lessonProgress } = student;
-
+  const subjectsQ = useSubjectProgress();
+  const summaryQ = useProgressSummary();
   return useMemo(() => {
-    const bySubject = {} as Record<SubjectId, { completed: number; total: number; pct: number }>;
-    for (const s of subjects) {
-      const ls = lessons.filter((l) => l.subjectId === s.id);
-      const completed = ls.filter((l) => lessonProgress[l.id]?.status === 'completed').length;
-      bySubject[s.id] = { completed, total: ls.length, pct: Math.round((completed / ls.length) * 100) };
+    const bySubject: Record<string, SubjectProgressDto> = {};
+    for (const s of subjectsQ.data ?? []) {
+      bySubject[s.slug] = s;
+      bySubject[s.subjectId] = s;
     }
-    const completed = lessons.filter((l) => lessonProgress[l.id]?.status === 'completed').length;
+    const sm = summaryQ.data;
     return {
-      ...student,
       bySubject,
-      completedLessons: completed,
-      totalLessons: lessons.length,
-      overallPct: Math.round((completed / lessons.length) * 100),
+      subjects: subjectsQ.data ?? [],
+      summary: sm,
+      completedLessons: sm?.completedLessons ?? 0,
+      totalLessons: sm?.totalLessons ?? 0,
+      overallPct: sm?.overallPct ?? 0,
+      isLoading: subjectsQ.isLoading || summaryQ.isLoading,
+      isError: subjectsQ.isError || summaryQ.isError,
+      refetch: () => {
+        void subjectsQ.refetch();
+        void summaryQ.refetch();
+      },
     };
-  }, [student, lessonProgress]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjectsQ.data, summaryQ.data, subjectsQ.isLoading, summaryQ.isLoading, subjectsQ.isError, summaryQ.isError]);
 }

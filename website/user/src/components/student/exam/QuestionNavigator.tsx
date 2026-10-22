@@ -4,7 +4,8 @@ import { cn } from '@/lib/utils';
 
 interface QuestionNavigatorProps {
   order: string[];
-  answers: Record<string, number | null>;
+  /** questionId → chosen option id (or index); null/undefined = unanswered. */
+  answers: Record<string, unknown>;
   flagged: string[];
   current: number;
   onJump: (index: number) => void;

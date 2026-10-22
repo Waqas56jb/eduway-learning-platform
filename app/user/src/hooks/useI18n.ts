@@ -9,7 +9,7 @@ import type { Localized } from '@/types';
  *   const { t, L, lang, isAr } = useI18n('home');
  *   t('greeting.evening', { name })   // from locales/<lang>/home.json
  *   t('common:actions.continue')      // other namespace
- *   L(subject.name)                    // pick en/ar from mock data
+ *   L(subject.name)                    // pick en/ar from a Localized API field
  */
 export function useI18n(ns: Namespace | Namespace[] = 'common') {
   const { t, i18n } = useTranslation(ns);

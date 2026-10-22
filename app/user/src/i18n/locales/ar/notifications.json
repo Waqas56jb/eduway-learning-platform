@@ -1,1 +1,31 @@
-{}
+{
+  "title": "الإشعارات",
+  "unreadCount_zero": "لا إشعارات غير مقروءة",
+  "unreadCount_one": "إشعار واحد غير مقروء",
+  "unreadCount_two": "إشعاران غير مقروءين",
+  "unreadCount_few": "{{count}} إشعارات غير مقروءة",
+  "unreadCount_many": "{{count}} إشعاراً غير مقروء",
+  "unreadCount_other": "{{count}} إشعار غير مقروء",
+  "allCaughtUp": "لا يوجد جديد",
+  "markAll": "تحديد الكل كمقروء",
+  "allMarked": "تم تحديد جميع الإشعارات كمقروءة",
+  "tabs": {
+    "all": "الكل",
+    "unread": "غير المقروءة"
+  },
+  "today": "اليوم",
+  "earlier": "سابقاً",
+  "delete": "حذف",
+  "deleted": "تم حذف الإشعار",
+  "unreadA11y": "غير مقروء",
+  "swipeHint": "اسحب للحذف",
+  "swipeTip": "تلميح: اسحب الإشعار لحذفه",
+  "empty": {
+    "title": "لا توجد إشعارات بعد",
+    "message": "ستظهر هنا الدروس الجديدة وتذكيرات الامتحانات وإيصالات الدفع.",
+    "unreadTitle": "لا يوجد جديد",
+    "unreadMessage": "لا توجد إشعارات غير مقروءة حالياً.",
+    "showAll": "عرض الكل"
+  },
+  "yesterday": "أمس"
+}

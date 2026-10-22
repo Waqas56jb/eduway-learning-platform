@@ -1,0 +1,28 @@
+{
+  "maintenance": {
+    "title": "We'll be right back",
+    "body": "EDUWAY is getting an upgrade. Your progress is safe — please check back in a little while.",
+    "banner": "EDUWAY is under maintenance — learning features are temporarily unavailable.",
+    "retry": "Check again",
+    "contact": "Need help?"
+  },
+  "session": {
+    "errorTitle": "We couldn't reach EDUWAY",
+    "errorBody": "Check your internet connection and try again. You are still signed in."
+  },
+  "legal": {
+    "title": "We updated our terms",
+    "body": "Please review and accept the latest versions to keep using EDUWAY.",
+    "accept": "Accept and continue",
+    "agree": "I have read and agree to the updated documents.",
+    "docs": {
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy"
+    }
+  },
+  "deviceLimit": {
+    "title": "Too many devices",
+    "body": "Your account is signed in on the maximum number of devices. Sign out of one to continue here.",
+    "revoke": "Sign out"
+  }
+}

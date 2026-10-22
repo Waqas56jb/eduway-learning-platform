@@ -4,12 +4,13 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Award, GraduationCap, Megaphone, Pencil, Plus, School, Trash2, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Marketer } from '@/types';
-import { governorateById, governorates } from '@/data';
-import { useMarketers, useSchools } from '@/store/core';
+import { qk } from '@/api/keys';
+import { exportRequest, useApiMutation, useExport, usePagedList } from '@/api/hooks';
+import { useLookups } from '@/api/lookups';
+import { marketersApi, partnerKeys, useMarketerStats, type MarketerVM } from '@/api/partners';
+import type { BulkResult } from '@/api/types';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
 import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { MarketerForm } from '@/components/forms/MarketerForm';
@@ -21,32 +22,46 @@ export default function Marketers() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const can = useCan();
-  const loading = useMockLoading();
-  const marketers = useMarketers((s) => s.items);
-  const remove = useMarketers((s) => s.remove);
-  const updateMany = useMarketers((s) => s.updateMany);
-  const updateSchools = useSchools((s) => s.updateMany);
+  const lookups = useLookups();
+  const stats = useMarketerStats();
   const [status, setStatus] = useState('');
   const [gov, setGov] = useState('');
-  const [editing, setEditing] = useState<Marketer | null>(null);
+  const [editing, setEditing] = useState<MarketerVM | null>(null);
   const [drawer, setDrawer] = useState(false);
 
-  const rows = useMemo(() => marketers.filter((m) => (!status || m.status === status) && (!gov || m.governorateId === gov)), [marketers, status, gov]);
+  const list = usePagedList({
+    key: qk.marketers.list,
+    fetcher: marketersApi.list,
+    filters: { status, governorateId: gov },
+    initialSort: '-paidStudents',
+  });
+  const exp = useExport('/admin/marketers/export', 'marketers');
 
-  const openEdit = (m: Marketer | null) => {
+  const bulkToast = (r: BulkResult) => {
+    if (r.succeeded.length) toast.success(t('toast.bulkDone', { count: r.succeeded.length }));
+    if (r.failed.length) toast.error(t('schools.bulkFailed', { count: r.failed.length, reason: r.failed[0]?.message ?? '' }));
+  };
+  const bulkStatus = useApiMutation((v: { ids: string[]; status: 'active' | 'inactive' }) => marketersApi.bulkStatus(v.ids, v.status), {
+    invalidate: [...partnerKeys],
+    onSuccess: bulkToast,
+  });
+  const removeM = useApiMutation((id: string) => marketersApi.remove(id), {
+    invalidate: [...partnerKeys],
+    success: () => t('toast.deleted', { entity: t('marketers.entity') }),
+  });
+
+  const openEdit = (m: MarketerVM | null) => {
     setEditing(m);
     setDrawer(true);
   };
 
-  const del = async (m: Marketer) => {
+  const del = async (m: MarketerVM) => {
     const ok = await confirm({ title: t('confirm.deleteTitle', { entity: L(m, 'name') }), body: t('marketers.deleteBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    if (m.schoolIds.length) updateSchools(m.schoolIds, { marketerId: null }, { silent: true });
-    remove(m.id);
-    toast.success(t('toast.deleted', { entity: t('marketers.entity') }));
+    removeM.mutate(m.id);
   };
 
-  const columns = useMemo<ColumnDef<Marketer>[]>(
+  const columns = useMemo<ColumnDef<MarketerVM>[]>(
     () => [
       {
         id: 'name',
@@ -58,16 +73,17 @@ export default function Marketers() {
             <Avatar name={row.original.name_en} src={row.original.avatar} size="md" />
             <div className="min-w-0">
               <div className="truncate font-semibold text-ink">{L(row.original, 'name')}</div>
-              <div className="truncate text-xs text-muted">{L(governorateById(row.original.governorateId), 'name')}</div>
+              <div className="truncate text-xs text-muted">{L(row.original, 'governorateName')}</div>
             </div>
           </div>
         ),
       },
-      { accessorKey: 'mobile', header: t('marketers.fields.mobile'), cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{getValue<string>()}</span> },
-      { accessorKey: 'email', header: t('marketers.fields.email'), cell: ({ getValue }) => <span className="text-muted">{getValue<string>()}</span> },
-      { id: 'schools', accessorFn: (r) => r.schoolIds.length, header: t('marketers.fields.schools'), meta: { align: 'end' }, cell: ({ getValue }) => fmtNumber(getValue<number>()) },
-      { accessorKey: 'paidStudents', header: t('marketers.fields.paid'), meta: { align: 'end' }, cell: ({ getValue }) => <span className="font-semibold">{fmtNumber(getValue<number>())}</span> },
+      { id: 'mobile', accessorKey: 'mobile', header: t('marketers.fields.mobile'), enableSorting: false, cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{getValue<string>()}</span> },
+      { id: 'email', accessorKey: 'email', header: t('marketers.fields.email'), enableSorting: false, cell: ({ getValue }) => <span className="text-muted">{getValue<string>()}</span> },
+      { id: 'schoolsCount', accessorFn: (r) => r.schoolsCount, header: t('marketers.fields.schools'), meta: { align: 'end' }, cell: ({ getValue }) => fmtNumber(getValue<number>()) },
+      { id: 'paidStudents', accessorKey: 'paidStudents', header: t('marketers.fields.paid'), meta: { align: 'end' }, cell: ({ getValue }) => <span className="font-semibold">{fmtNumber(getValue<number>())}</span> },
       {
+        id: 'milestonesHit',
         accessorKey: 'milestonesHit',
         header: t('marketers.fields.milestones'),
         meta: { align: 'center' },
@@ -76,9 +92,9 @@ export default function Marketers() {
           return n ? <Badge tone="accent" icon={<Award className="h-3 w-3" />}>{fmtNumber(n)}</Badge> : <span className="text-muted">0</span>;
         },
       },
-      { accessorKey: 'pendingReward', header: t('marketers.fields.pendingReward'), meta: { align: 'end' }, cell: ({ getValue }) => fmtMoney(getValue<number>()) },
-      { accessorKey: 'status', header: t('common.status'), cell: ({ getValue }) => <StatusBadge status={getValue<string>()} /> },
-      { accessorKey: 'joinedAt', header: t('marketers.fields.joined'), cell: ({ getValue }) => <span className="whitespace-nowrap text-muted">{fmtDate(getValue<string>())}</span> },
+      { id: 'pendingReward', accessorKey: 'pendingReward', header: t('marketers.fields.pendingReward'), meta: { align: 'end' }, cell: ({ getValue }) => fmtMoney(getValue<number>()) },
+      { id: 'status', accessorKey: 'status', header: t('common.status'), enableSorting: false, cell: ({ getValue }) => <StatusBadge status={getValue<string>()} /> },
+      { id: 'joinedAt', accessorKey: 'joinedAt', header: t('marketers.fields.joined'), cell: ({ getValue }) => <span className="whitespace-nowrap text-muted">{fmtDate(getValue<string>())}</span> },
       {
         id: 'actions',
         header: '',
@@ -109,7 +125,7 @@ export default function Marketers() {
     [t, L, can],
   );
 
-  const active = marketers.filter((m) => m.status === 'active');
+  const st = stats.data;
 
   return (
     <>
@@ -125,26 +141,28 @@ export default function Marketers() {
         }
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('marketers.kpi.active')} value={fmtNumber(active.length)} hint={`${fmtNumber(marketers.length)} ${t('common.total')}`} icon={<Megaphone />} color="#0B1F3A" />
-        <StatCard loading={loading} label={t('marketers.kpi.schools')} value={fmtNumber(marketers.reduce((a, m) => a + m.schoolIds.length, 0))} icon={<School />} color="#7C3AED" />
-        <StatCard loading={loading} label={t('marketers.kpi.paid')} value={fmtNumber(marketers.reduce((a, m) => a + m.paidStudents, 0))} icon={<GraduationCap />} color="#2563EB" />
+        <StatCard loading={stats.isLoading} label={t('marketers.kpi.active')} value={fmtNumber(st?.active ?? 0)} hint={`${fmtNumber(st?.total ?? 0)} ${t('common.total')}`} icon={<Megaphone />} color="#0B1F3A" />
+        <StatCard loading={stats.isLoading} label={t('marketers.kpi.schools')} value={fmtNumber(st?.schoolsAssigned ?? 0)} icon={<School />} color="#7C3AED" />
+        <StatCard loading={stats.isLoading} label={t('marketers.kpi.paid')} value={fmtNumber(st?.paidStudents ?? 0)} icon={<GraduationCap />} color="#2563EB" />
         <StatCard
-          loading={loading}
+          loading={stats.isLoading}
           label={t('marketers.kpi.pending')}
-          value={fmtMoney(marketers.reduce((a, m) => a + m.pendingReward, 0), 'IQD', true)}
+          value={fmtMoney(st?.pendingRewards ?? 0, 'IQD', true)}
           icon={<Wallet />}
           color="#C9A24A"
           onClick={() => navigate('/marketers/settlements')}
         />
       </div>
       <DataTable
-        data={rows}
+        data={list.items}
         columns={columns}
-        loading={loading}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
         onRowClick={(m) => navigate(`/marketers/${m.id}`)}
-        searchText={(m) => `${m.name_en} ${m.name_ar} ${m.mobile} ${m.email}`}
-        exportName={can('marketers', 'export') ? 'marketers' : undefined}
-        initialSort={[{ id: 'paidStudents', desc: true }]}
+        onExport={can('marketers', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         initialHidden={['email', 'joinedAt']}
         toolbar={
           <>
@@ -153,7 +171,7 @@ export default function Marketers() {
               label={t('common.governorate')}
               value={gov}
               onChange={setGov}
-              options={governorates.filter((g) => marketers.some((m) => m.governorateId === g.id)).map((g) => ({ value: g.id, label: L(g, 'name') }))}
+              options={lookups.governorates.map((g) => ({ value: g.id, label: L(g, 'name') }))}
             />
           </>
         }
@@ -164,23 +182,20 @@ export default function Marketers() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => {
-                      updateMany(sel.map((m) => m.id), { status: 'active' }, { action: 'marketer.bulk_activate', summary: `Activated ${sel.length} marketers` });
-                      toast.success(t('toast.bulkDone', { count: sel.length }));
-                      clear();
-                    }}
+                    loading={bulkStatus.isPending && bulkStatus.variables?.status === 'active'}
+                    onClick={() => bulkStatus.mutate({ ids: sel.map((m) => m.id), status: 'active' }, { onSuccess: clear })}
                   >
                     {t('actions.activate')}
                   </Button>
                   <Button
                     size="sm"
                     variant="danger"
+                    loading={bulkStatus.isPending && bulkStatus.variables?.status === 'inactive'}
                     onClick={async () => {
                       if (!(await confirm({ title: `${t('actions.deactivate')} (${sel.length})`, body: t('confirm.title'), confirmText: t('actions.deactivate') }))) return;
-                      updateMany(sel.map((m) => m.id), { status: 'inactive' }, { action: 'marketer.bulk_deactivate', summary: `Deactivated ${sel.length} marketers` });
-                      toast.success(t('toast.bulkDone', { count: sel.length }));
-                      clear();
+                      bulkStatus.mutate({ ids: sel.map((m) => m.id), status: 'inactive' }, { onSuccess: clear });
                     }}
+
                   >
                     {t('actions.deactivate')}
                   </Button>

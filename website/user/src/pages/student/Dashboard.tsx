@@ -11,18 +11,8 @@ import {
   WelcomeHero,
 } from '@/components/student/dashboard/DashboardWidgets';
 import { WeeklyStudyChart } from '@/components/student/dashboard/WeeklyStudyChart';
-import { Card, CardHeader, ProgressBar, Reveal, RevealItem, Seo, Skeleton, SkeletonList, useMockLoading } from '@/components/ui';
-import { demoUser, getLesson, getPackage, quizTrend, weeklyStudy } from '@/data';
-import { useAuth } from '@/hooks/useAuth';
-import { useProgress } from '@/hooks/useProgress';
-
-/** Average of all subjects in the most recent quiz-trend week. */
-function latestQuizAverage() {
-  const last = quizTrend[quizTrend.length - 1];
-  if (!last) return 84;
-  const vals = [last.math, last.physics, last.chemistry, last.biology, last.english];
-  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-}
+import { useDashboard } from '@/api/progress';
+import { Card, CardHeader, ErrorState, ProgressBar, Reveal, RevealItem, Seo, Skeleton, SkeletonList } from '@/components/ui';
 
 function DashboardSkeleton() {
   return (
@@ -39,7 +29,7 @@ function DashboardSkeleton() {
           <Skeleton key={i} className="h-44 rounded-2xl" />
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Skeleton className="h-80 rounded-2xl lg:col-span-2" />
         <SkeletonList rows={3} />
       </div>
@@ -49,29 +39,41 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const ready = useMockLoading();
-  const { user: authUser } = useAuth();
-  const user = authUser ?? demoUser;
-  const pkg = getPackage(user.packageId);
-  const { completedLessons, totalLessons, overallPct, mistakes, aiUsed, aiQuota, getLessonProgress } = useProgress();
+  // PRG-04: one composite call drives every widget on this page.
+  const { data: dash, isLoading, isError, refetch } = useDashboard();
 
-  const lastLesson = getLesson(user.lastLessonId) ?? getLesson(demoUser.lastLessonId);
-  const unresolved = mistakes.filter((m) => m.status === 'unresolved').length;
-  const aiLeft = Math.max(0, aiQuota - aiUsed);
-  const weekMinutes = weeklyStudy.reduce((s, d) => s + d.minutes, 0);
+  if (isError && !dash) {
+    return (
+      <>
+        <Seo title={t('learn.dashboard.seoTitle')} description={t('learn.dashboard.seoDescription')} />
+        <ErrorState onRetry={() => void refetch()} />
+      </>
+    );
+  }
+
+  const completedLessons = dash?.lessons.completed ?? 0;
+  const totalLessons = dash?.lessons.total ?? 0;
+  const overallPct = dash?.lessons.pct ?? 0;
+  const unresolved = dash?.unresolvedMistakes ?? 0;
+  const aiQuota = dash?.aiAllowance.quota ?? 0;
+  const aiUsed = dash?.aiAllowance.used ?? 0;
+  const aiLeft = dash?.aiAllowance.remaining ?? Math.max(0, aiQuota - aiUsed);
+  const weekMinutes = dash?.weeklyStudy.totalMinutes ?? 0;
+  const quizAvg = dash ? (dash.latestWeekQuizAverage ?? dash.quizAverage) : null;
+  const lastLesson = dash?.continueLesson ?? null;
 
   return (
     <>
       <Seo title={t('learn.dashboard.seoTitle')} description={t('learn.dashboard.seoDescription')} />
-      {!ready ? (
+      {isLoading || !dash ? (
         <DashboardSkeleton />
       ) : (
         <div className="space-y-8">
-          <WelcomeHero user={user} pkg={pkg} />
+          <WelcomeHero name={dash.greetingName} streak={dash.streak.current} subscription={dash.subscription} />
 
           {lastLesson && (
             <Reveal>
-              <ContinueCard lesson={lastLesson} progress={getLessonProgress(lastLesson.id).progress} />
+              <ContinueCard lesson={lastLesson} progress={lastLesson.progress} />
             </Reveal>
           )}
 
@@ -96,7 +98,7 @@ export default function Dashboard() {
                   icon={Target}
                   tint="#059669"
                   label={t('learn.dashboard.stats.quiz')}
-                  value={latestQuizAverage()}
+                  value={quizAvg === null ? null : Math.round(quizAvg)}
                   suffix="%"
                   sub={t('learn.dashboard.stats.quizSub')}
                 />
@@ -139,10 +141,10 @@ export default function Dashboard() {
                 {t('common.viewAll')}
               </Link>
             </div>
-            <SubjectProgressGrid />
+            <SubjectProgressGrid items={dash.subjects} />
           </section>
 
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <Card className="min-w-0 p-5 sm:p-6 lg:col-span-2">
               <CardHeader
                 title={t('learn.dashboard.weekly.title')}
@@ -153,23 +155,23 @@ export default function Dashboard() {
                       {t('learn.dashboard.weekly.total', { hours: Math.floor(weekMinutes / 60), minutes: weekMinutes % 60 })}
                     </p>
                     <p className="text-xs text-muted num">
-                      {t('learn.dashboard.weekly.avg', { count: Math.round(weekMinutes / weeklyStudy.length) })}
+                      {t('learn.dashboard.weekly.avg', { count: Math.round(dash.weeklyStudy.dailyAverageMinutes) })}
                     </p>
                   </div>
                 }
               />
               <div className="mt-6">
-                <WeeklyStudyChart />
+                <WeeklyStudyChart days={dash.weeklyStudy.days} />
               </div>
             </Card>
-            <UpcomingExams />
+            <UpcomingExams items={dash.upcomingExams} />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2">
-              <RecentActivity />
+              <RecentActivity items={dash.recentActivity} />
             </div>
-            <TodayGoal />
+            <TodayGoal todayMinutes={dash.todayMinutes} goalMinutes={dash.dailyGoalMinutes} />
           </div>
         </div>
       )}

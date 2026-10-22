@@ -20,7 +20,7 @@
     "avatarAlt": "EDUWAY student",
     "bgAlt": "Students studying together at a table",
     "scroll": "Scroll to explore",
-    "mock": {
+    "preview": {
       "label": "Preview of the EDUWAY student app",
       "nowPlaying": "Now playing",
       "play": "Play lesson",
@@ -40,7 +40,22 @@
   },
   "trust": {
     "title": "Trusted by students and schools across Iraq",
-    "cities": ["Baghdad", "Basra", "Erbil", "Najaf", "Mosul", "Karbala", "Sulaymaniyah", "Kirkuk", "Hilla", "Nasiriyah", "Diwaniyah", "Ramadi", "Kut", "Duhok"]
+    "cities": [
+      "Baghdad",
+      "Basra",
+      "Erbil",
+      "Najaf",
+      "Mosul",
+      "Karbala",
+      "Sulaymaniyah",
+      "Kirkuk",
+      "Hilla",
+      "Nasiriyah",
+      "Diwaniyah",
+      "Ramadi",
+      "Kut",
+      "Duhok"
+    ]
   },
   "subjects": {
     "eyebrow": "Subjects",

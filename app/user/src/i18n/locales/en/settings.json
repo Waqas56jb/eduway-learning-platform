@@ -37,7 +37,8 @@
       "terms": "Terms of service",
       "privacy": "Privacy policy"
     },
-    "unread": "Unread notifications: {{count}}"
+    "unread": "Unread notifications: {{count}}",
+    "daysLeft": "{{count}} days left"
   },
   "logout": {
     "row": "Log out",
@@ -101,7 +102,8 @@
     "terms": "Terms of service",
     "privacy": "Privacy policy",
     "support": "Contact support",
-    "appVersion": "App version"
+    "appVersion": "App version",
+    "notifFooter": "Choose which alerts EDUWAY sends to this device. You can change this anytime."
   },
   "editProfile": {
     "title": "Edit profile",
@@ -125,6 +127,10 @@
       "nameLong": "Name must be under 60 characters",
       "governorateRequired": "Please choose your governorate",
       "schoolLong": "School name must be under 80 characters"
+    },
+    "sections": {
+      "personal": "Personal details",
+      "account": "Account"
     }
   },
   "sessions": {
@@ -145,7 +151,9 @@
     "logoutAllMessage": "Every device except this one will be signed out immediately.",
     "logoutAllDone": "All other devices signed out",
     "empty": "No other devices",
-    "emptyMessage": "Only this device is signed in to your account."
+    "emptyMessage": "Only this device is signed in to your account.",
+    "activeNow": "Active now",
+    "logoutAllFooter": "Signs out every device except this one. They will need a verification code to sign in again."
   },
   "language": {
     "title": "Language",
@@ -164,6 +172,13 @@
     "restartTitle": "Restart required",
     "restartMessage": "The app will restart to apply the new layout direction. Your progress is safe.",
     "restartConfirm": "Restart now",
-    "changed": "Language updated"
+    "changed": "Language updated",
+    "heading": "Choose your language",
+    "restartNote": "Switching languages is instant — the whole layout flips direction and your progress is kept."
+  },
+  "notFound": {
+    "title": "This page doesn't exist",
+    "message": "The link may be broken or the page may have moved. Let's get you back to your studies.",
+    "back": "Go back"
   }
 }

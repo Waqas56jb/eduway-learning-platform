@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { I18nManager, Pressable, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { isRTL } from '@/utils/rtl';
+import { Pressable, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useLangStore } from '@/store/langStore';
 import { fontFor, radius, shadows, useTheme } from '@/theme';
@@ -40,7 +41,7 @@ export const SegmentedControl = memo(function SegmentedControl({ options, value,
 
   const translate = useSharedValue(0);
   const ready = useSharedValue(0);
-  const dir = I18nManager.isRTL ? -1 : 1;
+  const dir = isRTL() ? -1 : 1;
 
   useEffect(() => {
     if (segW <= 0) return;
@@ -95,13 +96,14 @@ export const SegmentedControl = memo(function SegmentedControl({ options, value,
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={typeof o.count === 'number' ? `${o.label}, ${formatNumber(o.count, lang)}` : o.label}
-            style={styles.segment}
+            style={({ pressed }) => [styles.segment, pressed && !selected && styles.pressed]}
           >
             <Text
               variant="label"
               color={selected ? colors.ink : colors.muted}
               numberOfLines={1}
-              style={{ fontFamily: fontFor(selected ? 'bold' : 'medium', isAr) }}
+              maxFontSizeMultiplier={1.2}
+              style={[styles.label, { fontFamily: fontFor(selected ? 'semibold' : 'medium', isAr) }]}
             >
               {o.label}
             </Text>
@@ -164,5 +166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  countText: { fontSize: 11, lineHeight: 14 },
+  countText: { fontSize: 11 },
+  label: { flexShrink: 1 },
+  pressed: { opacity: 0.6 },
 });

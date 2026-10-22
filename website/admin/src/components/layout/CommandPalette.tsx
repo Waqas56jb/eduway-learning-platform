@@ -7,9 +7,18 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/utils/cn';
 import { FLAT_PAGES } from '@/routes/nav';
 import { useAuth, useCan } from '@/store/auth';
-import { useLessons, useStudents } from '@/store/core';
 import { useUi } from '@/store/ui';
-import { useLocalize } from '@/hooks/useLocale';
+import { useLang } from '@/hooks/useLocale';
+import { useDebounce } from '@/hooks/useMisc';
+import { useApiQuery } from '@/api/hooks';
+import { api } from '@/api/client';
+import { qk } from '@/api/keys';
+import type { Localized } from '@/api/types';
+
+interface SearchDto {
+  students?: { id: string; name: Localized; mobile: string; avatarUrl: string | null }[];
+  lessons?: { id: string; title: Localized; subjectSlug: string; subjectName: Localized; status?: string; thumbnail: string }[];
+}
 
 interface Entry {
   id: string;
@@ -23,16 +32,24 @@ interface Entry {
 /** ⌘K / Ctrl+K global search across pages, students, lessons and commands. */
 export function CommandPalette() {
   const { t, i18n } = useTranslation();
-  const L = useLocalize();
+  const lang = useLang();
   const navigate = useNavigate();
   const open = useUi((s) => s.paletteOpen);
   const setOpen = useUi((s) => s.setPalette);
   const toggleTheme = useUi((s) => s.toggleTheme);
   const logout = useAuth((s) => s.logout);
   const can = useCan();
-  const students = useStudents((s) => s.items);
-  const lessons = useLessons((s) => s.items);
   const [q, setQ] = useState('');
+  const dq = useDebounce(q.trim(), 250);
+  const scopes = [can('users', 'view') && 'students', can('content', 'view') && 'lessons'].filter(Boolean) as string[];
+  // SRC-01: server-side search scoped by role (students + lessons, top 5 each).
+  const search = useApiQuery(qk.search(dq, scopes), () => api.get<SearchDto>('/search', { q: dq, scopes, limit: 5 }), {
+    enabled: open && dq.length >= 2 && scopes.length > 0,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+    meta: { silentError: true },
+  });
+  const found = dq.length >= 2 ? search.data : undefined;
   const [idx, setIdx] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -77,18 +94,19 @@ export function CommandPalette() {
 
     const studs: Entry[] =
       query && can('users', 'view')
-        ? students
-            .filter((s) => match(s.name_en, s.name_ar, s.mobile, s.id))
-            .slice(0, 5)
-            .map((s) => ({ id: `s:${s.id}`, group: 'students' as const, label: L(s, 'name'), sub: s.mobile, icon: <User className="h-4 w-4" />, run: go(`/users/${s.id}`) }))
+        ? (found?.students ?? []).map((s) => ({ id: `s:${s.id}`, group: 'students' as const, label: s.name[lang], sub: s.mobile, icon: <User className="h-4 w-4" />, run: go(`/users/${s.id}`) }))
         : [];
 
     const less: Entry[] =
       query && can('content', 'view')
-        ? lessons
-            .filter((l) => match(l.title_en, l.title_ar))
-            .slice(0, 5)
-            .map((l) => ({ id: `l:${l.id}`, group: 'lessons' as const, label: L(l, 'title'), sub: t(`status.${l.status}`), icon: <BookOpen className="h-4 w-4" />, run: go(`/content/lessons/${l.id}`) }))
+        ? (found?.lessons ?? []).map((l) => ({
+            id: `l:${l.id}`,
+            group: 'lessons' as const,
+            label: l.title[lang],
+            sub: l.status ? `${l.subjectName[lang]} · ${t(`status.${l.status}`)}` : l.subjectName[lang],
+            icon: <BookOpen className="h-4 w-4" />,
+            run: go(`/content/lessons/${l.id}`),
+          }))
         : [];
 
     const cmds: Entry[] = [
@@ -98,7 +116,7 @@ export function CommandPalette() {
     ].filter((e) => match(e.label));
 
     return [...pages.slice(0, query ? 8 : 6), ...studs, ...less, ...cmds];
-  }, [q, students, lessons, can, t, L, navigate, setOpen, toggleTheme, i18n, logout]);
+  }, [q, found, can, t, lang, navigate, setOpen, toggleTheme, i18n, logout]);
 
   useEffect(() => setIdx(0), [q]);
   useEffect(() => {

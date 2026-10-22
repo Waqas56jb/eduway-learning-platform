@@ -1,0 +1,263 @@
+{
+ "achievements": [
+  {
+   "id": "streak-7",
+   "icon": "flame",
+   "title": {
+    "en": "7-day streak",
+    "ar": "سلسلة 7 أيام"
+   },
+   "description": {
+    "en": "Studied every day for a full week without a break.",
+    "ar": "ذاكرت كل يوم لأسبوع كامل دون انقطاع."
+   },
+   "hint": {
+    "en": "Study at least once a day for 7 days in a row.",
+    "ar": "ذاكر مرة واحدة على الأقل يومياً لمدة 7 أيام متتالية."
+   },
+   "earned": true,
+   "current": 7,
+   "target": 7,
+   "earnedAt": "2026-10-19T18:00:00Z"
+  },
+  {
+   "id": "perfect-quiz",
+   "icon": "star",
+   "title": {
+    "en": "First perfect quiz",
+    "ar": "أول اختبار كامل"
+   },
+   "description": {
+    "en": "Answered every question of a lesson quiz correctly.",
+    "ar": "أجبت عن جميع أسئلة اختبار الدرس إجابة صحيحة."
+   },
+   "hint": {
+    "en": "Score 100% on any lesson quiz.",
+    "ar": "احصل على 100% في أي اختبار درس."
+   },
+   "earned": true,
+   "current": 1,
+   "target": 1,
+   "earnedAt": "2026-09-28T16:20:00Z"
+  },
+  {
+   "id": "questions-100",
+   "icon": "target",
+   "title": {
+    "en": "100 questions",
+    "ar": "100 سؤال"
+   },
+   "description": {
+    "en": "Solved 100 questions from the question bank.",
+    "ar": "حللت 100 سؤال من بنك الأسئلة."
+   },
+   "hint": {
+    "en": "Solve 100 questions in practice sessions.",
+    "ar": "حل 100 سؤال في جلسات التدريب."
+   },
+   "earned": true,
+   "current": 100,
+   "target": 100,
+   "earnedAt": "2026-10-05T20:45:00Z"
+  },
+  {
+   "id": "night-owl",
+   "icon": "moon",
+   "title": {
+    "en": "Night owl",
+    "ar": "سهران الليل"
+   },
+   "description": {
+    "en": "Completed 5 study sessions after 10 PM.",
+    "ar": "أكملت 5 جلسات مذاكرة بعد الساعة العاشرة مساءً."
+   },
+   "hint": {
+    "en": "Finish 5 study sessions after 10 PM.",
+    "ar": "أكمل 5 جلسات مذاكرة بعد العاشرة مساءً."
+   },
+   "earned": true,
+   "current": 5,
+   "target": 5,
+   "earnedAt": "2026-10-12T22:40:00Z"
+  },
+  {
+   "id": "early-bird",
+   "icon": "sun",
+   "title": {
+    "en": "Early bird",
+    "ar": "طائر الصباح"
+   },
+   "description": {
+    "en": "Studied before 7 AM on 10 different days.",
+    "ar": "ذاكرت قبل السابعة صباحاً في 10 أيام مختلفة."
+   },
+   "hint": {
+    "en": "Start a lesson before 7 AM on 10 days.",
+    "ar": "ابدأ درساً قبل السابعة صباحاً في 10 أيام."
+   },
+   "earned": false,
+   "current": 6,
+   "target": 10
+  },
+  {
+   "id": "exam-ready",
+   "icon": "trophy",
+   "title": {
+    "en": "Exam ready",
+    "ar": "جاهز للامتحان"
+   },
+   "description": {
+    "en": "Scored 85% or higher on 3 full mock exams.",
+    "ar": "حصلت على 85% أو أكثر في 3 امتحانات تجريبية كاملة."
+   },
+   "hint": {
+    "en": "Score 85%+ on 3 mock exams in the simulator.",
+    "ar": "احصل على 85% فأكثر في 3 امتحانات تجريبية في المحاكي."
+   },
+   "earned": false,
+   "current": 2,
+   "target": 3
+  },
+  {
+   "id": "mistake-slayer",
+   "icon": "shield",
+   "title": {
+    "en": "Mistake slayer",
+    "ar": "قاهر الأخطاء"
+   },
+   "description": {
+    "en": "Mastered 25 questions from your mistakes notebook.",
+    "ar": "أتقنت 25 سؤالاً من دفتر أخطائك."
+   },
+   "hint": {
+    "en": "Retry and master 25 of your mistakes.",
+    "ar": "أعد حل 25 من أخطائك حتى تتقنها."
+   },
+   "earned": false,
+   "current": 11,
+   "target": 25
+  },
+  {
+   "id": "streak-30",
+   "icon": "crown",
+   "title": {
+    "en": "30-day legend",
+    "ar": "أسطورة 30 يوماً"
+   },
+   "description": {
+    "en": "Kept your study streak alive for 30 days.",
+    "ar": "حافظت على سلسلة المذاكرة لمدة 30 يوماً."
+   },
+   "hint": {
+    "en": "Study every day for 30 days in a row.",
+    "ar": "ذاكر كل يوم لمدة 30 يوماً متتالية."
+   },
+   "earned": false,
+   "current": 7,
+   "target": 30
+  },
+  {
+   "id": "all-rounder",
+   "icon": "medal",
+   "title": {
+    "en": "All-rounder",
+    "ar": "متفوق في كل المواد"
+   },
+   "description": {
+    "en": "Reached 50% completion in all five subjects.",
+    "ar": "وصلت إلى 50% من الإنجاز في المواد الخمس كلها."
+   },
+   "hint": {
+    "en": "Complete half of every subject.",
+    "ar": "أكمل نصف كل مادة دراسية."
+   },
+   "earned": false,
+   "current": 3,
+   "target": 5
+  }
+ ],
+ "minutesPerLevel": [
+  0,
+  25,
+  50,
+  80,
+  120
+ ],
+ "todayPlan": [
+  {
+   "id": "p1",
+   "kind": "lesson",
+   "subjectId": "math",
+   "title": {
+    "en": "Finish “Rolle's & Mean Value Theorems”",
+    "ar": "أكمل درس \"مبرهنتا رول والقيمة المتوسطة\""
+   },
+   "meta": {
+    "en": "Mathematics · Lesson",
+    "ar": "الرياضيات · درس"
+   },
+   "minutes": 7,
+   "target": {
+    "pathname": "/lesson/[id]",
+    "params": {
+     "id": "math-l9"
+    }
+   },
+   "done": false
+  },
+  {
+   "id": "p2",
+   "kind": "mistakes",
+   "subjectId": "chemistry",
+   "title": {
+    "en": "Review 5 mistakes from this week",
+    "ar": "راجع 5 أخطاء من هذا الأسبوع"
+   },
+   "meta": {
+    "en": "My Mistakes · Review",
+    "ar": "أخطائي · مراجعة"
+   },
+   "minutes": 10,
+   "target": "/mistakes",
+   "done": true
+  },
+  {
+   "id": "p3",
+   "kind": "quiz",
+   "subjectId": "physics",
+   "title": {
+    "en": "Take the Faraday's Law quiz",
+    "ar": "أدِّ اختبار قانون فاراداي"
+   },
+   "meta": {
+    "en": "Physics · 5 questions",
+    "ar": "الفيزياء · 5 أسئلة"
+   },
+   "minutes": 8,
+   "target": {
+    "pathname": "/quiz/[lessonId]",
+    "params": {
+     "lessonId": "physics-l7"
+    }
+   },
+   "done": false
+  },
+  {
+   "id": "p4",
+   "kind": "exam",
+   "subjectId": "math",
+   "title": {
+    "en": "Warm up for tomorrow’s ministerial mock",
+    "ar": "تهيّأ للامتحان الوزاري التجريبي غداً"
+   },
+   "meta": {
+    "en": "Exam Simulator · Mathematics",
+    "ar": "محاكي الامتحانات · الرياضيات"
+   },
+   "minutes": 25,
+   "target": "/exams",
+   "done": false
+  }
+ ],
+ "lastWeekStudyMinutes": 662
+}

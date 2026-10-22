@@ -10,14 +10,19 @@ import { gradients, palette, radius, space, useTheme } from '@/theme';
 import { formatPrice } from '@/utils/format';
 import { haptic } from '@/utils/haptics';
 import { MethodMark } from './PaymentMethodCard';
-import type { PaymentMethod } from './paymentMethods';
+import { methodLabel, type PaymentMethod } from './paymentMethods';
 
 interface GatewaySheetProps {
   visible: boolean;
   amount: number;
   method: PaymentMethod;
   onClose: () => void;
-  /** Called once the mock payment has been "authorised". */
+  /**
+   * Runs the real payment (initiate → gateway → status poll) while the sheet animates.
+   * Resolves `true` when the payment is paid. Only the wallet MSISDN is passed on — PINs and card data never leave the sheet.
+   */
+  onPay: (walletPhone?: string) => Promise<boolean>;
+  /** Called after the "approved" animation. */
   onSuccess: () => void;
 }
 
@@ -25,8 +30,8 @@ type Phase = 'form' | 'processing';
 const STEPS = ['connecting', 'verifying', 'activating'] as const;
 const STEP_MS = 700;
 
-/** Mock, navy-branded secure payment gateway shown in a bottom sheet. */
-export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method, onClose, onSuccess }: GatewaySheetProps) {
+/** Navy-branded payment sheet; drives PAY-06 → mock confirm / hosted page → PAY-08 behind its animation. */
+export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method, onClose, onPay, onSuccess }: GatewaySheetProps) {
   const { colors } = useTheme();
   const { t, L, lang } = useI18n('subscription');
   const user = useAuthStore((s) => s.user);
@@ -34,7 +39,7 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
   const [step, setStep] = useState(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const [phone, setPhone] = useState('770 123 4567');
+  const [phone, setPhone] = useState(() => (user?.mobile ?? '').replace(/^\+964/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3'));
   const [pin, setPin] = useState('1234');
   const [cardNumber, setCardNumber] = useState(method.id === 'qicard' ? '6262 1500 4418 2093' : '4242 4242 4242 4242');
   const [expiry, setExpiry] = useState('12/28');
@@ -46,24 +51,34 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
       setPhase('form');
       setStep(0);
       setHolder(L(user?.name));
-      setCardNumber(method.id === 'qicard' ? '6262 1500 4418 2093' : method.id === 'mastercard' ? '5355 0012 7781 4406' : '4242 4242 4242 4242');
+      setCardNumber(method.id === 'qicard' ? '6262 1500 4418 2093' : '4242 4242 4242 4242');
     }
   }, [visible, method.id, user, L]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-  const methodName = t(`methods.${method.id}`);
+  const methodName = methodLabel(method, t, L);
 
-  const pay = () => {
+  const pay = async () => {
     haptic.medium();
     setPhase('processing');
     setStep(0);
     timers.current.forEach(clearTimeout);
+    // Steps advance while the gateway works; "activating" holds until the server confirms.
+    timers.current = [setTimeout(() => setStep(1), STEP_MS), setTimeout(() => setStep(2), STEP_MS * 2)];
+    const digits = phone.replace(/\D/g, '');
+    const started = Date.now();
+    const ok = await onPay(method.kind === 'wallet' && digits ? `+964${digits.replace(/^0/, '')}` : undefined);
+    const wait = Math.max(0, STEP_MS * 2 + 600 - (Date.now() - started));
+    timers.current.forEach(clearTimeout);
+    if (!ok) {
+      setPhase('form');
+      setStep(0);
+      return;
+    }
     timers.current = [
-      setTimeout(() => setStep(1), STEP_MS),
-      setTimeout(() => setStep(2), STEP_MS * 2),
-      setTimeout(() => setStep(3), STEP_MS * 2 + 600),
-      setTimeout(() => onSuccess(), STEP_MS * 2 + 950),
+      setTimeout(() => setStep(3), wait),
+      setTimeout(() => onSuccess(), wait + 350),
     ];
   };
 
@@ -80,7 +95,7 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
             <Button
               title={t('gateway.confirm', { amount: formatPrice(amount, lang) })}
               icon="lock"
-              onPress={pay}
+              onPress={() => void pay()}
               fullWidth
             />
             <Text variant="caption" color="muted" align="center">

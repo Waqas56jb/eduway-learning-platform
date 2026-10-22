@@ -16,30 +16,34 @@ export interface StatTileProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Compact KPI tile: tinted icon square, large Playfair value (tabular), label caption. */
+/** KPI tile: tinted icon square, large tabular Playfair value, label and muted sublabel. Fixed internal rhythm. */
 export const StatTile = memo(function StatTile({ icon, label, value, sublabel, color, onPress, style }: StatTileProps) {
   const { colors, isDark } = useTheme();
   const tint = color ?? colors.accent;
+  const a11y = `${label}: ${value}${sublabel ? `, ${sublabel}` : ''}`;
 
   const content = (
     <>
-      <View style={styles.top}>
-        <View style={[styles.iconBox, { backgroundColor: withAlpha(tint, isDark ? 0.22 : 0.12) }]}>
-          <Icon name={icon} size={20} color={tint} />
-        </View>
-        {onPress ? <Icon name="chevron" size={16} color={colors.muted} /> : null}
+      <View style={[styles.iconBox, { backgroundColor: withAlpha(tint, isDark ? 0.22 : 0.12) }]}>
+        <Icon name={icon} size={18} color={tint} />
       </View>
-      <Text variant="h1" display tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.value}>
+      <Text
+        variant="h1"
+        display
+        tabular
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+        style={styles.value}
+      >
         {value}
       </Text>
-      <Text variant="label" numberOfLines={1}>
+      <Text variant="label" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
         {label}
       </Text>
-      {sublabel ? (
-        <Text variant="caption" color="muted" numberOfLines={1} style={styles.sub}>
-          {sublabel}
-        </Text>
-      ) : null}
+      <Text variant="caption" color="muted" numberOfLines={1} style={styles.sub}>
+        {sublabel ?? ' '}
+      </Text>
     </>
   );
 
@@ -52,18 +56,13 @@ export const StatTile = memo(function StatTile({ icon, label, value, sublabel, c
 
   if (onPress) {
     return (
-      <PressableScale
-        onPress={onPress}
-        style={boxStyle}
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${value}${sublabel ? `, ${sublabel}` : ''}`}
-      >
+      <PressableScale onPress={onPress} style={boxStyle} accessibilityRole="button" accessibilityLabel={a11y}>
         {content}
       </PressableScale>
     );
   }
   return (
-    <View style={boxStyle} accessible accessibilityLabel={`${label}: ${value}${sublabel ? `, ${sublabel}` : ''}`}>
+    <View style={boxStyle} accessible accessibilityLabel={a11y}>
       {content}
     </View>
   );
@@ -72,23 +71,17 @@ export const StatTile = memo(function StatTile({ icon, label, value, sublabel, c
 const styles = StyleSheet.create({
   tile: {
     flex: 1,
-    minHeight: 132,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: space.lg,
   },
-  top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: space.md,
-  },
   iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: space.md,
   },
   value: { marginBottom: space.xxs },
   sub: { marginTop: space.xxs },

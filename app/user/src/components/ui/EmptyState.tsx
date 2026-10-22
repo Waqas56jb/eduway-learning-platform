@@ -1,14 +1,6 @@
 import { memo, useEffect } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, {
-  cancelAnimation,
-  Easing,
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { Icon, type IconName } from '@/components/icons';
 import { space, useTheme } from '@/theme';
 import { Button } from './Button';
@@ -23,27 +15,32 @@ export interface EmptyStateProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Friendly empty / zero state with a gently floating illustration. */
+/** Friendly empty / zero state with an illustration that springs in once. */
 export const EmptyState = memo(function EmptyState({ icon = 'sparkles', title, message, actionLabel, onAction, style }: EmptyStateProps) {
   const { colors, isDark } = useTheme();
-  const float = useSharedValue(0);
+  // One-shot entrance (no perpetual animation): halo blooms, circle springs in.
+  const enter = useSharedValue(0);
+  const halo = useSharedValue(0);
 
   useEffect(() => {
-    float.value = withRepeat(withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }), -1, true);
-    return () => cancelAnimation(float);
-  }, [float]);
+    enter.value = withSpring(1, { damping: 14, stiffness: 180, mass: 0.8 });
+    halo.value = withDelay(120, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+  }, [enter, halo]);
 
-  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -6 + float.value * 12 }] }));
+  const floatStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, enter.value * 1.5),
+    transform: [{ scale: 0.7 + enter.value * 0.3 }],
+  }));
   const haloStyle = useAnimatedStyle(() => ({
-    opacity: 0.55 + float.value * 0.45,
-    transform: [{ scale: 0.96 + float.value * 0.08 }],
+    opacity: halo.value,
+    transform: [{ scale: 0.8 + halo.value * 0.2 }],
   }));
 
   const iconColor = isDark ? colors.accentLight : colors.accent;
 
   return (
     <Animated.View entering={FadeInDown.duration(300)} style={[styles.container, style]}>
-      <View style={styles.illustration}>
+      <View style={styles.illustration} pointerEvents="none">
         <Animated.View style={[styles.halo, { backgroundColor: colors.accentSoft }, haloStyle]} />
         <Animated.View
           style={[
@@ -86,6 +83,6 @@ const styles = StyleSheet.create({
   },
   inner: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   title: { marginBottom: space.sm },
-  message: { maxWidth: 300 },
+  message: { maxWidth: 320 },
   action: { marginTop: space.xl, minWidth: 180 },
 });

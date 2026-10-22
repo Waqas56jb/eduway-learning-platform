@@ -14,12 +14,11 @@ import {
   SkeletonCard,
   SmartImage,
   SubjectBadgeIcon,
-  useMockLoading,
 } from '@/components/ui';
-import { governorates, subjects } from '@/data';
+import { useSubjects } from '@/api/catalog';
+import { useGovernorates, usePublicStats, useTeachers } from '@/api/public';
 import { useLang } from '@/hooks/useLang';
 import { AVATARS, IMAGES } from '@/lib/images';
-import type { SubjectId } from '@/types';
 
 interface TextItem {
   title: string;
@@ -31,30 +30,26 @@ interface Milestone extends TextItem {
 
 const VALUE_ICONS = [Target, HeartHandshake, ShieldCheck, Lightbulb];
 
-const TEACHER_META: Record<SubjectId, { avatar: string; years: number; students: number }> = {
-  math: { avatar: AVATARS[0], years: 18, students: 14200 },
-  physics: { avatar: AVATARS[2], years: 15, students: 12800 },
-  chemistry: { avatar: AVATARS[3], years: 12, students: 11300 },
-  biology: { avatar: AVATARS[5], years: 14, students: 10900 },
-  english: { avatar: AVATARS[7], years: 10, students: 9600 },
-};
 
 export default function About() {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
-  const ready = useMockLoading(600);
+  // PUB-05 impact counters, PUB-08 teachers, PUB-02 governorate count, CAT-01 subject colours.
+  const { data: stats } = usePublicStats();
+  const { data: teachers = [], isLoading: teachersLoading } = useTeachers();
+  const { data: governorates = [] } = useGovernorates();
+  const { data: subjects = [] } = useSubjects();
+  const ready = !teachersLoading;
 
   const values = t('pages.about.values.items', { returnObjects: true }) as unknown as TextItem[];
   const milestones = t('pages.about.timeline.items', { returnObjects: true }) as unknown as Milestone[];
 
-  const totalQuestions = subjects.reduce((s, x) => s + x.questionsCount, 0);
   const impact = [
-    { to: 48000, suffix: '+', label: t('pages.about.impact.students') },
-    // Platform-wide catalogue size (matches the landing stats band; mock data only ships a sample).
-    { to: 850, suffix: '+', label: t('pages.about.impact.lessons') },
-    { to: totalQuestions, suffix: '+', label: t('pages.about.impact.questions') },
-    { to: governorates.length, suffix: '', label: t('pages.about.impact.governorates') },
-    { to: 94, suffix: '%', label: t('pages.about.impact.passRate') },
+    { to: Math.floor((stats?.students ?? 0) / 100) * 100, suffix: '+', label: t('pages.about.impact.students') },
+    { to: stats?.lessons ?? 0, suffix: '+', label: t('pages.about.impact.lessons') },
+    { to: stats?.questions ?? 0, suffix: '+', label: t('pages.about.impact.questions') },
+    { to: stats?.governorates ?? governorates.length, suffix: '', label: t('pages.about.impact.governorates') },
+    { to: stats?.passRatePct ?? 0, suffix: '%', label: t('pages.about.impact.passRate') },
   ];
 
   return (
@@ -205,42 +200,47 @@ export default function About() {
           />
           <ul className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {ready
-              ? subjects.map((s, i) => {
-                  const meta = TEACHER_META[s.id];
+              ? teachers.map((tc, i) => {
+                  const s = subjects.find((x) => x.id === tc.subjectId || x.slug === tc.subjectSlug);
+                  const color = s?.color ?? '#C9A24A';
                   return (
                     <motion.li
-                      key={s.id}
+                      key={tc.id}
                       initial={{ opacity: 0, y: 24 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5, delay: i * 0.08 }}
                     >
                       <HoverCard className="relative flex h-full flex-col overflow-hidden p-6">
-                        <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: s.color }} aria-hidden />
+                        <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: color }} aria-hidden />
                         <div className="flex items-center justify-between">
-                          <Avatar src={meta.avatar} alt={l(s.teacher)} size={72} className="ring-4 ring-cream" />
-                          <SubjectBadgeIcon id={s.id} color={s.color} size={40} />
+                          <Avatar src={tc.avatarUrl ?? AVATARS[i % AVATARS.length]} alt={l(tc.name)} size={72} className="ring-4 ring-cream" />
+                          <SubjectBadgeIcon id={tc.subjectSlug} color={color} size={40} />
                         </div>
-                        <h3 className="mt-5 font-sans text-lg font-bold tracking-normal text-primary rtl:font-display">{l(s.teacher)}</h3>
-                        <Badge color={s.color} className="mt-2 self-start">
-                          {l(s.name)}
-                        </Badge>
-                        <p className="mt-4 flex-1 text-sm text-muted">{t(`pages.about.teachers.bios.${s.id}`)}</p>
+                        <h3 className="mt-5 font-sans text-lg font-bold tracking-normal text-primary rtl:font-display">{l(tc.name)}</h3>
+                        {s && (
+                          <Badge color={color} className="mt-2 self-start">
+                            {l(s.name)}
+                          </Badge>
+                        )}
+                        <p className="mt-4 flex-1 text-sm text-muted">{l(tc.bio)}</p>
                         <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-primary/5 pt-4 text-xs">
                           <div>
                             <dt className="text-muted">{t('pages.about.teachers.experience')}</dt>
-                            <dd className="mt-0.5 font-bold text-primary">{t('pages.about.teachers.years', { count: meta.years })}</dd>
+                            <dd className="mt-0.5 font-bold text-primary">
+                              {tc.yearsExperience !== null ? t('pages.about.teachers.years', { count: tc.yearsExperience }) : '—'}
+                            </dd>
                           </div>
                           <div>
                             <dt className="text-muted">{t('pages.about.teachers.taught')}</dt>
-                            <dd className="num mt-0.5 font-bold text-primary">{fmtNumber(meta.students)}+</dd>
+                            <dd className="num mt-0.5 font-bold text-primary">{tc.studentsCount !== null ? `${fmtNumber(tc.studentsCount)}+` : '—'}</dd>
                           </div>
                         </dl>
                       </HoverCard>
                     </motion.li>
                   );
                 })
-              : subjects.map((s) => (
-                  <li key={s.id}>
+              : [0, 1, 2, 3, 4].map((i) => (
+                  <li key={i}>
                     <SkeletonCard media={false} lines={4} className="h-80" />
                   </li>
                 ))}

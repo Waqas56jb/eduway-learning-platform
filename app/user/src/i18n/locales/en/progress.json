@@ -13,7 +13,9 @@
   "subjects": {
     "title": "Subject completion",
     "subtitle": "Tap a subject to continue",
-    "a11y": "{{subject}}, {{value}}% complete"
+    "a11y": "{{subject}}, {{value}}% complete",
+    "viewAll": "All subjects",
+    "viewAllA11y": "Browse all subjects"
   },
   "trend": {
     "title": "Score trend",
@@ -29,11 +31,12 @@
     "subtitle": "Based on your mistakes and quiz results",
     "accuracy": "{{value}}% accuracy",
     "review": "Review",
-    "reviewA11y": "Review {{topic}}"
+    "reviewA11y": "Review {{topic}}",
+    "empty": "No weak topics yet — keep practising and we'll point out what to strengthen."
   },
   "calendar": {
     "title": "Study streak",
-    "subtitle": "Your activity over the last 16 weeks",
+    "subtitle": "Your activity over the last {{count}} weeks",
     "less": "Less",
     "more": "More",
     "hint": "Tap a day to see details",
@@ -88,6 +91,7 @@
       "quiz": "Quiz",
       "exam": "Exam",
       "ai": "AI Tutor"
-    }
+    },
+    "empty": "Your lessons, quizzes and exams will appear here."
   }
 }

@@ -5,18 +5,18 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Eraser, Eye, Lock, Save, ShieldCheck, Sparkles, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import toast from 'react-hot-toast';
-import { ACTIONS, MODULES, type PermissionMatrix, type Role } from '@/types';
-import { useRoles } from '@/store/core';
+import { MODULES, type PermissionMatrix } from '@/types';
 import { useCan } from '@/store/auth';
-import { logAudit } from '@/store/audit';
-import { emptyMatrix, matrix } from '@/data/security';
 import { useLocalize } from '@/hooks/useLocale';
-import { uid } from '@/utils/id';
 import { cn } from '@/utils/cn';
+import { useApiMutation } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { isApiError } from '@/api/client';
+import { securityApi, useRoleQuery, useRolesQuery, type RoleVM, type RoleWrite } from '@/api/security';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Badge, Button, ButtonLink, Card, CardHeader, EmptyState, Field, Input, ProgressBar, Textarea } from '@/components/ui';
-import { cloneMatrix, countGranted, diffPermissions, RoleMatrix, TOTAL_PERMISSIONS } from '@/components/forms/RoleForm';
+import { Badge, Button, ButtonLink, Card, CardHeader, EmptyState, Field, Input, ProgressBar, SkeletonCard, Textarea } from '@/components/ui';
+import { QueryError } from '@/components/ui/QueryError';
+import { cloneMatrix, countGranted, diffPermissions, emptyMatrix, matrix, RoleMatrix, TOTAL_PERMISSIONS } from '@/components/forms/RoleForm';
 
 const READ_ONLY = (): PermissionMatrix =>
   matrix(Object.fromEntries(MODULES.map((m) => [m, ['view']])) as Parameters<typeof matrix>[0]);
@@ -25,18 +25,39 @@ const FULL = (): PermissionMatrix => matrix(Object.fromEntries(MODULES.map((m) =
 /** Keyed by id so state never leaks between /new and /:id or across roles. */
 export default function RoleEditorPage() {
   const { id } = useParams();
-  return <RoleEditor key={id ?? 'new'} id={id} />;
+  const { t } = useTranslation();
+  const q = useRoleQuery(id);
+  if (id && q.isLoading) {
+    return (
+      <div className="grid gap-6 xl:grid-cols-3">
+        <SkeletonCard lines={6} />
+        <SkeletonCard lines={10} className="xl:col-span-2" />
+      </div>
+    );
+  }
+  if (id && q.error) {
+    if (isApiError(q.error) && q.error.status === 404) {
+      return (
+        <>
+          <PageHeader title={t('security.roleEditor.notFound')} />
+          <Card>
+            <EmptyState title={t('security.roleEditor.notFound')} action={<ButtonLink to="/security/roles">{t('actions.back')}</ButtonLink>} />
+          </Card>
+        </>
+      );
+    }
+    return <QueryError error={q.error} onRetry={() => q.refetch()} />;
+  }
+  return <RoleEditor key={`${id ?? 'new'}:${q.data?.updatedAt ?? ''}`} id={id} existing={q.data} />;
 }
 
-function RoleEditor({ id }: { id?: string }) {
+function RoleEditor({ id, existing }: { id?: string; existing?: RoleVM }) {
   const { t } = useTranslation();
   const L = useLocalize();
   const navigate = useNavigate();
   const can = useCan();
-  const roles = useRoles((s) => s.items);
-  const addRole = useRoles((s) => s.add);
-  const updateRole = useRoles((s) => s.update);
-  const existing = id ? roles.find((r) => r.id === id) : undefined;
+  const rolesQ = useRolesQuery();
+  const roles = useMemo(() => rolesQ.data?.items ?? [], [rolesQ.data]);
   const isNew = !id;
 
   const schema = useMemo(
@@ -60,6 +81,7 @@ function RoleEditor({ id }: { id?: string }) {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -74,61 +96,38 @@ function RoleEditor({ id }: { id?: string }) {
 
   const baseline = useMemo(() => (existing ? cloneMatrix(existing.permissions) : emptyMatrix()), [existing]);
   const [perms, setPerms] = useState<PermissionMatrix>(() => (existing ? cloneMatrix(existing.permissions) : READ_ONLY()));
-  const [saving, setSaving] = useState(false);
 
-  if (id && !existing) {
-    return (
-      <>
-        <PageHeader title={t('security.roleEditor.notFound')} />
-        <Card>
-          <EmptyState title={t('security.roleEditor.notFound')} action={<ButtonLink to="/security/roles">{t('actions.back')}</ButtonLink>} />
-        </Card>
-      </>
-    );
-  }
+  const save = useApiMutation(
+    (body: RoleWrite) => (existing ? securityApi.updateRole(existing.id, body) : securityApi.createRole(body)),
+    {
+      invalidate: [qk.roles.all, qk.me, qk.lookups],
+      success: isNew ? 'security.roleEditor.created' : 'security.roleEditor.saved',
+      onSuccess: (r) => {
+        if (isNew) navigate(`/security/roles/${r.id}`, { replace: true });
+      },
+      onError: (err) => {
+        if (err.code === 'CONFLICT') setError('key', { message: t('security.roleEditor.keyTaken') });
+        for (const [f, msg] of Object.entries(err.fields)) {
+          const k = f.replace(/^name\.(en|ar)$/, 'name_$1').replace(/^description\.(en|ar)$/, 'description_$1');
+          if (['name_en', 'name_ar', 'key', 'description_en', 'description_ar'].includes(k)) setError(k as keyof FormValues, { message: msg });
+        }
+      },
+    },
+  );
+  const saving = save.isPending;
 
   const locked = existing?.key === 'super_admin';
   const readOnly = locked || !can('security', isNew ? 'create' : 'edit');
   const changes = diffPermissions(baseline, perms);
   const granted = countGranted(perms);
 
-  const onSubmit = async (v: FormValues) => {
-    setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
-    if (isNew) {
-      const role: Role = { id: uid('role'), ...v, system: false, permissions: perms, createdAt: new Date().toISOString() };
-      addRole(role, { summary: `Created role “${v.name_en}” with ${countGranted(perms)} permissions` });
-      toast.success(t('security.roleEditor.created'));
-      navigate(`/security/roles/${role.id}`, { replace: true });
-    } else if (existing) {
-      updateRole(existing.id, { ...v, permissions: perms }, { silent: true });
-      const before: Record<string, unknown> = {};
-      const after: Record<string, unknown> = {};
-      for (const k of changes) {
-        const [m, a] = k.split('.') as [keyof PermissionMatrix, (typeof ACTIONS)[number]];
-        before[k] = baseline[m][a];
-        after[k] = perms[m][a];
-      }
-      (Object.keys(v) as (keyof FormValues)[]).forEach((k) => {
-        if (existing[k] !== v[k]) {
-          before[k] = existing[k];
-          after[k] = v[k];
-        }
-      });
-      logAudit({
-        action: 'role.update',
-        entity: 'role',
-        entityId: existing.id,
-        summary: changes.length
-          ? `Updated ${changes.length} permission(s) on “${v.name_en}”: ${changes.slice(0, 4).join(', ')}${changes.length > 4 ? '…' : ''}`
-          : `Updated details of role “${v.name_en}”`,
-        before,
-        after,
-      });
-      reset(v);
-      toast.success(t('security.roleEditor.saved'));
-    }
-    setSaving(false);
+  const onSubmit = (v: FormValues) => {
+    save.mutate({
+      key: v.key,
+      name: { en: v.name_en, ar: v.name_ar },
+      description: { en: v.description_en, ar: v.description_ar },
+      permissions: perms,
+    });
   };
 
   const discard = () => {

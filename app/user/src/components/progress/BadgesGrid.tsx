@@ -1,13 +1,27 @@
 import { memo, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import Animated, { ZoomIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Icon } from '@/components/icons';
+import { Icon, type IconName } from '@/components/icons';
 import { Badge, BottomSheet, PressableScale, ProgressBar, Text } from '@/components/ui';
-import type { Achievement } from '@/data/progress';
 import { useI18n } from '@/hooks/useI18n';
-import { gradients, palette, radius, shadows, space, useTheme } from '@/theme';
+import { gradients, palette, radius, SCREEN_PADDING, shadows, space, useTheme } from '@/theme';
 import { formatDate } from '@/utils/format';
+import type { Localized } from '@/types';
+
+export interface Achievement {
+  id: string;
+  icon: IconName;
+  title: Localized;
+  description: Localized;
+  /** How to unlock it (shown while locked). */
+  hint: Localized;
+  earned: boolean;
+  current: number;
+  target: number;
+  /** ISO date the badge was earned. */
+  earnedAt?: string;
+}
 
 interface BadgesGridProps {
   items: Achievement[];
@@ -58,14 +72,12 @@ const Medallion = memo(function Medallion({ item, size }: { item: Achievement; s
 export const BadgesGrid = memo(function BadgesGrid({ items }: BadgesGridProps) {
   const { colors } = useTheme();
   const { t, L, lang } = useI18n('progress');
-  const [width, setWidth] = useState(0);
+  const { width } = useWindowDimensions();
   const [active, setActive] = useState<Achievement | null>(null);
   const [visible, setVisible] = useState(false);
 
-  const itemWidth = width ? Math.floor((width - GAP * (COLUMNS - 1)) / COLUMNS) : 0;
-  const medalSize = itemWidth ? Math.min(64, Math.max(48, itemWidth - 40)) : 56;
-
-  const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const itemWidth = Math.floor((width - SCREEN_PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
+  const medalSize = Math.min(64, Math.max(46, itemWidth - 40));
 
   const open = (a: Achievement) => {
     setActive(a);
@@ -74,20 +86,20 @@ export const BadgesGrid = memo(function BadgesGrid({ items }: BadgesGridProps) {
 
   return (
     <>
-      <View style={styles.grid} onLayout={onLayout}>
-        {itemWidth > 0 &&
-          items.map((a, i) => {
+      <View style={styles.grid}>
+        {items.map((a) => {
             const title = L(a.title);
             const p = pct(a);
             return (
-              <Animated.View key={a.id} entering={FadeInDown.duration(320).delay(i * 45)} style={{ width: itemWidth }}>
-                <PressableScale
+              <PressableScale
+                  key={a.id}
                   onPress={() => open(a)}
                   accessibilityRole="button"
                   accessibilityLabel={a.earned ? t('badges.a11yEarned', { title }) : t('badges.a11yLocked', { title, value: p })}
                   style={[
                     styles.tile,
                     {
+                      width: itemWidth,
                       backgroundColor: a.earned ? colors.accentSoft : colors.surface,
                       borderColor: a.earned ? 'rgba(201,162,74,0.35)' : colors.border,
                     },
@@ -98,6 +110,8 @@ export const BadgesGrid = memo(function BadgesGrid({ items }: BadgesGridProps) {
                     variant="label"
                     align="center"
                     numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
                     color={a.earned ? 'ink' : 'muted'}
                     style={styles.tileTitle}
                   >
@@ -116,7 +130,6 @@ export const BadgesGrid = memo(function BadgesGrid({ items }: BadgesGridProps) {
                     </View>
                   )}
                 </PressableScale>
-              </Animated.View>
             );
           })}
       </View>
@@ -176,14 +189,14 @@ export const BadgesGrid = memo(function BadgesGrid({ items }: BadgesGridProps) {
 });
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, minHeight: 120 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   tile: {
     alignItems: 'center',
     paddingVertical: space.lg,
     paddingHorizontal: space.sm,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 158,
+    minHeight: 160,
   },
   tileTitle: { marginTop: space.md, minHeight: 32 },
   tileProgress: { alignSelf: 'stretch', marginTop: space.xs, paddingHorizontal: space.xs },

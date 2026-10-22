@@ -1,23 +1,30 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CalendarClock, Filter, Megaphone, RotateCcw, Send, Users, XCircle } from 'lucide-react';
+import { CalendarClock, Filter, Globe, Megaphone, RotateCcw, Send, Smartphone, Users, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Campaign, DeliveryLogEntry, NotifChannel } from '@/types';
-import { NOTIF_CHANNELS, PROVIDER_BY_CHANNEL } from '@/data/messaging';
-import { governorates } from '@/data/geo';
-import { useCampaigns, useDeliveryLog, useTemplates } from '@/store/messaging';
-import { usePackages, useSchools, useStudents, useSubjects } from '@/store/core';
-import { useCan, useCurrentAdmin } from '@/store/auth';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import type { NotifChannel } from '@/types';
+import {
+  NOTIF_CHANNELS,
+  PLATFORMS,
+  notificationsApi,
+  type CampaignFilters,
+  type CampaignVM,
+  type SubscriptionStatus,
+} from '@/api/notifications';
+import { qk } from '@/api/keys';
+import { uuid, isApiError } from '@/api/client';
+import { exportRequest, useApiMutation, useApiQuery, useExport, usePagedList } from '@/api/hooks';
+import { useLookups } from '@/api/lookups';
+import type { Platform } from '@/api/types';
+import { useCan } from '@/store/auth';
+import { useDebounce } from '@/hooks/useMisc';
 import { useLang, useLocalize } from '@/hooks/useLocale';
 import { fmtDateTime, fmtNumber } from '@/utils/format';
-import { MOCK_NOW } from '@/utils/random';
-import { uid } from '@/utils/id';
 import { cn } from '@/utils/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Button, Card, CardBody, CardHeader, DataTable, EmptyState, Field, Input, ProgressBar, Segmented, Select, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
-import { CHANNEL_META, ChannelIcon, PhonePreview } from './_shared';
+import { CHANNEL_META, ChannelIcon, PhonePreview, useTemplateVariables } from './_shared';
 
 interface Audience {
   package: string;
@@ -25,133 +32,128 @@ interface Audience {
   governorate: string;
   school: string;
   inactiveDays: string;
+  subscriptionStatus: string;
+  platforms: Platform[];
 }
 
-const EMPTY: Audience = { package: '', subject: '', governorate: '', school: '', inactiveDays: '' };
+const EMPTY: Audience = { package: '', subject: '', governorate: '', school: '', inactiveDays: '', subscriptionStatus: '', platforms: [] };
+const SUB_STATUSES: SubscriptionStatus[] = ['active', 'trial', 'expired', 'cancelled', 'none'];
+
+const toFilters = (a: Audience): CampaignFilters => ({
+  packageId: a.package || null,
+  subjectId: a.subject || null,
+  governorateId: a.governorate || null,
+  schoolId: a.school || null,
+  inactiveDays: a.inactiveDays ? Number(a.inactiveDays) : null,
+  platforms: a.platforms.length ? a.platforms : null,
+  subscriptionStatus: (a.subscriptionStatus || null) as SubscriptionStatus | null,
+});
 
 export default function SendCampaign() {
   const { t } = useTranslation();
   const lang = useLang();
   const L = useLocalize();
-  const loading = useMockLoading();
   const can = useCan();
   const confirm = useConfirm();
-  const admin = useCurrentAdmin();
-  const students = useStudents((s) => s.items);
-  const packages = usePackages((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
-  const schools = useSchools((s) => s.items);
-  const templates = useTemplates((s) => s.items);
-  const campaigns = useCampaigns((s) => s.items);
-  const addCampaign = useCampaigns((s) => s.add);
-  const updateCampaign = useCampaigns((s) => s.update);
-  const setLog = useDeliveryLog((s) => s.setItems);
-  const updateLog = useDeliveryLog((s) => s.updateMany);
+  const lookups = useLookups();
+  const vars = useTemplateVariables();
 
   const canSend = can('notifications', 'create');
   const [aud, setAud] = useState<Audience>(EMPTY);
   const [channel, setChannel] = useState<NotifChannel>('push');
-  const [templateId, setTemplateId] = useState('tpl_newlesson_push');
+  const [templateId, setTemplateId] = useState('');
   const [name, setName] = useState('');
   const [when, setWhen] = useState<'now' | 'later'>('now');
   const [at, setAt] = useState('');
   const [previewLang, setPreviewLang] = useState<'en' | 'ar'>(lang);
-  const [sending, setSending] = useState(false);
+  /** Idempotency-Key for the pending send; reused if the same send is retried, cleared on success. */
+  const idemKey = useRef<string | null>(null);
 
-  const matched = useMemo(() => {
-    const cutoff = aud.inactiveDays ? MOCK_NOW.getTime() - Number(aud.inactiveDays) * 86_400_000 : null;
-    return students.filter(
-      (s) =>
-        !s.locked &&
-        (!aud.package || s.packageId === aud.package) &&
-        (!aud.subject || s.entitlements.some((e) => e.subjectId === aud.subject)) &&
-        (!aud.governorate || s.governorateId === aud.governorate) &&
-        (!aud.school || s.schoolId === aud.school) &&
-        (cutoff === null || new Date(s.lastActive).getTime() < cutoff),
-    );
-  }, [students, aud]);
+  // Live audience count (ADM-CMP-03), debounced so typing "inactive days" doesn't spam the API.
+  const filters = useMemo(() => toFilters(aud), [aud]);
+  const debounced = useDebounce(JSON.stringify({ filters, channel }), 350);
+  const previewArgs = useMemo(() => JSON.parse(debounced) as { filters: CampaignFilters; channel: NotifChannel }, [debounced]);
+  const audienceQ = useApiQuery(qk.campaigns.sub('audience', previewArgs), () => notificationsApi.audiencePreview(previewArgs.filters, previewArgs.channel), {
+    placeholderData: (prev) => prev,
+  });
+  const audience = audienceQ.data;
+  const audienceStale = audienceQ.isFetching || debounced !== JSON.stringify({ filters, channel });
 
-  const reachable = channel === 'email' ? matched.filter((s) => s.email) : matched;
-  const channelTemplates = templates.filter((tp) => tp.channel === channel);
-  const template = templates.find((tp) => tp.id === templateId && tp.channel === channel);
-  const activeFilters = Object.values(aud).filter(Boolean).length;
+  // Templates usable for the selected channel (ADM-NTT-01?channel&active=true).
+  const tplQ = useApiQuery(qk.templates.list({ channel, active: true, pageSize: 100, picker: true }), () =>
+    notificationsApi.listTemplates({ channel, active: true, pageSize: 100, sort: 'name' }),
+  );
+  const channelTemplates = tplQ.data?.items ?? [];
+  const template = channelTemplates.find((tp) => tp.id === templateId) ?? channelTemplates[0];
+
+  const history = usePagedList({ key: qk.campaigns.list, fetcher: notificationsApi.listCampaigns, initialSort: '-createdAt', pageSize: 5 });
+  const exp = useExport('/admin/campaigns/export', 'campaigns');
+
+  const reachable = audience?.reachable ?? 0;
+  const matched = audience?.matched ?? 0;
+  const total = audience?.total ?? 0;
+  const activeFilters = Object.values(aud).filter((v) => (Array.isArray(v) ? v.length > 0 : !!v)).length;
   const scheduleInvalid = when === 'later' && (!at || new Date(at).getTime() <= Date.now());
-  const ready = canSend && !!template && reachable.length > 0 && name.trim().length >= 3 && !scheduleInvalid;
+  const ready = canSend && !!template && !!audience && !audienceStale && reachable > 0 && name.trim().length >= 3 && !scheduleInvalid;
 
   const setChannelAndTemplate = (ch: NotifChannel) => {
     setChannel(ch);
-    const first = templates.find((tp) => tp.channel === ch && tp.active) ?? templates.find((tp) => tp.channel === ch);
-    setTemplateId(first?.id ?? '');
+    setTemplateId('');
   };
+
+  const togglePlatform = (p: Platform) =>
+    setAud((a) => ({ ...a, platforms: a.platforms.includes(p) ? a.platforms.filter((x) => x !== p) : [...a.platforms, p] }));
+
+  const sendM = useApiMutation(
+    (v: { body: Parameters<typeof notificationsApi.createCampaign>[0]; key: string }) => notificationsApi.createCampaign(v.body, v.key),
+    {
+      invalidate: [qk.campaigns.all, qk.deliveries.all],
+      silentError: true,
+      onError: (err) => {
+        if (isApiError(err) && err.reason === 'NO_RECIPIENTS') toast.error(t('notifications.campaign.noRecipients'));
+        else toast.error(err.message || t('apiErrors.INTERNAL'));
+      },
+    },
+  );
+
+  const cancelM = useApiMutation((c: CampaignVM) => notificationsApi.cancelCampaign(c.id), {
+    invalidate: [qk.campaigns.all],
+    success: 'notifications.campaign.cancelledToast',
+  });
 
   const send = async () => {
     if (!template) return;
     const ok = await confirm({
-      title: when === 'now' ? t('notifications.campaign.confirmSendTitle', { count: reachable.length }) : t('notifications.campaign.confirmScheduleTitle'),
-      body: t('notifications.campaign.confirmBody', { name: name.trim(), channel: t(`notifications.channels.${channel}`), count: reachable.length, when: when === 'now' ? t('notifications.campaign.immediately') : fmtDateTime(new Date(at)) }),
+      title: when === 'now' ? t('notifications.campaign.confirmSendTitle', { count: reachable }) : t('notifications.campaign.confirmScheduleTitle'),
+      body: t('notifications.campaign.confirmBody', { name: name.trim(), channel: t(`notifications.channels.${channel}`), count: reachable, when: when === 'now' ? t('notifications.campaign.immediately') : fmtDateTime(new Date(at)) }),
       tone: 'primary',
       confirmText: when === 'now' ? t('actions.send') : t('actions.schedule'),
     });
     if (!ok) return;
-    setSending(true);
-    await new Promise((r) => setTimeout(r, 700));
-    const now = new Date().toISOString();
-    const cmp: Campaign = {
-      id: uid('cmp'),
-      name: name.trim(),
-      channel,
-      templateId: template.id,
-      audienceCount: reachable.length,
-      filters: { package: aud.package || null, subject: aud.subject || null, governorate: aud.governorate || null, school: aud.school || null, inactiveDays: aud.inactiveDays ? Number(aud.inactiveDays) : null },
-      status: when === 'now' ? 'sending' : 'scheduled',
-      scheduledAt: when === 'later' ? new Date(at).toISOString() : null,
-      sentAt: when === 'now' ? now : null,
-      createdBy: admin?.name ?? 'Admin',
-    };
-    addCampaign(cmp, { action: when === 'now' ? 'campaign.send' : 'campaign.schedule', summary: `${when === 'now' ? 'Sent' : 'Scheduled'} campaign “${cmp.name}” to ${cmp.audienceCount} students via ${channel}` });
-
-    if (when === 'now') {
-      const entries: DeliveryLogEntry[] = reachable.map((s) => ({
-        id: uid('dl'),
-        campaignId: cmp.id,
-        templateId: template.id,
-        studentId: s.id,
-        channel,
-        provider: PROVIDER_BY_CHANNEL[channel],
-        status: 'queued',
-        error: null,
-        attempts: 1,
-        createdAt: now,
-      }));
-      setLog([...entries, ...useDeliveryLog.getState().items]);
-      // Simulate provider callbacks: most deliver, a few fail.
-      setTimeout(() => {
-        const failIds = entries.filter((_, i) => i % 17 === 5).map((e) => e.id);
-        const okIds = entries.filter((e) => !failIds.includes(e.id)).map((e) => e.id);
-        updateLog(okIds, { status: 'delivered' }, { silent: true });
-        if (failIds.length) updateLog(failIds, { status: 'failed', error: channel === 'push' ? 'Device token expired (UNREGISTERED)' : 'Carrier rejected: number unreachable' }, { silent: true });
-        updateCampaign(cmp.id, { status: 'sent' }, { silent: true });
-      }, 2200);
-      toast.success(t('notifications.campaign.sentToast', { count: reachable.length }));
-    } else {
-      toast.success(t('notifications.campaign.scheduledToast', { when: fmtDateTime(new Date(at)) }));
-    }
-    setSending(false);
+    idemKey.current ??= uuid();
+    const sendAt = when === 'later' ? new Date(at).toISOString() : null;
+    const cmp = await sendM
+      .mutateAsync({ body: { name: name.trim(), channel, templateId: template.id, filters, sendAt }, key: idemKey.current })
+      .catch(() => null);
+    if (!cmp) return;
+    idemKey.current = null;
+    if (sendAt) toast.success(t('notifications.campaign.scheduledToast', { when: fmtDateTime(sendAt) }));
+    else toast.success(t('notifications.campaign.sentToast', { count: cmp.audienceCount }));
     setName('');
     setAt('');
     setWhen('now');
   };
 
-  const cancelScheduled = async (c: Campaign) => {
+  const cancelScheduled = async (c: CampaignVM) => {
     const ok = await confirm({ title: t('notifications.campaign.cancelTitle', { name: c.name }), body: t('notifications.campaign.cancelBody'), tone: 'warning', confirmText: t('notifications.campaign.cancelCampaign') });
     if (!ok) return;
-    updateCampaign(c.id, { status: 'draft', scheduledAt: null }, { action: 'campaign.cancel', summary: `Cancelled scheduled campaign “${c.name}”` });
-    toast.success(t('notifications.campaign.cancelledToast'));
+    cancelM.mutate(c);
   };
 
-  const columns = useMemo<ColumnDef<Campaign>[]>(
+  const columns = useMemo<ColumnDef<CampaignVM>[]>(
     () => [
       {
+        id: 'name',
         accessorKey: 'name',
         header: t('notifications.campaign.name'),
         meta: { label: t('notifications.campaign.name') },
@@ -160,31 +162,48 @@ export default function SendCampaign() {
             <ChannelIcon channel={row.original.channel} />
             <div className="min-w-0">
               <div className="truncate font-medium">{row.original.name}</div>
-              <div className="text-xs text-muted">{t(`notifications.channels.${row.original.channel}`)}</div>
+              <div className="text-xs text-muted">
+                {t(`notifications.channels.${row.original.channel}`)}
+                {row.original.templateName && <> · {row.original.templateName}</>}
+              </div>
             </div>
           </div>
         ),
       },
       {
+        id: 'audienceCount',
         accessorKey: 'audienceCount',
         header: t('notifications.campaign.recipients'),
         meta: { label: t('notifications.campaign.recipients'), align: 'end' },
-        cell: ({ getValue }) => fmtNumber(getValue<number>()),
+        cell: ({ row }) => {
+          const s = row.original.stats;
+          return (
+            <div className="whitespace-nowrap">
+              <div>{fmtNumber(row.original.audienceCount)}</div>
+              {(s.delivered > 0 || s.failed > 0) && (
+                <div className="text-[11px] text-muted">
+                  <span className="text-success">{fmtNumber(s.delivered)}</span> · <span className={s.failed ? 'text-danger' : undefined}>{fmtNumber(s.failed)}</span>
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
+        id: 'status',
         accessorKey: 'status',
         header: t('common.status'),
         meta: { label: t('common.status') },
         cell: ({ getValue }) => <StatusBadge status={getValue<string>()} />,
       },
       {
-        id: 'when',
-        accessorFn: (r) => r.sentAt ?? r.scheduledAt ?? '',
+        id: 'createdAt',
+        accessorFn: (r) => r.sentAt ?? r.scheduledAt ?? r.createdAt,
         header: t('notifications.campaign.when'),
         meta: { label: t('notifications.campaign.when') },
         cell: ({ row }) => <span className="whitespace-nowrap text-xs text-muted">{row.original.sentAt ? fmtDateTime(row.original.sentAt) : row.original.scheduledAt ? fmtDateTime(row.original.scheduledAt) : '—'}</span>,
       },
-      { accessorKey: 'createdBy', header: t('notifications.campaign.createdBy'), meta: { label: t('notifications.campaign.createdBy') } },
+      { id: 'createdBy', accessorKey: 'createdBy', enableSorting: false, header: t('notifications.campaign.createdBy'), meta: { label: t('notifications.campaign.createdBy') } },
       {
         id: 'actions',
         header: '',
@@ -205,13 +224,15 @@ export default function SendCampaign() {
     [t, canSend],
   );
 
-  const filterSelect = (key: keyof Audience, label: string, options: { value: string; label: string }[]) => (
+  const filterSelect = (key: Exclude<keyof Audience, 'platforms'>, label: string, options: { value: string; label: string }[]) => (
     <Field label={label}>
       <Select value={aud[key]} onChange={(e) => setAud((a) => ({ ...a, [key]: e.target.value }))} placeholder={t('common.all')} options={options} />
     </Field>
   );
 
-  const pct = students.length ? (reachable.length / students.length) * 100 : 0;
+  const pct = total ? (reachable / total) * 100 : 0;
+  const excluded = audience?.excluded;
+  const excludedTotal = excluded ? excluded.noEmail + excluded.noPushToken + excluded.optedOut + excluded.locked : 0;
 
   return (
     <div>
@@ -233,25 +254,73 @@ export default function SendCampaign() {
               }
             />
             <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filterSelect('package', t('common.package'), packages.map((p) => ({ value: p.id, label: L(p, 'name') })))}
-              {filterSelect('subject', t('common.subject'), subjects.map((s) => ({ value: s.id, label: L(s, 'name') })))}
-              {filterSelect('governorate', t('common.governorate'), governorates.map((g) => ({ value: g.id, label: L(g, 'name') })))}
-              {filterSelect('school', t('common.school'), schools.map((s) => ({ value: s.id, label: L(s, 'name') })))}
+              {filterSelect('package', t('common.package'), lookups.packages.map((p) => ({ value: p.id, label: L(p, 'name') })))}
+              {filterSelect('subject', t('common.subject'), lookups.subjects.map((s) => ({ value: s.id, label: L(s, 'name') })))}
+              {filterSelect('governorate', t('common.governorate'), lookups.governorates.map((g) => ({ value: g.id, label: L(g, 'name') })))}
+              {filterSelect('school', t('common.school'), lookups.schools.map((s) => ({ value: s.id, label: L(s, 'name') })))}
+              {filterSelect('subscriptionStatus', t('notifications.campaign.subscriptionStatus'), SUB_STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) })))}
               <Field label={t('notifications.campaign.inactiveDays')} hint={t('notifications.campaign.inactiveDaysHint')}>
                 <Input type="number" min={1} max={365} value={aud.inactiveDays} onChange={(e) => setAud((a) => ({ ...a, inactiveDays: e.target.value }))} placeholder="—" suffix={t('common.days')} />
               </Field>
+              <Field label={t('notifications.campaign.platforms')} hint={t('notifications.campaign.platformsHint')} className="sm:col-span-2">
+                <div className="flex flex-wrap gap-2" role="group" aria-label={t('notifications.campaign.platforms')}>
+                  {PLATFORMS.map((p) => {
+                    const on = aud.platforms.includes(p);
+                    const Icon = p === 'web' ? Globe : Smartphone;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => togglePlatform(p)}
+                        aria-pressed={on}
+                        className={cn(
+                          'inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition',
+                          on ? 'border-accent bg-accent/[0.08] text-primary shadow-sm' : 'border-line text-muted hover:border-accent/50 hover:text-ink',
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {t(`notifications.platforms.${p}`)}
+                      </button>
+                    );
+                  })}
+                  {aud.platforms.length === 0 && <span className="self-center text-xs text-muted">{t('notifications.campaign.allPlatforms')}</span>}
+                </div>
+              </Field>
               <div className="flex flex-col justify-end">
-                <div className="rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-3">
+                <div className={cn('rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-3 transition-opacity', audienceStale && audience && 'opacity-60')} aria-live="polite">
                   <div className="flex items-center gap-2 text-xs text-muted">
                     <Users className="h-3.5 w-3.5 text-accent" /> {t('notifications.campaign.previewCount')}
                   </div>
                   <div className="mt-0.5 flex items-baseline gap-2">
-                    <span className="kpi-num text-2xl text-primary">{loading ? '—' : fmtNumber(reachable.length)}</span>
-                    <span className="text-xs text-muted">/ {fmtNumber(students.length)}</span>
+                    <span className="kpi-num text-2xl text-primary">{audienceQ.isLoading ? '—' : fmtNumber(reachable)}</span>
+                    <span className="text-xs text-muted">/ {fmtNumber(total)}</span>
                   </div>
                   <ProgressBar value={pct} size="xs" className="mt-2" />
+                  {audienceQ.error && !audience && (
+                    <button type="button" onClick={() => audienceQ.refetch()} className="mt-1.5 text-[11px] font-medium text-danger hover:underline">
+                      {t('api.loadFailed')} · {t('api.retry')}
+                    </button>
+                  )}
                 </div>
               </div>
+              {audience && (matched !== reachable || excludedTotal > 0) && (
+                <p className="text-xs text-muted sm:col-span-2 lg:col-span-3">
+                  {t('notifications.campaign.matchedOf', { matched: fmtNumber(matched), reachable: fmtNumber(reachable) })}
+                  {excluded && excludedTotal > 0 && (
+                    <>
+                      {' — '}
+                      {[
+                        excluded.noPushToken > 0 && t('notifications.campaign.excluded.noPushToken', { count: excluded.noPushToken }),
+                        excluded.noEmail > 0 && t('notifications.campaign.excluded.noEmail', { count: excluded.noEmail }),
+                        excluded.optedOut > 0 && t('notifications.campaign.excluded.optedOut', { count: excluded.optedOut }),
+                        excluded.locked > 0 && t('notifications.campaign.excluded.locked', { count: excluded.locked }),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </>
+                  )}
+                </p>
+              )}
             </CardBody>
           </Card>
 
@@ -281,16 +350,16 @@ export default function SendCampaign() {
                     );
                   })}
                 </div>
-                {channel === 'email' && matched.length !== reachable.length && (
-                  <p className="mt-2 text-xs text-warning">{t('notifications.campaign.emailReach', { count: matched.length - reachable.length })}</p>
-                )}
+                {channel === 'email' && !!excluded?.noEmail && <p className="mt-2 text-xs text-warning">{t('notifications.campaign.emailReach', { count: excluded.noEmail })}</p>}
+                {channel === 'push' && !!excluded?.noPushToken && <p className="mt-2 text-xs text-warning">{t('notifications.campaign.pushReach', { count: excluded.noPushToken })}</p>}
               </div>
-              <Field label={t('notifications.campaign.template')} error={!template ? t('notifications.campaign.noTemplate') : undefined}>
+              <Field label={t('notifications.campaign.template')} error={!tplQ.isLoading && !template ? t('notifications.campaign.noTemplate') : undefined}>
                 <Select
-                  value={template ? templateId : ''}
+                  value={template?.id ?? ''}
                   onChange={(e) => setTemplateId(e.target.value)}
-                  placeholder={channelTemplates.length ? undefined : t('notifications.campaign.noTemplate')}
-                  options={channelTemplates.map((tp) => ({ value: tp.id, label: `${tp.name}${tp.active ? '' : ` (${t('status.inactive')})`}` }))}
+                  disabled={tplQ.isLoading}
+                  placeholder={tplQ.isLoading ? t('notifications.campaign.loadingTemplates') : channelTemplates.length ? undefined : t('notifications.campaign.noTemplate')}
+                  options={channelTemplates.map((tp) => ({ value: tp.id, label: tp.name }))}
                 />
               </Field>
               <div>
@@ -312,8 +381,8 @@ export default function SendCampaign() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                 <p className="text-xs text-muted">{t('notifications.campaign.optOutNote')}</p>
-                <Button onClick={send} disabled={!ready} loading={sending} icon={when === 'now' ? <Send className="h-4 w-4 flip-rtl" /> : <CalendarClock className="h-4 w-4" />}>
-                  {when === 'now' ? t('notifications.campaign.sendTo', { count: reachable.length }) : t('actions.schedule')}
+                <Button onClick={send} disabled={!ready} loading={sendM.isPending} icon={when === 'now' ? <Send className="h-4 w-4 flip-rtl" /> : <CalendarClock className="h-4 w-4" />}>
+                  {when === 'now' ? t('notifications.campaign.sendTo', { count: reachable }) : t('actions.schedule')}
                 </Button>
               </div>
             </CardBody>
@@ -328,7 +397,13 @@ export default function SendCampaign() {
           />
           <CardBody className="bg-surface-2">
             {template ? (
-              <PhonePreview channel={channel} lang={previewLang} subject={previewLang === 'ar' ? template.subject_ar : template.subject_en} body={previewLang === 'ar' ? template.body_ar : template.body_en} />
+              <PhonePreview
+                channel={channel}
+                lang={previewLang}
+                subject={previewLang === 'ar' ? template.subject_ar : template.subject_en}
+                body={previewLang === 'ar' ? template.body_ar : template.body_en}
+                samples={vars.samples}
+              />
             ) : (
               <EmptyState compact title={t('notifications.campaign.noTemplate')} hint={t('notifications.campaign.noTemplateHint')} />
             )}
@@ -339,9 +414,19 @@ export default function SendCampaign() {
       <div className="mt-8">
         <div className="mb-3 flex items-center gap-2">
           <h2 className="text-base font-semibold text-ink">{t('notifications.campaign.history')}</h2>
-          <Badge>{campaigns.length}</Badge>
+          <Badge>{history.meta.total}</Badge>
         </div>
-        <DataTable data={campaigns} columns={columns} loading={loading} exportName="campaigns" initialSort={[{ id: 'when', desc: true }]} pageSize={5} />
+        <DataTable
+          data={history.items}
+          columns={columns}
+          loading={history.isLoading}
+          error={history.error}
+          onRetry={() => history.refetch()}
+          server={history.server}
+          onExport={can('notifications', 'export') ? (ids) => exp.mutate(exportRequest('csv', history.exportFilters, ids)) : undefined}
+          exporting={exp.isPending}
+          pageSize={5}
+        />
       </div>
     </div>
   );

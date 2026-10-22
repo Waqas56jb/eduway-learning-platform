@@ -13,7 +13,7 @@ import {
   PlayCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { useMemo, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -27,16 +27,24 @@ import {
   SmartImage,
   SubjectIcon,
 } from '@/components/ui';
-import { getSubject, recentActivity, subjects, upcomingExams, weeklyStudy } from '@/data';
+import { appLinkToWeb } from '@/api/notifications';
+import type { ActivityItem, LessonSummary, Localized, StudentDashboardDto, SubjectProgressDto, SubjectRef, UpcomingExamDto } from '@/api/types';
 import { useLang } from '@/hooks/useLang';
-import { useProgress } from '@/hooks/useProgress';
 import { cn, dayPart, formatClock } from '@/lib/utils';
-import type { Lesson, Package, User } from '@/types';
 
 /* --------------------------------------------------------------- Hero */
 
-export function WelcomeHero({ user, pkg }: { user: User; pkg?: Package }) {
+export function WelcomeHero({
+  name,
+  streak,
+  subscription,
+}: {
+  name: Localized;
+  streak: number;
+  subscription: StudentDashboardDto['subscription'];
+}) {
   const { t } = useTranslation();
+  const active = subscription.status === 'active' || subscription.status === 'trial';
   const { l, fmtDate } = useLang();
   const today = fmtDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -53,19 +61,27 @@ export function WelcomeHero({ user, pkg }: { user: User; pkg?: Package }) {
         <div className="min-w-0">
           <p className="text-sm font-medium text-white/60">{today}</p>
           <h1 className="mt-2 text-3xl font-bold leading-tight text-white sm:text-4xl">
-            {t(`learn.dashboard.greeting.${dayPart()}`, { name: l(user.firstName) })}
+            {t(`learn.dashboard.greeting.${dayPart()}`, { name: l(name) })}
           </h1>
           <p className="mt-2 max-w-xl text-white/70">{t('learn.dashboard.subtitle')}</p>
           <div className="mt-5 flex flex-wrap items-center gap-2.5">
-            {pkg && (
+            {subscription.packageName && active && (
               <Badge className="bg-gold-grad px-3 py-1.5 text-primary ring-0">
                 <Crown className="h-3.5 w-3.5" aria-hidden />
-                {l(pkg.name)}
+                {l(subscription.packageName)}
               </Badge>
             )}
-            <Badge tone="white" dot className="px-3 py-1.5">
-              {t('student.plan.active')} · {t('student.plan.daysLeft', { count: user.daysRemaining })}
-            </Badge>
+            {active ? (
+              <Badge tone="white" dot className="px-3 py-1.5">
+                {t('student.plan.active')} · {t('student.plan.daysLeft', { count: subscription.daysRemaining })}
+              </Badge>
+            ) : (
+              <Link to="/student/subscription">
+                <Badge tone="white" className="px-3 py-1.5">
+                  {t(subscription.status === 'expired' ? 'student.plan.expired' : 'student.plan.none')} · {t('student.plan.upgrade')}
+                </Badge>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -79,9 +95,9 @@ export function WelcomeHero({ user, pkg }: { user: User; pkg?: Package }) {
           </motion.span>
           <div>
             <p className="text-2xl font-bold text-white num">
-              <AnimatedCounter to={user.streak} duration={1.2} />
+              <AnimatedCounter to={streak} duration={1.2} />
             </p>
-            <p className="text-sm text-white/70">{t('learn.dashboard.streak', { count: user.streak })}</p>
+            <p className="text-sm text-white/70">{t('learn.dashboard.streak', { count: streak })}</p>
           </div>
         </div>
       </div>
@@ -91,10 +107,10 @@ export function WelcomeHero({ user, pkg }: { user: User; pkg?: Package }) {
 
 /* ---------------------------------------------------- Continue learning */
 
-export function ContinueCard({ lesson, progress }: { lesson: Lesson; progress: number }) {
+export function ContinueCard({ lesson, progress }: { lesson: LessonSummary & { subject?: SubjectRef }; progress: number }) {
   const { t } = useTranslation();
   const { l } = useLang();
-  const subject = getSubject(lesson.subjectId);
+  const subject = lesson.subject;
   return (
     <Card className="group overflow-hidden">
       <div className="grid gap-0 sm:grid-cols-[minmax(0,15rem)_1fr] lg:grid-cols-[minmax(0,18rem)_1fr]">
@@ -154,7 +170,8 @@ export function StatTile({
 }: {
   icon: LucideIcon;
   label: string;
-  value: number;
+  /** `null` renders an em dash (e.g. no quiz attempts yet). */
+  value: number | null;
   suffix?: string;
   sub?: ReactNode;
   tint: string;
@@ -177,7 +194,7 @@ export function StatTile({
       <p className="mt-1 text-2xl font-bold text-primary sm:text-3xl">
         {/* Isolated LTR run so "73 / 100" and "84%" never get re-ordered by the RTL paragraph. */}
         <span dir="ltr" className="inline-block num">
-          <AnimatedCounter to={value} suffix={suffix} duration={1.4} />
+          {value === null ? '—' : <AnimatedCounter to={value} suffix={suffix} duration={1.4} />}
         </span>
       </p>
       {sub && <p className="mt-1 text-xs text-muted num">{sub}</p>}
@@ -188,18 +205,17 @@ export function StatTile({
 
 /* ---------------------------------------------------- Subject progress */
 
-export function SubjectProgressGrid() {
+export function SubjectProgressGrid({ items }: { items: SubjectProgressDto[] }) {
   const { t } = useTranslation();
   const { l } = useLang();
-  const { bySubject } = useProgress();
   return (
     <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-      {subjects.map((s) => {
-        const p = bySubject[s.id];
+      {items.map((p) => {
+        const s = { id: p.slug, color: p.color, name: p.name };
         return (
-          <li key={s.id} className="last:col-span-2 md:last:col-span-1">
+          <li key={p.subjectId} className="last:col-span-2 md:last:col-span-1">
             <Link
-              to={`/student/subjects/${s.id}`}
+              to={`/student/subjects/${p.slug}`}
               className="card group flex h-full flex-col items-center p-5 text-center transition duration-300 hover:-translate-y-1 hover:shadow-lift"
             >
               <ProgressRing value={p.pct} size={84} stroke={7} color={s.color} label={l(s.name)}>
@@ -222,27 +238,20 @@ export function SubjectProgressGrid() {
 
 /* ------------------------------------------------------ Recent activity */
 
-const activityIcon: Record<(typeof recentActivity)[number]['kind'], { icon: LucideIcon; cls: string }> = {
+const activityIcon: Record<ActivityItem['kind'], { icon: LucideIcon; cls: string }> = {
   lesson: { icon: PlayCircle, cls: 'bg-math/10 text-math' },
   quiz: { icon: ListChecks, cls: 'bg-success/10 text-success' },
   exam: { icon: ClipboardCheck, cls: 'bg-accent/15 text-[#8A6A1F]' },
   ai: { icon: Bot, cls: 'bg-physics/10 text-physics' },
 };
 
-/** Mock activity carries fixed timestamps — re-anchor them so the newest item is always "35 minutes ago". */
-function anchoredActivity() {
-  const latest = Math.max(...recentActivity.map((a) => new Date(a.date).getTime()));
-  const shift = Date.now() - 35 * 60_000 - latest;
-  return recentActivity.map((a) => ({ ...a, date: new Date(new Date(a.date).getTime() + shift).toISOString() }));
-}
-
-export function RecentActivity() {
+export function RecentActivity({ items }: { items: ActivityItem[] }) {
   const { t } = useTranslation();
   const { l, fmtRelative } = useLang();
-  const items = useMemo(anchoredActivity, []);
   return (
     <Card className="p-5 sm:p-6">
       <CardHeader title={t('learn.dashboard.activity.title')} subtitle={t('learn.dashboard.activity.subtitle')} />
+      {items.length === 0 && <p className="mt-5 text-sm text-muted">{t('learn.dashboard.activity.empty')}</p>}
       <ol className="relative mt-5 space-y-1">
         {items.map((a, i) => {
           const { icon: Icon, cls } = activityIcon[a.kind];
@@ -255,11 +264,17 @@ export function RecentActivity() {
                 <Icon className="h-5 w-5" aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-primary">{l(a.title)}</p>
+                {appLinkToWeb(a.link) ? (
+                  <Link to={appLinkToWeb(a.link)!} className="text-sm font-semibold text-primary hover:text-accent">
+                    {l(a.title)}
+                  </Link>
+                ) : (
+                  <p className="text-sm font-semibold text-primary">{l(a.title)}</p>
+                )}
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
                   <span>{l(a.meta)}</span>
                   <span aria-hidden>·</span>
-                  <time dateTime={a.date}>{fmtRelative(a.date)}</time>
+                  <time dateTime={a.date}>{fmtRelative(a.date, { clampFuture: true })}</time>
                 </p>
               </div>
             </li>
@@ -272,9 +287,10 @@ export function RecentActivity() {
 
 /* ------------------------------------------------------- Upcoming exams */
 
-export function UpcomingExams() {
+export function UpcomingExams({ items }: { items: UpcomingExamDto[] }) {
   const { t } = useTranslation();
   const { l, fmtDate, fmtRelative } = useLang();
+  const upcomingExams = items;
   return (
     <Card className="p-5 sm:p-6">
       <CardHeader
@@ -286,6 +302,7 @@ export function UpcomingExams() {
           </Link>
         }
       />
+      {upcomingExams.length === 0 && <p className="mt-5 text-sm text-muted">{t('learn.dashboard.exams.empty')}</p>}
       <ul className="mt-5 space-y-3">
         {upcomingExams.map((e, i) => (
           <li key={e.id}>
@@ -313,6 +330,7 @@ export function UpcomingExams() {
                 <span className="block truncate text-sm font-semibold text-primary">{l(e.title)}</span>
                 <span className="mt-1 flex items-center gap-1.5 text-xs text-muted">
                   <CalendarClock className="h-3.5 w-3.5" aria-hidden />
+                  <span>{t(`learn.dashboard.exams.${e.kind}`)}</span>
                   <time dateTime={e.date}>{fmtRelative(e.date)}</time>
                   <span aria-hidden>·</span>
                   <span className="num">{fmtDate(e.date, { hour: 'numeric', minute: '2-digit' })}</span>
@@ -332,13 +350,11 @@ export function UpcomingExams() {
 
 /* ----------------------------------------------------------- Today's goal */
 
-const DAILY_GOAL = 120;
-
 /** Today's study goal ring + quick shortcuts into practice tools. */
-export function TodayGoal() {
+export function TodayGoal({ todayMinutes, goalMinutes }: { todayMinutes: number; goalMinutes: number }) {
   const { t } = useTranslation();
-  // weeklyStudy starts on Saturday (Iraqi week); JS getDay() starts on Sunday.
-  const today = weeklyStudy[(new Date().getDay() + 1) % 7] ?? weeklyStudy[0];
+  const DAILY_GOAL = Math.max(1, goalMinutes);
+  const today = { minutes: todayMinutes };
   const pct = Math.min(100, Math.round((today.minutes / DAILY_GOAL) * 100));
   const shortcuts = [
     { to: '/student/question-bank', icon: BookOpen, label: t('student.nav.questionBank'), cls: 'bg-math/10 text-math' },

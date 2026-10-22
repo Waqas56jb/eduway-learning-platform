@@ -1,10 +1,12 @@
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { StyleSheet, View, type TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   AuthScaffold,
+  AuthSwitchLink,
   DemoHint,
   LegalLinks,
   MobileField,
@@ -13,15 +15,19 @@ import {
   useFieldError,
   type LoginValues,
 } from '@/components/auth';
-import { Button, PressableScale, Text } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { images } from '@/constants/images';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore } from '@/store';
 import { space } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
+const enter = (i: number) => FadeInDown.duration(350).delay(Math.min(80 + i * 60, 300));
+
 export default function LoginScreen() {
   const { t } = useI18n('auth');
   const fieldError = useFieldError();
+  const mobileRef = useRef<TextInput | null>(null);
   const {
     control,
     handleSubmit,
@@ -32,9 +38,19 @@ export default function LoginScreen() {
     mode: 'onTouched',
   });
 
+  // Raise the keyboard once the push transition has settled (smoother than autoFocus).
+  useEffect(() => {
+    const id = setTimeout(() => mobileRef.current?.focus(), 450);
+    return () => clearTimeout(id);
+  }, []);
+
   const onSubmit = handleSubmit(
     async ({ mobile }) => {
-      await useAuthStore.getState().requestOtp(toE164ish(mobile));
+      const sent = await useAuthStore.getState().requestOtp(toE164ish(mobile));
+      if (!sent) {
+        haptic.error();
+        return;
+      }
       haptic.success();
       router.push('/(auth)/verify-otp');
     },
@@ -42,26 +58,11 @@ export default function LoginScreen() {
   );
 
   return (
-    <AuthScaffold title={t('login.title')} subtitle={t('login.subtitle')}>
-      <Animated.View entering={FadeInDown.duration(300).delay(60)} style={styles.form}>
-        <Controller
-          control={control}
-          name="mobile"
-          render={({ field: { value, onChange, onBlur, ref } }) => (
-            <MobileField
-              ref={ref}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={fieldError(errors.mobile?.message)}
-              hint={t('fields.mobile.hint')}
-              returnKeyType="done"
-              onSubmitEditing={() => void onSubmit()}
-              autoFocus
-            />
-          )}
-        />
-
+    <AuthScaffold
+      title={t('login.title')}
+      subtitle={t('login.subtitle')}
+      image={images.onboardingLibrary}
+      footer={
         <Button
           title={t('login.sendOtp')}
           variant="primary"
@@ -74,35 +75,52 @@ export default function LoginScreen() {
           onPress={() => void onSubmit()}
           accessibilityLabel={t('login.sendOtp')}
         />
-
-        <LegalLinks prefix={t('legal.continuePrefix')} align="center" />
+      }
+      footerSecondary={
+        <AuthSwitchLink
+          prompt={t('login.newHere')}
+          action={t('login.createAccount')}
+          onPress={() => router.push('/(auth)/register')}
+        />
+      }
+    >
+      <Animated.View entering={enter(0)}>
+        <Controller
+          control={control}
+          name="mobile"
+          render={({ field: { value, onChange, onBlur, ref } }) => (
+            <MobileField
+              ref={(node) => {
+                ref(node);
+                mobileRef.current = node;
+              }}
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              error={fieldError(errors.mobile?.message)}
+              hint={t('fields.mobile.hint')}
+              returnKeyType="done"
+              onSubmitEditing={() => void onSubmit()}
+            />
+          )}
+        />
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.duration(300).delay(120)}>
+      <Animated.View entering={enter(1)} style={styles.demo}>
         <DemoHint title={t('demo.title')} message={t('demo.login')} />
       </Animated.View>
 
       <View style={styles.spacer} />
 
-      <PressableScale
-        onPress={() => router.push('/(auth)/register')}
-        accessibilityRole="link"
-        accessibilityLabel={`${t('login.newHere')} ${t('login.createAccount')}`}
-        style={styles.switchRow}
-      >
-        <Text variant="body" color="muted">
-          {t('login.newHere')}{' '}
-          <Text variant="bodyBold" color="accent">
-            {t('login.createAccount')}
-          </Text>
-        </Text>
-      </PressableScale>
+      <Animated.View entering={enter(2)} style={styles.legal}>
+        <LegalLinks prefix={t('legal.continuePrefix')} align="center" />
+      </Animated.View>
     </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: space.lg },
-  spacer: { flexGrow: 1 },
-  switchRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  demo: { marginTop: space.xxl },
+  spacer: { flexGrow: 1, minHeight: space.xxl },
+  legal: { paddingHorizontal: space.sm },
 });

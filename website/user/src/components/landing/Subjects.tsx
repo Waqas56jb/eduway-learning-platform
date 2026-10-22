@@ -2,8 +2,8 @@ import { motion } from 'framer-motion';
 import { ArrowUpRight, Clock, PlayCircle, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { SectionHeading, Skeleton, SmartImage, SubjectIcon, fadeUp, stagger, useMockLoading } from '@/components/ui';
-import { subjects } from '@/data';
+import { useSubjects } from '@/api/catalog';
+import { ErrorState, SectionHeading, Skeleton, SmartImage, SubjectIcon, fadeUp, stagger } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
@@ -12,7 +12,7 @@ import type { Subject } from '@/types';
 /** Bento layout: the first card spans 2×2 on desktop, the other four fill a 2×2 grid beside it. */
 export function Subjects() {
   const { t } = useTranslation();
-  const ready = useMockLoading(450);
+  const { data: subjects = [], isLoading, isError, refetch } = useSubjects();
 
   return (
     <section id="subjects" className="section scroll-mt-20 bg-cream">
@@ -23,7 +23,9 @@ export function Subjects() {
           subtitle={t('landing.subjects.subtitle')}
         />
 
-        {ready ? (
+        {isError ? (
+          <ErrorState className="mt-14" onRetry={() => void refetch()} />
+        ) : !isLoading ? (
           <motion.ul
             className="mt-14 grid gap-5 md:grid-cols-2 lg:auto-rows-[290px] lg:grid-cols-4"
             variants={stagger(0.1)}
@@ -43,9 +45,9 @@ export function Subjects() {
           </motion.ul>
         ) : (
           <div className="mt-14 grid gap-5 md:grid-cols-2 lg:auto-rows-[290px] lg:grid-cols-4" aria-hidden>
-            {subjects.map((s, i) => (
+            {[0, 1, 2, 3, 4].map((i) => (
               <Skeleton
-                key={s.id}
+                key={i}
                 className={cn('h-[340px] rounded-3xl lg:h-auto', i === 0 && 'md:col-span-2 lg:row-span-2')}
               />
             ))}
@@ -60,7 +62,7 @@ function SubjectCard({ subject: s, featured }: { subject: Subject; featured: boo
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
   const { isAuthenticated } = useAuth();
-  const to = isAuthenticated ? `/student/subjects/${s.id}` : '/register';
+  const to = isAuthenticated ? `/student/subjects/${s.slug}` : '/register';
 
   return (
     <article
@@ -83,7 +85,7 @@ function SubjectCard({ subject: s, featured }: { subject: Subject; featured: boo
           className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ring-1 ring-white/20 backdrop-blur"
           style={{ backgroundColor: `${s.color}cc` }}
         >
-          <SubjectIcon id={s.id} className="h-6 w-6" />
+          <SubjectIcon id={s.slug} icon={s.icon} className="h-6 w-6" />
         </span>
         {featured && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/90 px-3 py-1 text-xs font-bold text-primary">

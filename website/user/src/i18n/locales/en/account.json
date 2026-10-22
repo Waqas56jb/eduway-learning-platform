@@ -40,7 +40,9 @@
       "chemistry": "How does temperature shift equilibrium?",
       "biology": "What ratios does a Mendel dihybrid cross give?",
       "english": "How do I change a question into reported speech?"
-    }
+    },
+    "disabledBody": "You can still review your previous conversations.",
+    "resetsOn": "Your questions renew on {{date}}."
   },
   "progress": {
     "seoTitle": "My Progress",
@@ -82,7 +84,13 @@
       "2": "Steady study",
       "3": "Strong day",
       "4": "Outstanding day"
-    }
+    },
+    "heatStats": {
+      "longest": "Longest streak",
+      "month": "Last 30 days",
+      "busiest": "Most active day"
+    },
+    "weakNone": "No weak topics yet — keep practising to see insights here."
   },
   "subscription": {
     "seoTitle": "Subscription",
@@ -131,7 +139,15 @@
       "zainHint": "Pay from your Zain Cash wallet",
       "fastpayHint": "Instant payment via FastPay",
       "asiahawalaHint": "Pay with your AsiaHawala wallet",
-      "cardHint": "Visa, Mastercard or Qi Card"
+      "cardHint": "Visa, Mastercard or Qi Card",
+      "zaincash": "Zain Cash",
+      "zaincashHint": "Pay from your Zain Cash wallet",
+      "visa": "Bank card",
+      "visaHint": "Visa, Mastercard or Qi Card",
+      "qicard": "Qi Card",
+      "qicardHint": "Pay with your Qi Card",
+      "mock": "Test gateway",
+      "mockHint": "Development payments only"
     },
     "pay": {
       "title": "Complete your payment",
@@ -176,7 +192,19 @@
       "method": "Payment method",
       "done": "Done",
       "toast": "Subscription activated",
-      "toastBody": "{{plan}} · {{period}}"
+      "toastBody": "{{plan}} · {{period}}",
+      "proration": "Credit from current plan",
+      "failed": "The payment was not completed. No money was taken — please try again."
+    },
+    "noPlanBody": "Choose a plan below to unlock lessons, the question bank and the AI Tutor.",
+    "historyEmpty": "No payments yet.",
+    "status": {
+      "pending": "Pending",
+      "initiated": "Pending",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "refunded": "Refunded",
+      "partially_refunded": "Partly refunded"
     }
   },
   "profile": {
@@ -237,11 +265,12 @@
     "dangerSub": "Sign out or restore the demo to its original state.",
     "logout": "Log out",
     "logoutHint": "Sign out of EDUWAY on this device.",
-    "reset": "Reset demo data",
-    "resetHint": "Restore lessons, mistakes, notifications, AI usage and your plan to the original demo.",
-    "resetConfirmTitle": "Reset all demo data?",
-    "resetConfirmBody": "Your progress, mistakes, bookmarks and notifications will return to the original demo state.",
-    "resetDone": "Demo data has been reset"
+    "reset": "Sign out everywhere",
+    "resetHint": "Ends every session on all your devices, including this one.",
+    "resetConfirmTitle": "Sign out of all devices?",
+    "resetConfirmBody": "You will be signed out on every phone and browser, including this one, and will need a new code to sign in.",
+    "resetDone": "Signed out of all devices",
+    "activeNow": "Active now"
   },
   "notifications": {
     "seoTitle": "Notifications",
@@ -271,6 +300,7 @@
     "emptyTitle": "Nothing here yet",
     "emptyBody": "When something needs your attention, it will show up here.",
     "emptyUnreadTitle": "No unread notifications",
-    "emptyUnreadBody": "You've read everything. Nice work!"
+    "emptyUnreadBody": "You've read everything. Nice work!",
+    "delete": "Delete notification"
   }
 }

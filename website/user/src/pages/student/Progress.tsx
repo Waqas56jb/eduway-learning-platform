@@ -13,17 +13,14 @@ import {
   Skeleton,
   SkeletonList,
   SubjectBadgeIcon,
-  useMockLoading,
+  ErrorState,
 } from '@/components/ui';
 import { ActivityHeatmap } from '@/components/student/account/ActivityHeatmap';
 import { QuizTrendChart } from '@/components/student/account/QuizTrendChart';
-import { getLesson, getSubject, lessons, quizTrend, subjects, weakTopics } from '@/data';
-import { useAuth } from '@/hooks/useAuth';
+import { useSubjectLookup } from '@/api/catalog';
+import { useScoreTrend, useStreakCalendar, useWeakTopics } from '@/api/progress';
 import { useLang } from '@/hooks/useLang';
 import { useProgress } from '@/hooks/useProgress';
-import type { SubjectId } from '@/types';
-
-const quizAverage = (id: SubjectId) => Math.round(quizTrend.reduce((sum, r) => sum + r[id], 0) / quizTrend.length);
 
 function ProgressSkeleton() {
   return (
@@ -41,15 +38,17 @@ function ProgressSkeleton() {
 export default function Progress() {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
-  const { user } = useAuth();
-  const { overallPct, completedLessons, totalLessons, bySubject, lessonProgress } = useProgress();
-  const ready = useMockLoading(650);
-
-  const studySeconds = lessons.reduce(
-    (sum, ls) => sum + (ls.duration * (lessonProgress[ls.id]?.progress ?? 0)) / 100,
-    0,
-  );
-  const hours = Math.round(studySeconds / 3600);
+  // PRG-06 summary + PRG-05 per subject, PRG-07 score trend, PRG-08 weak topics, PRG-09 streak calendar.
+  const progress = useProgress();
+  const { overallPct, completedLessons, totalLessons, summary } = progress;
+  const subjects = progress.subjects;
+  const trendQ = useScoreTrend(8);
+  const weakQ = useWeakTopics(5);
+  const calendarQ = useStreakCalendar(16);
+  const subjectOf = useSubjectLookup();
+  const weakTopics = weakQ.data ?? [];
+  const ready = !progress.isLoading;
+  const hours = Math.round(summary?.studyHours ?? 0);
 
   const stats = [
     {
@@ -57,7 +56,7 @@ export default function Progress() {
       label: t('account.progress.lessonsDone'),
       value: `${fmtNumber(completedLessons)} / ${fmtNumber(totalLessons)}`,
     },
-    { icon: Flame, label: t('account.progress.streak'), value: t('account.progress.daysValue', { count: user?.streak ?? 0 }) },
+    { icon: Flame, label: t('account.progress.streak'), value: t('account.progress.daysValue', { count: summary?.streak ?? 0 }) },
     { icon: Clock3, label: t('account.progress.studyHours'), value: t('account.progress.hoursValue', { n: fmtNumber(hours) }) },
   ];
 
@@ -66,7 +65,9 @@ export default function Progress() {
       <Seo title={t('account.progress.seoTitle')} description={t('account.progress.seoDescription')} />
       <PageHeader title={t('account.progress.title')} subtitle={t('account.progress.subtitle')} />
 
-      {!ready ? (
+      {progress.isError && !ready ? (
+        <ErrorState onRetry={progress.refetch} />
+      ) : !ready ? (
         <ProgressSkeleton />
       ) : (
         <div className="space-y-6">
@@ -115,12 +116,12 @@ export default function Progress() {
             <Card className="p-5 sm:p-6 lg:col-span-2">
               <CardHeader title={t('account.progress.bySubject')} subtitle={t('account.progress.bySubjectSub')} />
               <Reveal as="ul" staggerChildren={0.07} className="mt-5 space-y-3">
-                {subjects.map((s) => {
-                  const p = bySubject[s.id];
+                {subjects.map((p) => {
+                  const s = { id: p.slug, color: p.color, name: p.name };
                   return (
-                    <RevealItem as="li" key={s.id}>
+                    <RevealItem as="li" key={p.subjectId}>
                       <Link
-                        to={`/student/subjects/${s.id}`}
+                        to={`/student/subjects/${p.slug}`}
                         aria-label={`${l(s.name)} — ${t('account.progress.open')}`}
                         className="group block rounded-2xl border border-primary/5 p-3.5 transition hover:border-primary/10 hover:bg-cream/60"
                       >
@@ -137,7 +138,8 @@ export default function Progress() {
                             <div className="mt-1.5 flex items-center justify-between text-xs text-muted">
                               <span className="num">{t('account.progress.lessonsOf', { done: p.completed, total: p.total })}</span>
                               <span className="num">
-                                {t('account.progress.quizAvg')} <b className="text-primary">{quizAverage(s.id)}%</b>
+                                {t('account.progress.quizAvg')}{' '}
+                                <b className="text-primary">{p.quizAverage === null ? '—' : `${Math.round(p.quizAverage)}%`}</b>
                               </span>
                             </div>
                           </div>
@@ -150,10 +152,10 @@ export default function Progress() {
             </Card>
 
             {/* Trend */}
-            <Card className="p-5 sm:p-6 lg:col-span-3">
+            <Card className="flex flex-col p-5 sm:p-6 lg:col-span-3">
               <CardHeader title={t('account.progress.trendTitle')} subtitle={t('account.progress.trendSub')} />
-              <div className="mt-5">
-                <QuizTrendChart />
+              <div className="mt-5 flex-1">
+                {trendQ.data ? <QuizTrendChart trend={trendQ.data} /> : <Skeleton className="h-72 w-full" />}
               </div>
             </Card>
           </div>
@@ -170,13 +172,17 @@ export default function Progress() {
                   </span>
                 }
               />
+              {weakQ.isLoading && <SkeletonList rows={3} className="mt-5" />}
+              {!weakQ.isLoading && weakTopics.length === 0 && (
+                <p className="mt-5 rounded-2xl bg-success/10 p-4 text-center text-sm font-medium text-success">{t('account.progress.weakNone')}</p>
+              )}
               <Reveal as="ul" staggerChildren={0.07} className="mt-5 divide-y divide-primary/5">
                 {weakTopics.map((w) => {
-                  const s = getSubject(w.subjectId);
-                  const lesson = getLesson(w.lessonId);
+                  const s = subjectOf(w.subjectSlug);
+                  const lesson = w.lessonId ? { title: w.lessonTitle } : null;
                   const color = w.accuracy < 55 ? '#DC2626' : '#D97706';
                   return (
-                    <RevealItem as="li" key={w.lessonId} className="py-3.5 first:pt-0 last:pb-0">
+                    <RevealItem as="li" key={w.topicId} className="py-3.5 first:pt-0 last:pb-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-semibold text-primary">{l(w.topic)}</p>
@@ -184,11 +190,11 @@ export default function Progress() {
                             <span style={{ color: s?.color }} className="font-semibold">
                               {l(s?.name)}
                             </span>
-                            {lesson && <> · {l(lesson.title)}</>}
+                            {lesson?.title && <> · {l(lesson.title)}</>}
                           </p>
                         </div>
                         <Link
-                          to={`/student/lesson/${w.lessonId}`}
+                          to={w.lessonId ? `/student/lesson/${w.lessonId}` : `/student/question-bank?subject=${w.subjectSlug}`}
                           className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-accent transition hover:bg-accent/10"
                         >
                           {t('account.progress.review')}
@@ -198,7 +204,7 @@ export default function Progress() {
                       <div className="mt-2.5 flex items-center gap-3">
                         <ProgressBar value={w.accuracy} color={color} size="xs" label={l(w.topic)} />
                         <span className="shrink-0 text-xs font-semibold num" style={{ color }}>
-                          {t('account.progress.accuracy', { pct: w.accuracy })}
+                          {t('account.progress.accuracy', { pct: Math.round(w.accuracy) })}
                         </span>
                       </div>
                     </RevealItem>
@@ -219,7 +225,7 @@ export default function Progress() {
                 }
               />
               <div className="mt-5">
-                <ActivityHeatmap />
+                {calendarQ.data ? <ActivityHeatmap calendar={calendarQ.data} /> : <Skeleton className="h-48 w-full" />}
               </div>
             </Card>
           </div>

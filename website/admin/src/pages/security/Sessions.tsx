@@ -3,82 +3,93 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Globe2, LogOut, Monitor, MonitorSmartphone, Smartphone, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { AdminSession } from '@/types';
-import { useAdminSessions } from '@/store/security';
-import { useAdminUsers } from '@/store/core';
 import { useCan } from '@/store/auth';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useLocalize } from '@/hooks/useLocale';
 import { fmtDateTime, fmtNumber, fmtRelative } from '@/utils/format';
+import { exportRequest, useApiMutation, useExport, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { securityApi, type AdminSessionVM, type SessionsMeta } from '@/api/security';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar, Badge, Button, DataTable, StatCard, Tooltip, useConfirm } from '@/components/ui';
 
-const isMobile = (s: AdminSession) => /iPhone|Galaxy|Redmi|Tab|Android/i.test(s.device);
-const isAbroad = (s: AdminSession) => !s.location.endsWith(', IQ');
+type AdminSession = AdminSessionVM;
+
+const isMobile = (s: AdminSession) => s.deviceType !== 'desktop';
+const isAbroad = (s: AdminSession) => s.abroad;
 
 export default function Sessions() {
   const { t } = useTranslation();
+  const L = useLocalize();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const sessions = useAdminSessions((s) => s.items);
-  const remove = useAdminSessions((s) => s.remove);
-  const removeMany = useAdminSessions((s) => s.removeMany);
-  const admins = useAdminUsers((s) => s.items);
   const canRevoke = can('security', 'edit');
 
-  const adminOf = (id: string) => admins.find((a) => a.id === id);
+  const list = usePagedList({
+    key: qk.adminSessions.list,
+    fetcher: securityApi.sessions,
+    initialSort: '-lastActive',
+  });
+  const sessions = list.items;
+  const kpis = (list.meta as SessionsMeta).kpis;
+  const loading = list.isLoading;
+  const exp = useExport('/admin/admin-sessions/export', 'admin-sessions');
+
+  const adminName = (s: AdminSession) => L({ n_en: s.adminName, n_ar: s.adminName_ar }, 'n');
+
+  const revokeM = useApiMutation((id: string) => securityApi.revokeSession(id), {
+    invalidate: [qk.adminSessions.all],
+    success: 'security.sessions.revoked',
+  });
+  const revokeAllM = useApiMutation(() => securityApi.revokeAllSessions(), {
+    invalidate: [qk.adminSessions.all],
+    success: (r) => t('security.sessions.revokedAll', { count: r.revoked }),
+  });
 
   const revoke = async (s: AdminSession) => {
     if (s.current) {
       toast.error(t('security.sessions.cannotCurrent'));
       return;
     }
-    const a = adminOf(s.adminId);
     const ok = await confirm({
       title: t('security.sessions.revokeTitle'),
-      body: t('security.sessions.revokeBody', { name: a?.name ?? '—', device: s.device }),
+      body: t('security.sessions.revokeBody', { name: adminName(s), device: s.device }),
       confirmText: t('security.sessions.revoke'),
     });
     if (!ok) return;
-    remove(s.id, { action: 'admin_session.revoke', summary: `Revoked session of ${a?.email ?? s.adminId} on ${s.device} (${s.ip})` });
-    toast.success(t('security.sessions.revoked'));
+    revokeM.mutate(s.id);
   };
 
-  const others = sessions.filter((s) => !s.current);
+  const othersCount = Math.max(0, (kpis?.active ?? list.meta.total) - (sessions.some((s) => s.current) ? 1 : 0));
 
   const revokeAll = async () => {
     const ok = await confirm({
       title: t('security.sessions.revokeAllTitle'),
-      body: t('security.sessions.revokeAllBody', { count: others.length }),
+      body: t('security.sessions.revokeAllBody', { count: othersCount }),
       confirmText: t('security.sessions.revokeAll'),
     });
     if (!ok) return;
-    removeMany(
-      others.map((s) => s.id),
-      { action: 'admin_session.revoke_all', summary: `Revoked ${others.length} admin sessions (kept current session)` },
-    );
-    toast.success(t('security.sessions.revokedAll', { count: others.length }));
+    revokeAllM.mutate();
   };
 
   const columns = useMemo<ColumnDef<AdminSession, unknown>[]>(
     () => [
       {
         id: 'admin',
-        accessorFn: (s) => adminOf(s.adminId)?.name ?? s.adminId,
+        accessorFn: (s) => adminName(s),
+        enableSorting: false,
         header: t('security.sessions.admin'),
         meta: { label: t('security.sessions.admin') },
         cell: ({ row: { original: s } }) => {
-          const a = adminOf(s.adminId);
           return (
             <div className="flex items-center gap-2.5">
-              <Avatar name={a?.name ?? '?'} src={a?.avatar} size="sm" />
+              <Avatar name={s.adminName || '?'} src={s.adminAvatar} size="sm" />
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 font-medium">
-                  <span className="truncate">{a?.name ?? s.adminId}</span>
+                  <span className="truncate">{adminName(s)}</span>
                   {s.current && <Badge tone="success" dot>{t('security.sessions.current')}</Badge>}
                 </div>
                 <div className="truncate text-xs text-muted" dir="ltr">
-                  {a?.email}
+                  {s.adminEmail}
                 </div>
               </div>
             </div>
@@ -150,14 +161,21 @@ export default function Sessions() {
               </Button>
             </Tooltip>
           ) : (
-            <Button variant="ghost" size="xs" className="text-danger hover:bg-danger/10 hover:text-danger" icon={<LogOut className="h-3.5 w-3.5" />} onClick={() => revoke(s)}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-danger hover:bg-danger/10 hover:text-danger"
+              icon={<LogOut className="h-3.5 w-3.5" />}
+              loading={revokeM.isPending && revokeM.variables === s.id}
+              onClick={() => revoke(s)}
+            >
               {t('security.sessions.revoke')}
             </Button>
           )),
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, admins, canRevoke, sessions],
+    [t, L, canRevoke, revokeM.isPending, revokeM.variables],
   );
 
   return (
@@ -167,7 +185,7 @@ export default function Sessions() {
         subtitle={t('security.sessions.subtitle')}
         actions={
           canRevoke && (
-            <Button variant="danger" icon={<LogOut className="h-4 w-4" />} disabled={others.length === 0} onClick={revokeAll}>
+            <Button variant="danger" icon={<LogOut className="h-4 w-4" />} disabled={othersCount === 0} loading={revokeAllM.isPending} onClick={revokeAll}>
               {t('security.sessions.revokeAll')}
             </Button>
           )
@@ -175,19 +193,21 @@ export default function Sessions() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('security.sessions.kpiActive')} value={fmtNumber(sessions.length)} icon={<MonitorSmartphone />} color="#0B1F3A" />
-        <StatCard loading={loading} label={t('security.sessions.kpiAdmins')} value={fmtNumber(new Set(sessions.map((s) => s.adminId)).size)} icon={<Users />} color="#C9A24A" />
-        <StatCard loading={loading} label={t('security.sessions.kpiMobile')} value={fmtNumber(sessions.filter(isMobile).length)} icon={<Smartphone />} color="#2563EB" />
-        <StatCard loading={loading} label={t('security.sessions.kpiAbroad')} value={fmtNumber(sessions.filter(isAbroad).length)} icon={<Globe2 />} color="#F59E0B" />
+        <StatCard loading={loading} label={t('security.sessions.kpiActive')} value={fmtNumber(kpis?.active ?? list.meta.total)} icon={<MonitorSmartphone />} color="#0B1F3A" />
+        <StatCard loading={loading} label={t('security.sessions.kpiAdmins')} value={fmtNumber(kpis?.admins ?? new Set(sessions.map((s) => s.adminId)).size)} icon={<Users />} color="#C9A24A" />
+        <StatCard loading={loading} label={t('security.sessions.kpiMobile')} value={fmtNumber(kpis?.mobile ?? sessions.filter(isMobile).length)} icon={<Smartphone />} color="#2563EB" />
+        <StatCard loading={loading} label={t('security.sessions.kpiAbroad')} value={fmtNumber(kpis?.abroad ?? sessions.filter(isAbroad).length)} icon={<Globe2 />} color="#F59E0B" />
       </div>
 
       <DataTable
         data={sessions}
         columns={columns}
         loading={loading}
-        exportName={can('security', 'export') ? 'admin-sessions' : undefined}
-        searchText={(s) => `${adminOf(s.adminId)?.name ?? ''} ${s.device} ${s.browser} ${s.ip} ${s.location}`}
-        initialSort={[{ id: 'lastActive', desc: true }]}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
+        onExport={can('security', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         rowClassName={(s) => (s.current ? 'bg-success/[0.04]' : undefined)}
       />
     </>

@@ -2,16 +2,17 @@ import { useNavigate } from 'react-router-dom';
 import { Copy, Lock, Pencil, Plus, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { MODULES, type Role } from '@/types';
-import { useAdminUsers, useRoles } from '@/store/core';
+import { MODULES } from '@/types';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
-import { uid } from '@/utils/id';
 import { fmtDate, fmtNumber } from '@/utils/format';
+import { useApiMutation } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { securityApi, useRolesQuery, type RoleVM } from '@/api/security';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar, Badge, Button, ButtonLink, Card, ProgressBar, SkeletonCard, StatCard, Tooltip, useConfirm } from '@/components/ui';
-import { cloneMatrix, countGranted, TOTAL_PERMISSIONS } from '@/components/forms/RoleForm';
+import { QueryError } from '@/components/ui/QueryError';
+import { countGranted, TOTAL_PERMISSIONS } from '@/components/forms/RoleForm';
 
 export default function Roles() {
   const { t } = useTranslation();
@@ -19,37 +20,25 @@ export default function Roles() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const can = useCan();
-  const loading = useMockLoading();
-  const roles = useRoles((s) => s.items);
-  const addRole = useRoles((s) => s.add);
-  const removeRole = useRoles((s) => s.remove);
-  const admins = useAdminUsers((s) => s.items);
+  const q = useRolesQuery();
+  const loading = q.isLoading;
+  const roles = q.data?.items ?? [];
 
-  const adminsFor = (r: Role) => admins.filter((a) => a.roleId === r.id && a.status !== 'deactivated');
+  const cloneM = useApiMutation((id: string) => securityApi.cloneRole(id), {
+    invalidate: [qk.roles.all, qk.lookups],
+    success: 'security.roles.cloned',
+    onSuccess: (r) => navigate(`/security/roles/${r.id}`),
+  });
+  const deleteM = useApiMutation((v: { id: string; key: string }) => securityApi.deleteRole(v.id, v.key), {
+    invalidate: [qk.roles.all, qk.lookups],
+    success: 'security.roles.deleted',
+  });
 
-  const clone = (r: Role) => {
-    let key = `${r.key}_copy`;
-    let n = 2;
-    while (roles.some((x) => x.key === key)) key = `${r.key}_copy_${n++}`;
-    const copy: Role = {
-      ...r,
-      id: uid('role'),
-      key,
-      name_en: t('security.roles.copyOf', { name: r.name_en, lng: 'en' }),
-      name_ar: t('security.roles.copyOfAr', { name: r.name_ar }),
-      system: false,
-      permissions: cloneMatrix(r.permissions),
-      createdAt: new Date().toISOString(),
-    };
-    addRole(copy, { action: 'role.clone', summary: `Cloned role “${r.name_en}” → “${copy.name_en}”` });
-    toast.success(t('security.roles.cloned'));
-    navigate(`/security/roles/${copy.id}`);
-  };
+  const clone = (r: RoleVM) => cloneM.mutate(r.id);
 
-  const del = async (r: Role) => {
-    const assigned = adminsFor(r).length;
-    if (assigned) {
-      toast.error(t('security.roles.deleteBlocked', { count: assigned }));
+  const del = async (r: RoleVM) => {
+    if (r.assignedCount) {
+      toast.error(t('security.roles.deleteBlocked', { count: r.assignedCount }));
       return;
     }
     const ok = await confirm({
@@ -59,11 +48,11 @@ export default function Roles() {
       typeToConfirm: r.key,
     });
     if (!ok) return;
-    removeRole(r.id);
-    toast.success(t('security.roles.deleted'));
+    deleteM.mutate({ id: r.id, key: r.key });
   };
 
-  const assignedTotal = admins.filter((a) => a.status !== 'deactivated').length;
+  const assignedTotal = q.data?.meta.assignedAdmins ?? roles.reduce((n, r) => n + r.assignedCount, 0);
+  const customCount = q.data?.meta.customCount ?? roles.filter((r) => !r.system).length;
 
   return (
     <>
@@ -81,17 +70,19 @@ export default function Roles() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard loading={loading} label={t('security.roles.totalRoles')} value={fmtNumber(roles.length)} icon={<ShieldCheck />} color="#0B1F3A" />
-        <StatCard loading={loading} label={t('security.roles.customRoles')} value={fmtNumber(roles.filter((r) => !r.system).length)} icon={<Copy />} color="#C9A24A" />
+        <StatCard loading={loading} label={t('security.roles.customRoles')} value={fmtNumber(customCount)} icon={<Copy />} color="#C9A24A" />
         <StatCard loading={loading} label={t('security.roles.assignedAdmins')} value={fmtNumber(assignedTotal)} icon={<Users />} color="#2563EB" />
       </div>
+
+      {q.error && !loading && <QueryError error={q.error} onRetry={() => q.refetch()} className="mb-4" />}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading
           ? Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} lines={4} />)
           : roles.map((r) => {
-              const granted = countGranted(r.permissions);
-              const mods = MODULES.filter((m) => r.permissions[m].view).length;
-              const ra = adminsFor(r);
+              const granted = r.grantedCount || countGranted(r.permissions);
+              const mods = MODULES.filter((m) => r.permissions[m]?.view).length;
+              const ra = r.assignedAdmins;
               const locked = r.key === 'super_admin';
               return (
                 <Card key={r.id} className="flex flex-col p-5 transition hover:border-accent/40 hover:shadow-soft">
@@ -132,12 +123,12 @@ export default function Roles() {
                     <div className="flex items-center gap-2">
                       <div className="flex -space-x-2 rtl:space-x-reverse">
                         {ra.slice(0, 4).map((a) => (
-                          <Tooltip key={a.id} content={a.name}>
+                          <Tooltip key={a.id} content={L(a, 'name')}>
                             <Avatar name={a.name} src={a.avatar} size="xs" />
                           </Tooltip>
                         ))}
                       </div>
-                      <span className="text-xs text-muted num">{t('security.roles.adminsCount', { count: ra.length })}</span>
+                      <span className="text-xs text-muted num">{t('security.roles.adminsCount', { count: r.assignedCount })}</span>
                     </div>
                     <span className="text-[11px] text-muted">{fmtDate(r.createdAt)}</span>
                   </div>
@@ -147,7 +138,7 @@ export default function Roles() {
                       {locked || !can('security', 'edit') ? t('actions.view') : t('security.roles.editPermissions')}
                     </ButtonLink>
                     {can('security', 'create') && (
-                      <Button variant="ghost" size="sm" icon={<Copy className="h-3.5 w-3.5" />} onClick={() => clone(r)}>
+                      <Button variant="ghost" size="sm" icon={<Copy className="h-3.5 w-3.5" />} loading={cloneM.isPending && cloneM.variables === r.id} onClick={() => clone(r)}>
                         {t('actions.clone')}
                       </Button>
                     )}

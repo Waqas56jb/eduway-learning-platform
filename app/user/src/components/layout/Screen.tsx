@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode, type RefObject } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, type ScrollViewInstance, type StyleProp, type ViewStyle } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -23,15 +23,16 @@ export interface ScreenProps {
   /** Wrap in a KeyboardAvoidingView. */
   keyboard?: boolean;
   statusBar?: 'light' | 'dark' | 'auto';
-  /** Ref to the inner ScrollView: `useRef<ScrollViewInstance>(null)` (RN 0.88 ScrollView is a function component). */
-  scrollRef?: RefObject<ScrollViewInstance | null>;
+  /** Ref to the inner ScrollView: `useRef<ScrollView>(null)` (RN 0.88 ScrollView is a function component). */
+  scrollRef?: RefObject<ScrollView | null>;
   style?: StyleProp<ViewStyle>;
   /** Disable the fade/slide enter animation. */
   animated?: boolean;
 }
 
-const ENTER_MS = 250;
-const ENTER_OFFSET = 10;
+// Subtle: a short fade + 8pt rise. Touches are never blocked (opacity/transform only).
+const ENTER_MS = 300;
+const ENTER_OFFSET = 8;
 
 /** Base screen container: safe area, theme background, status bar, optional scroll/refresh/keyboard. */
 export function Screen({
@@ -82,6 +83,7 @@ export function Screen({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        contentInsetAdjustmentBehavior="never"
         refreshControl={
           onRefresh ? (
             <RefreshControl

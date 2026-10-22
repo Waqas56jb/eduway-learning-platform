@@ -4,25 +4,25 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Marketer } from '@/types';
-import { governorates } from '@/data';
-import { useMarketers } from '@/store/core';
+import { useQueryClient } from '@tanstack/react-query';
+import { isApiError, toastError } from '@/api/client';
+import { useLookups } from '@/api/lookups';
+import { marketersApi, partnerKeys, type MarketerVM, type MarketerWriteDto } from '@/api/partners';
 import { useLocalize } from '@/hooks/useLocale';
-import { uid } from '@/utils/id';
 import { Button, Drawer, Field, Input, Select } from '@/components/ui';
 
 interface MarketerFormProps {
   open: boolean;
   onClose: () => void;
-  marketer?: Marketer | null;
+  marketer?: MarketerVM | null;
 }
 
 /** Create / edit marketer drawer. */
 export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const add = useMarketers((s) => s.add);
-  const update = useMarketers((s) => s.update);
+  const lookups = useLookups();
+  const qc = useQueryClient();
 
   const req = t('errors.required');
   const schema = z.object({
@@ -32,6 +32,10 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
     email: z.string().trim().email(t('errors.invalidEmail')),
     governorateId: z.string().min(1, req),
     status: z.enum(['active', 'inactive']),
+    code: z
+      .string()
+      .trim()
+      .refine((c) => !c || /^[A-Za-z0-9-]{4,20}$/.test(c), t('marketers.codeFormat')),
   });
   type FormValues = z.infer<typeof schema>;
 
@@ -40,14 +44,16 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
     name_ar: marketer?.name_ar ?? '',
     mobile: marketer?.mobile ?? '',
     email: marketer?.email ?? '',
-    governorateId: marketer?.governorateId ?? 'gov_bgd',
+    governorateId: marketer?.governorateId ?? 'baghdad',
     status: marketer?.status ?? 'active',
+    code: marketer?.code ?? '',
   });
 
   const {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: defaults() });
 
@@ -57,24 +63,35 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
   }, [open, marketer?.id]);
 
   const onSubmit = async (v: FormValues) => {
-    await new Promise((r) => setTimeout(r, 300));
-    if (marketer) {
-      update(marketer.id, v);
-      toast.success(t('toast.updated', { entity: t('marketers.entity') }));
-    } else {
-      add({
-        id: uid('mkt'),
-        ...v,
-        avatar: '',
-        schoolIds: [],
-        paidStudents: 0,
-        milestonesHit: 0,
-        pendingReward: 0,
-        joinedAt: new Date().toISOString(),
-      });
-      toast.success(t('toast.created', { entity: t('marketers.entity') }));
+    const body: MarketerWriteDto = {
+      name: { en: v.name_en, ar: v.name_ar },
+      mobile: v.mobile,
+      email: v.email,
+      governorateId: v.governorateId,
+      status: v.status,
+      code: v.code ? v.code.toUpperCase() : null,
+    };
+    try {
+      if (marketer) {
+        await marketersApi.update(marketer.id, body);
+        toast.success(t('toast.updated', { entity: t('marketers.entity') }));
+      } else {
+        await marketersApi.create(body);
+        toast.success(t('toast.created', { entity: t('marketers.entity') }));
+      }
+      await Promise.all(partnerKeys.map((k) => qc.invalidateQueries({ queryKey: k })));
+      onClose();
+    } catch (e) {
+      if (isApiError(e) && e.code === 'CONFLICT') {
+        setError('code', { message: t('marketers.codeTaken') });
+        return;
+      }
+      if (isApiError(e) && Object.keys(e.fields).length) {
+        for (const [k, msg] of Object.entries(e.fields)) setError(k.replace(/^name\.(en|ar)$/, 'name_$1') as keyof FormValues, { message: msg });
+        return;
+      }
+      toastError(e);
     }
-    onClose();
   };
 
   return (
@@ -108,9 +125,12 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
         <Field label={t('marketers.fields.email')} error={errors.email?.message} required htmlFor="mf-email">
           <Input id="mf-email" type="email" dir="ltr" placeholder="name@partners.eduway.iq" invalid={!!errors.email} {...register('email')} />
         </Field>
+        <Field label={t('marketers.fields.code')} hint={t('marketers.codeHint')} error={errors.code?.message} htmlFor="mf-code">
+          <Input id="mf-code" dir="ltr" className="uppercase" invalid={!!errors.code} {...register('code')} />
+        </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t('marketers.fields.governorate')} htmlFor="mf-gov">
-            <Select id="mf-gov" options={governorates.map((g) => ({ value: g.id, label: L(g, 'name') }))} {...register('governorateId')} />
+            <Select id="mf-gov" options={lookups.governorates.map((g) => ({ value: g.id, label: L(g, 'name') }))} {...register('governorateId')} />
           </Field>
           <Field label={t('common.status')} htmlFor="mf-status">
             <Select id="mf-status" options={(['active', 'inactive'] as const).map((s) => ({ value: s, label: t(`status.${s}`) }))} {...register('status')} />

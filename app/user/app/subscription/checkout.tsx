@@ -1,117 +1,216 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import { useQueryClient } from '@tanstack/react-query';
+import { toPackage } from '@/api/adapters';
+import { toastError } from '@/api/errors';
+import { qk } from '@/api/keys';
+import {
+  confirmMockPayment,
+  initiatePayment,
+  usePackage,
+  usePackages,
+  usePaymentMethodsForCheckout,
+  useQuote,
+  validatePromo,
+  waitForPayment,
+} from '@/api/payments';
+import { newRequestId } from '@/api/session';
+import type { Gateway } from '@/api/types';
 import { Icon, SubjectIcon } from '@/components/icons';
 import { Header, Screen } from '@/components/layout';
 import {
   AnimatedPrice,
   GatewaySheet,
-  PAYMENT_METHODS,
-  PROMO_CODES,
+  MethodMark,
   PaymentMethodCard,
-  generateReceiptNumber,
+  methodLabel,
+  toPaymentMethod,
   type PaymentMethodId,
 } from '@/components/subscription';
-import { Badge, Button, Card, Input, SectionHeader, Text, toast } from '@/components/ui';
-import { getPackage, packages } from '@/data';
+import { Badge, Button, Card, EmptyState, Input, SectionHeader, SkeletonCard, Text, toast } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { useAuthStore, useNotificationsStore, type BillingCycle } from '@/store';
-import { radius, SCREEN_PADDING, space, subjectColors, useTheme } from '@/theme';
+import { useAuthStore, type BillingCycle } from '@/store';
+import { radius, SCREEN_PADDING, shadows, space, subjectColors, useTheme } from '@/theme';
 import { formatPrice } from '@/utils/format';
 import { haptic } from '@/utils/haptics';
+
+const RETURN_URL = 'eduway://subscription/success';
 
 export default function CheckoutScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { t, L, lang, i18n } = useI18n('subscription');
+  const { t, L, lang } = useI18n('subscription');
   const params = useLocalSearchParams<{ packageId?: string; cycle?: string }>();
-  const subscribe = useAuthStore((s) => s.subscribe);
-  const addNotification = useNotificationsStore((s) => s.add);
+  const qc = useQueryClient();
 
-  const pkg = getPackage(params.packageId) ?? packages.find((p) => p.popular) ?? packages[0]!;
-  const cycle: BillingCycle = params.cycle === 'yearly' ? 'yearly' : 'monthly';
-  const price = cycle === 'yearly' ? pkg.priceYearly : pkg.priceMonthly;
+  // PAY-02 (falls back to the popular plan from PAY-01 when no id is given).
+  const pkgQuery = usePackage(params.packageId);
+  const { data: allPackages } = usePackages();
+  const pkgDto =
+    pkgQuery.data ?? (params.packageId ? undefined : (allPackages?.find((p) => p.popular) ?? allPackages?.[0]));
+  const pkg = useMemo(() => (pkgDto ? toPackage(pkgDto) : undefined), [pkgDto]);
+  const cycle: BillingCycle = params.cycle === 'yearly' && (pkgDto?.priceYearly ?? 0) > 0 ? 'yearly' : 'monthly';
+  const basePrice = pkg ? (cycle === 'yearly' ? pkg.priceYearly : pkg.priceMonthly) : 0;
 
   const [code, setCode] = useState('');
-  const [promoPct, setPromoPct] = useState<number | null>(null);
+  /** Applied promo (validated by PAY-05). */
+  const [promo, setPromo] = useState<{ code: string; pct: number } | null>(null);
   const [promoError, setPromoError] = useState<string | undefined>();
   const [applying, setApplying] = useState(false);
-  const [methodId, setMethodId] = useState<PaymentMethodId>('zaincash');
+  const [methodId, setMethodId] = useState<PaymentMethodId>('');
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** One Idempotency-Key per checkout attempt (renewed after a failed attempt). */
+  const idemKey = useRef(newRequestId());
+  const paymentRef = useRef<{ id: string; receipt: string | null; amount: number } | null>(null);
 
-  const method = PAYMENT_METHODS.find((m) => m.id === methodId) ?? PAYMENT_METHODS[0]!;
-  const discount = promoPct ? Math.round((price * promoPct) / 100) : 0;
-  const total = price - discount;
+  // PAY-04 — authoritative totals (promo + proration).
+  const { data: quote } = useQuote(pkg?.id, cycle, promo?.code);
+  const price = quote?.subtotal ?? basePrice;
+  const discount = promo ? (quote?.discount ?? Math.round((price * promo.pct) / 100)) : 0;
+  const total = quote?.total ?? price - discount;
 
-  const wallets = useMemo(() => PAYMENT_METHODS.filter((m) => m.kind === 'wallet'), []);
-  const cards = useMemo(() => PAYMENT_METHODS.filter((m) => m.kind === 'card'), []);
+  // PAY-11 / PUB-09 — enabled gateways.
+  const { data: methodDtos, isPending: methodsLoading } = usePaymentMethodsForCheckout();
+  const methods = useMemo(() => (methodDtos ?? []).filter((m) => m.enabled).map(toPaymentMethod), [methodDtos]);
+  useEffect(() => {
+    if (methods.length && !methods.some((m) => m.id === methodId)) setMethodId(methods[0]!.id);
+  }, [methods, methodId]);
+  const method = methods.find((m) => m.id === methodId) ?? methods[0];
 
-  const applyPromo = () => {
+  const wallets = useMemo(() => methods.filter((m) => m.kind === 'wallet'), [methods]);
+  const cards = useMemo(() => methods.filter((m) => m.kind === 'card'), [methods]);
+
+  const applyPromo = async () => {
     const normalized = code.trim().toUpperCase();
     if (!normalized) {
       setPromoError(t('checkout.promo.empty'));
       haptic.error();
       return;
     }
+    if (!pkg) return;
     setApplying(true);
-    setTimeout(() => {
-      setApplying(false);
-      const pct = PROMO_CODES[normalized];
-      if (pct) {
-        setPromoPct(pct);
+    try {
+      const res = await validatePromo({ code: normalized, packageId: pkg.id, cycle });
+      if (res.valid) {
+        const sub = res.quote?.subtotal ?? price;
+        const pct = res.type === 'percent' ? Math.round(res.value) : sub > 0 ? Math.round((res.discountAmount / sub) * 100) : 0;
+        if (res.quote) qc.setQueryData(['payments', 'quote', pkg.id, cycle, normalized], res.quote);
+        setPromo({ code: normalized, pct });
         setPromoError(undefined);
         setCode(normalized);
         haptic.success();
         toast.success(t('checkout.promo.applied', { code: normalized, pct }));
       } else {
-        setPromoPct(null);
-        setPromoError(t('checkout.promo.invalid'));
+        setPromo(null);
+        setPromoError(res.message || t('checkout.promo.invalid'));
         haptic.error();
       }
-    }, 600);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setApplying(false);
+    }
   };
 
   const removePromo = () => {
-    setPromoPct(null);
+    setPromo(null);
     setCode('');
     setPromoError(undefined);
     haptic.light();
   };
 
+  /** PAY-06 → gateway (mock confirm / hosted page / wallet app) → PAY-08 poll. Resolves true when paid. */
+  const onPay = useCallback(
+    async (walletPhone?: string): Promise<boolean> => {
+      if (!pkg || !method) return false;
+      try {
+        const init = await initiatePayment(
+          {
+            packageId: pkg.id,
+            cycle,
+            gateway: method.id as Gateway,
+            promoCode: promo?.code,
+            walletPhone: method.requiresPhone ? walletPhone : undefined,
+            returnScheme: RETURN_URL,
+          },
+          idemKey.current,
+        );
+        if (init.mock) {
+          await confirmMockPayment(init.paymentId, 'success');
+        } else if (init.redirectUrl) {
+          await WebBrowser.openAuthSessionAsync(init.redirectUrl, RETURN_URL);
+        } else if (init.deeplink) {
+          await Linking.openURL(init.deeplink).catch(() => {});
+        }
+        const final = await waitForPayment(init.paymentId);
+        if (final.status !== 'paid') {
+          idemKey.current = newRequestId();
+          haptic.error();
+          toast.error(t('gateway.failed'));
+          return false;
+        }
+        paymentRef.current = { id: final.id, receipt: final.receiptNumber, amount: final.amount };
+        // Entitlements come from the webhook; refresh everything that depends on them.
+        await useAuthStore.getState().refreshMe();
+        void qc.invalidateQueries({ queryKey: qk.payments.all });
+        void qc.invalidateQueries({ queryKey: qk.progress.all });
+        void qc.invalidateQueries({ queryKey: qk.catalog.all });
+        void qc.invalidateQueries({ queryKey: qk.tutor.allowance });
+        void qc.invalidateQueries({ queryKey: qk.notifications.all });
+        return true;
+      } catch (err) {
+        idemKey.current = newRequestId();
+        toastError(err);
+        return false;
+      }
+    },
+    [pkg, method, cycle, promo, qc, t],
+  );
+
   const onPaid = useCallback(() => {
-    const receipt = generateReceiptNumber();
-    subscribe(pkg.id, cycle);
-    addNotification({
-      type: 'payment',
-      title: {
-        en: i18n.t('subscription:notification.title', { lng: 'en' }),
-        ar: i18n.t('subscription:notification.title', { lng: 'ar' }),
-      },
-      body: {
-        en: i18n.t('subscription:notification.body', {
-          lng: 'en',
-          amount: formatPrice(total, 'en'),
-          plan: pkg.name.en,
-          receipt,
-        }),
-        ar: i18n.t('subscription:notification.body', {
-          lng: 'ar',
-          amount: formatPrice(total, 'ar'),
-          plan: pkg.name.ar,
-          receipt,
-        }),
-      },
-      link: '/subscription',
-    });
+    if (!pkg || !method) return;
+    const paid = paymentRef.current;
     haptic.success();
     setSheetOpen(false);
     router.replace({
       pathname: '/subscription/success',
-      params: { receipt, packageId: pkg.id, cycle, amount: String(total), method: methodId },
+      params: {
+        paymentId: paid?.id ?? '',
+        receipt: paid?.receipt ?? '',
+        packageId: pkg.id,
+        cycle,
+        amount: String(paid?.amount ?? total),
+        method: method.id,
+      },
     });
-  }, [subscribe, addNotification, i18n, pkg, cycle, total, methodId]);
+  }, [pkg, method, cycle, total]);
+
+  if (!pkg) {
+    return (
+      <Screen padded={false} keyboard>
+        <Header title={t('checkout.title')} subtitle={t('checkout.subtitle')} />
+        <View style={styles.content}>
+          {pkgQuery.isError ? (
+            <EmptyState
+              icon="crown"
+              title={t('common:states.error')}
+              actionLabel={t('common:actions.retry')}
+              onAction={() => void pkgQuery.refetch()}
+            />
+          ) : (
+            <>
+              <SkeletonCard lines={4} />
+              <SkeletonCard lines={2} />
+            </>
+          )}
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen padded={false} keyboard>
@@ -120,6 +219,7 @@ export default function CheckoutScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        keyboardDismissMode="interactive"
       >
         {/* Order summary */}
         <Animated.View entering={FadeInDown.duration(300)}>
@@ -128,11 +228,13 @@ export default function CheckoutScreen() {
               <View style={[styles.pkgIcon, { backgroundColor: colors.accentSoft }]}>
                 <Icon name="crown" size={22} color={colors.accent} filled />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text variant="overline" color="muted">
                   {t('checkout.summary')}
                 </Text>
-                <Text variant="h3">{L(pkg.name)}</Text>
+                <Text variant="h3" numberOfLines={1}>
+                  {L(pkg.name)}
+                </Text>
               </View>
               <Badge label={cycle === 'yearly' ? t('cycle.yearly') : t('cycle.monthly')} tone="gold" size="sm" />
             </View>
@@ -159,10 +261,10 @@ export default function CheckoutScreen() {
                   {formatPrice(price, lang)}
                 </Text>
               </View>
-              {promoPct ? (
+              {promo ? (
                 <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)} style={styles.lineRow}>
-                  <Text variant="body" color="success">
-                    {t('checkout.discount', { code, pct: promoPct })}
+                  <Text variant="body" color="success" style={styles.flexShrink}>
+                    {t('checkout.discount', { code: promo.code, pct: promo.pct })}
                   </Text>
                   <Text variant="bodyMedium" color="success" tabular>
                     −{formatPrice(discount, lang)}
@@ -202,42 +304,59 @@ export default function CheckoutScreen() {
                 placeholder={t('checkout.promo.placeholder')}
                 autoCapitalize="characters"
                 autoCorrect={false}
-                editable={!promoPct}
+                editable={!promo}
                 icon="gift"
                 error={promoError}
-                hint={promoPct ? undefined : t('checkout.promo.hint')}
+                hint={promo ? undefined : t('checkout.promo.hint')}
                 returnKeyType="done"
-                onSubmitEditing={applyPromo}
+                onSubmitEditing={() => void applyPromo()}
                 accessibilityLabel={t('checkout.promo.title')}
               />
             </View>
-            {promoPct ? (
-              <Button title={t('checkout.promo.remove')} variant="ghost" size="lg" onPress={removePromo} />
-            ) : (
-              <Button title={t('common:actions.apply')} variant="secondary" size="lg" loading={applying} onPress={applyPromo} />
-            )}
+            <View style={styles.promoBtn}>
+              {promo ? (
+                <Button title={t('checkout.promo.remove')} variant="outline" size="lg" onPress={removePromo} />
+              ) : (
+                <Button
+                  title={t('common:actions.apply')}
+                  variant="secondary"
+                  size="lg"
+                  loading={applying}
+                  onPress={() => void applyPromo()}
+                />
+              )}
+            </View>
           </View>
         </Animated.View>
 
         {/* Payment methods */}
         <Animated.View entering={FadeInDown.duration(300).delay(160)} style={{ gap: space.md }}>
           <SectionHeader title={t('checkout.payWith')} />
-          <Text variant="overline" color="muted">
-            {t('checkout.wallets')}
-          </Text>
-          <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
-            {wallets.map((m) => (
-              <PaymentMethodCard key={m.id} method={m} selected={m.id === methodId} onSelect={setMethodId} />
-            ))}
-          </View>
-          <Text variant="overline" color="muted" style={{ marginTop: space.sm }}>
-            {t('checkout.cards')}
-          </Text>
-          <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
-            {cards.map((m) => (
-              <PaymentMethodCard key={m.id} method={m} selected={m.id === methodId} onSelect={setMethodId} />
-            ))}
-          </View>
+          {methodsLoading ? <SkeletonCard lines={2} /> : null}
+          {wallets.length ? (
+            <>
+              <Text variant="overline" color="muted">
+                {t('checkout.wallets')}
+              </Text>
+              <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
+                {wallets.map((m) => (
+                  <PaymentMethodCard key={m.id} method={m} selected={m.id === method?.id} onSelect={setMethodId} />
+                ))}
+              </View>
+            </>
+          ) : null}
+          {cards.length ? (
+            <>
+              <Text variant="overline" color="muted" style={{ marginTop: space.sm }}>
+                {t('checkout.cards')}
+              </Text>
+              <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
+                {cards.map((m) => (
+                  <PaymentMethodCard key={m.id} method={m} selected={m.id === method?.id} onSelect={setMethodId} />
+                ))}
+              </View>
+            </>
+          ) : null}
         </Animated.View>
 
         <View style={[styles.secureNote, { backgroundColor: colors.surfaceMuted }]}>
@@ -251,15 +370,36 @@ export default function CheckoutScreen() {
       <View
         style={[
           styles.footer,
-          { paddingBottom: insets.bottom + space.md, backgroundColor: colors.surface, borderTopColor: colors.border },
+          shadows.lg,
+          {
+            paddingBottom: Math.max(insets.bottom, space.md) + space.sm,
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+          },
         ]}
       >
+        <View style={styles.footerInfo}>
+          {method ? (
+            <View style={styles.footerMethod}>
+              <MethodMark method={method} size={22} />
+              <Text variant="caption" color="muted" numberOfLines={1} style={styles.flexShrink}>
+                {methodLabel(method, t, L)}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.footerMethod} />
+          )}
+          <Text variant="label" tabular numberOfLines={1}>
+            {`${t('checkout.total')} · ${formatPrice(total, lang)}`}
+          </Text>
+        </View>
         <Button
           title={t('checkout.pay', { amount: formatPrice(total, lang) })}
           icon="lock"
           variant="primary"
           size="lg"
           fullWidth
+          disabled={!method}
           onPress={() => {
             haptic.medium();
             setSheetOpen(true);
@@ -267,13 +407,16 @@ export default function CheckoutScreen() {
         />
       </View>
 
-      <GatewaySheet
-        visible={sheetOpen}
-        amount={total}
-        method={method}
-        onClose={() => setSheetOpen(false)}
-        onSuccess={onPaid}
-      />
+      {method ? (
+        <GatewaySheet
+          visible={sheetOpen}
+          amount={total}
+          method={method}
+          onClose={() => setSheetOpen(false)}
+          onPay={onPay}
+          onSuccess={onPaid}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -294,6 +437,7 @@ const styles = StyleSheet.create({
   hr: { height: StyleSheet.hairlineWidth },
   lineRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.md },
   promoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, marginTop: space.md },
+  promoBtn: { height: 54, justifyContent: 'center', minWidth: 96 },
   secureNote: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -304,6 +448,12 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: SCREEN_PADDING,
     paddingTop: space.md,
+    gap: space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopStartRadius: radius.lg,
+    borderTopEndRadius: radius.lg,
   },
+  footerInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  footerMethod: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1 },
+  flexShrink: { flexShrink: 1 },
 });

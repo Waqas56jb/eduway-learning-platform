@@ -1,29 +1,42 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Crown, Lightbulb, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import {
+  sendTutorMessage,
+  useAiAllowance,
+  useAiConversation,
+  useAiConversations,
+  useAiSuggestions,
+  useCreateConversation,
+  useRateMessage,
+} from '@/api/aiTutor';
+import { useAppConfig } from '@/api/appSettings';
+import { useSubjects } from '@/api/catalog';
+import { errorMessage, isApiError } from '@/api/client';
+import { keys } from '@/api/keys';
+import { uploadFile } from '@/api/storage';
+import type { AiAllowance, ConversationDto } from '@/api/types';
 import { Button, ProgressRing, Seo, SubjectIcon, useToast } from '@/components/ui';
 import { TutorAvatar, TutorChat } from '@/components/student/TutorChat';
 import { Composer } from '@/components/student/tutor/Composer';
 import {
-  TUTOR_STORE_KEY,
   TUTOR_SUBJECT_KEY,
-  TUTOR_SUBJECTS,
-  findAnswer,
   newId,
-  seedAll,
-  seedConversation,
   studentContent,
+  toChatMessage,
   type ChatMessage,
-  type Conversations,
 } from '@/components/student/tutor/tutorEngine';
-import { getSubject, tutorSuggestions } from '@/data';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { readStore, writeStore } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import type { SubjectId } from '@/types';
+
+/** Feature flag (PUB-01 `featureFlags`) that enables image attachments in the tutor composer. */
+const ATTACH_FLAG = 'ai_tutor_attachments';
 
 /** Clipboard API with a legacy fallback (unfocused documents, older WebViews, plain http). */
 async function copyText(text: string) {
@@ -48,34 +61,48 @@ async function copyText(text: string) {
   }
 }
 
-function loadConversations(): Conversations {
-  const stored = readStore<Partial<Conversations>>(TUTOR_STORE_KEY, {});
-  const seeded = seedAll();
-  for (const s of TUTOR_SUBJECTS) {
-    const list = stored[s];
-    if (Array.isArray(list) && list.length) seeded[s] = list;
-  }
-  return seeded;
-}
-
+/**
+ * AI tutor. One thread per subject = the newest conversation of that subject (AIT-03/05); "New chat"
+ * creates a fresh one (AIT-04). Answers stream over SSE (AIT-08, falls back to polling AIT-09); the
+ * allowance pill reads AIT-01 and is updated from the stream's meta/done events.
+ */
 export default function AiTutor() {
   const { t, i18n } = useTranslation();
-  const { l, fmtNumber } = useLang();
+  const { l, lang, fmtNumber } = useLang();
   const { user } = useAuth();
-  const { aiUsed, aiQuota, consumeAiQuestion } = useStudent();
   const toast = useToast();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { data: subjects = [] } = useSubjects();
+  const { data: config } = useAppConfig();
+  const allowanceQ = useAiAllowance();
+  const createConversation = useCreateConversation();
+  const rateMessage = useRateMessage();
 
-  const [subject, setSubject] = useState<SubjectId>(() => {
-    const s = readStore<string>(TUTOR_SUBJECT_KEY, 'math');
-    return (TUTOR_SUBJECTS as string[]).includes(s) ? (s as SubjectId) : 'math';
-  });
-  const [convos, setConvos] = useState<Conversations>(loadConversations);
+  const [subject, setSubject] = useState<SubjectId>(() => readStore<string>(TUTOR_SUBJECT_KEY, 'math'));
+  useEffect(() => writeStore(TUTOR_SUBJECT_KEY, subject), [subject]);
+  // Fall back to the first subject when the remembered one no longer exists.
+  useEffect(() => {
+    if (subjects.length && !subjects.some((s) => s.slug === subject)) setSubject(subjects[0].slug);
+  }, [subjects, subject]);
+
+  const conversationsQ = useAiConversations(subject);
+  const [activeId, setActiveId] = useState<Record<string, string | null>>({});
+  const conversationId = activeId[subject] !== undefined ? activeId[subject] : (conversationsQ.data?.items[0]?.id ?? null);
+  const conversationQ = useAiConversation(conversationId);
+  const suggestionsQ = useAiSuggestions(subject);
+
+  // In-flight messages (optimistic student bubble + the streaming tutor answer) and rating overrides.
+  const [local, setLocal] = useState<ChatMessage[]>([]);
+  const [ratings, setRatings] = useState<Record<string, 'up' | 'down' | undefined>>({});
   const [pending, setPending] = useState<SubjectId | null>(null);
   const [streamingId, setStreamingId] = useState<string | null>(null);
-  const timer = useRef<number>();
+  const [streamingLive, setStreamingLive] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => writeStore(TUTOR_STORE_KEY, convos), [convos]);
-  useEffect(() => writeStore(TUTOR_SUBJECT_KEY, subject), [subject]);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   // Keep the active subject chip visible in the horizontally scrolling row (phones).
   const chipsRef = useRef<HTMLDivElement>(null);
@@ -89,63 +116,161 @@ export default function AiTutor() {
       row.scrollBy({ left: c.left + c.width / 2 - (r.left + r.width / 2), behavior: 'smooth' });
     }
   }, [subject]);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  const subj = getSubject(subject);
-  const messages = convos[subject];
-  const left = Math.max(0, aiQuota - aiUsed);
-  const locked = left === 0;
-  const busy = pending !== null || streamingId !== null;
+  const subj = subjects.find((s) => s.slug === subject);
+  const serverMessages = useMemo(() => (conversationQ.data?.messages ?? []).map(toChatMessage), [conversationQ.data]);
+  const welcome: ChatMessage = useMemo(
+    () => ({ id: `welcome-${subject}`, role: 'tutor', kind: 'welcome', content: studentContent(''), at: new Date().toISOString() }),
+    [subject],
+  );
+  const messages = useMemo(() => {
+    const base = serverMessages.length ? serverMessages : [welcome];
+    const ids = new Set(base.map((m) => m.id));
+    return [...base, ...local.filter((m) => !ids.has(m.id))].map((m) => (m.id in ratings ? { ...m, rating: ratings[m.id] } : m));
+  }, [serverMessages, welcome, local, ratings]);
+
+  const allowance = allowanceQ.data;
+  const aiQuota = allowance?.quota ?? 0;
+  const left = allowance?.remaining ?? 0;
+  const disabledReason = allowance && !allowance.enabled ? allowance.disabledReason : null;
+  const locked = !!allowance && (!allowance.enabled || left === 0);
+  const busy = pending !== null || streamingId !== null || uploading;
   const studentTurns = messages.filter((m) => m.role === 'student').length;
   const asked = new Set(messages.filter((m) => m.role === 'student').map((m) => m.content.en.trim().toLowerCase()));
   const extraSuggestion = useMemo(
     () => ({
-      en: i18n.getFixedT('en')(`account.tutor.moreSuggestions.${subject}`),
-      ar: i18n.getFixedT('ar')(`account.tutor.moreSuggestions.${subject}`),
+      en: i18n.getFixedT('en')(`account.tutor.moreSuggestions.${subject}`, { defaultValue: '' }),
+      ar: i18n.getFixedT('ar')(`account.tutor.moreSuggestions.${subject}`, { defaultValue: '' }),
     }),
     [i18n, subject],
   );
-  const freshSuggestions = [...tutorSuggestions[subject], extraSuggestion]
-    .filter(
-      (s) => !asked.has(s.en.trim().toLowerCase()) && !asked.has(s.ar.trim().toLowerCase()),
-    )
+  const freshSuggestions = [...(suggestionsQ.data ?? []), extraSuggestion]
+    .filter((s) => s.en || s.ar)
+    .filter((s) => !asked.has(s.en.trim().toLowerCase()) && !asked.has(s.ar.trim().toLowerCase()))
     .slice(0, 3);
 
+  const setAllowance = useCallback((a: AiAllowance | null | undefined) => {
+    if (a) qc.setQueryData(keys.aiAllowance, a);
+  }, [qc]);
+
+  const ensureConversation = useCallback(async (): Promise<string> => {
+    if (conversationId) return conversationId;
+    const conv = await createConversation.mutateAsync({ subjectId: subject });
+    setActiveId((m) => ({ ...m, [subject]: conv.id }));
+    return conv.id;
+  }, [conversationId, createConversation, subject]);
+
+  const finishStream = useCallback(
+    (convId: string) => {
+      setStreamingId(null);
+      setStreamingLive(false);
+      // Swap the local bubbles for the persisted thread.
+      void qc.invalidateQueries({ queryKey: keys.aiConversation(convId) }).then(() => setLocal([]));
+      void qc.invalidateQueries({ queryKey: [...keys.ai, 'conversations'] });
+    },
+    [qc],
+  );
+  const lastConv = useRef<string | null>(null);
+
   const send = useCallback(
-    (text: string) => {
+    async (text: string, attachmentFileKey?: string) => {
       if (busy) return;
-      if (!consumeAiQuestion()) {
+      if (locked) {
         toast.error(t('account.tutor.quotaTitle'), t('account.tutor.quotaBody'));
         return;
       }
       const target = subject;
-      const q: ChatMessage = { id: newId('s'), role: 'student', content: studentContent(text), at: new Date().toISOString() };
-      setConvos((c) => ({ ...c, [target]: [...c[target], q] }));
+      const tempId = newId('s');
+      setLocal((xs) => [...xs, { id: tempId, role: 'student', content: studentContent(text), at: new Date().toISOString() }]);
       setPending(target);
-      timer.current = window.setTimeout(
-        () => {
-          const a: ChatMessage = { id: newId('t'), role: 'tutor', content: findAnswer(text, target), at: new Date().toISOString() };
-          setConvos((c) => ({ ...c, [target]: [...c[target], a] }));
-          setPending(null);
-          setStreamingId(a.id);
-        },
-        1200 + Math.random() * 800,
-      );
+      const controller = new AbortController();
+      abortRef.current = controller;
+      let tutorId: string | null = null;
+      try {
+        const convId = await ensureConversation();
+        lastConv.current = convId;
+        const result = await sendTutorMessage(
+          convId,
+          { text, lang, clientMessageId: tempId, attachmentFileKey },
+          {
+            onMeta: ({ studentMessage, tutorMessageId, allowance: a }) => {
+              tutorId = tutorMessageId;
+              setAllowance(a);
+              setLocal((xs) => [
+                ...xs.map((m) => (m.id === tempId ? toChatMessage(studentMessage) : m)),
+                { id: tutorMessageId, role: 'tutor', content: studentContent(''), at: new Date().toISOString(), status: 'streaming' },
+              ]);
+              setPending(null);
+              setStreamingLive(true);
+              setStreamingId(tutorMessageId);
+            },
+            onDelta: (delta) => {
+              setLocal((xs) => xs.map((m) => (m.id === tutorId ? { ...m, content: studentContent(m.content.en + delta) } : m)));
+            },
+          },
+          controller.signal,
+        );
+        const final = toChatMessage(result.message);
+        setLocal((xs) => {
+          const has = xs.some((m) => m.id === final.id);
+          return has ? xs.map((m) => (m.id === final.id ? { ...final, content: final.content.en ? final.content : m.content } : m)) : [...xs, final];
+        });
+        setPending(null);
+        if (result.allowance) setAllowance(result.allowance);
+        else void qc.invalidateQueries({ queryKey: keys.aiAllowance });
+        if (!tutorId) {
+          setStreamingId(final.id);
+        }
+        setStreamingLive(false);
+        if (result.message.status === 'failed' || result.message.status === 'blocked') {
+          toast.error(t(result.message.status === 'blocked' ? 'errors.reasons.AI_BLOCKED_CONTENT' : 'errors.UNKNOWN'));
+        }
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+        setPending(null);
+        setStreamingId(null);
+        setStreamingLive(false);
+        setLocal((xs) => xs.filter((m) => m.id !== tempId && m.id !== tutorId));
+        if (isApiError(e)) {
+          const a = e.details.allowance as AiAllowance | undefined;
+          if (a) setAllowance(a);
+          else if (e.reason?.startsWith('AI_') || e.isLocked) void qc.invalidateQueries({ queryKey: keys.aiAllowance });
+          if (e.isLocked) {
+            toast.show({
+              type: 'warning',
+              title: errorMessage(e),
+              action: { label: t('errors.viewPlans'), onClick: () => navigate('/student/subscription') },
+            });
+            return;
+          }
+        }
+        toast.error(errorMessage(e));
+      }
     },
-    [busy, consumeAiQuestion, subject, t, toast],
+    [busy, locked, subject, ensureConversation, lang, setAllowance, qc, toast, t, navigate],
   );
 
   const rate = useCallback(
     (id: string, rating: 'up' | 'down') => {
-      const current = convos[subject].find((m) => m.id === id)?.rating;
-      setConvos((c) => ({
-        ...c,
-        [subject]: c[subject].map((m) => (m.id === id ? { ...m, rating: m.rating === rating ? undefined : rating } : m)),
-      }));
+      const current = messages.find((m) => m.id === id)?.rating;
+      const next = current === rating ? undefined : rating;
+      setRatings((r) => ({ ...r, [id]: next }));
+      rateMessage.mutate(
+        { id, rating: next ?? null },
+        {
+          onSuccess: (m) => {
+            if (conversationId)
+              qc.setQueryData<ConversationDto>(keys.aiConversation(conversationId), (c) =>
+                c ? { ...c, messages: c.messages.map((x) => (x.id === m.id ? m : x)) } : c,
+              );
+          },
+          onError: () => setRatings((r) => ({ ...r, [id]: current })),
+        },
+      );
       // Thank the student when they rate, not when they undo a rating.
       if (current !== rating) toast.success(t('account.tutor.feedbackThanks'), t('account.tutor.feedbackBody'));
     },
-    [convos, subject, t, toast],
+    [messages, rateMessage, conversationId, qc, t, toast],
   );
 
   const copy = useCallback(
@@ -159,11 +284,45 @@ export default function AiTutor() {
   );
 
   const newChat = () => {
-    window.clearTimeout(timer.current);
+    abortRef.current?.abort();
     setPending(null);
     setStreamingId(null);
-    setConvos((c) => ({ ...c, [subject]: seedConversation(subject, false) }));
-    toast.info(t('account.tutor.newChatDone'));
+    setStreamingLive(false);
+    setLocal([]);
+    createConversation.mutate(
+      { subjectId: subject },
+      {
+        onSuccess: (conv) => {
+          setActiveId((m) => ({ ...m, [subject]: conv.id }));
+          toast.info(t('account.tutor.newChatDone'));
+        },
+      },
+    );
+  };
+
+  // Image attachments (STO-01 purpose ai_attachment) when the feature flag is on; otherwise the
+  // existing "coming soon" notice.
+  const attachEnabled = !!config?.featureFlags?.[ATTACH_FLAG];
+  const onAttach = () => {
+    if (!attachEnabled) {
+      toast.info(t('account.tutor.attachSoon'), t('account.tutor.attachSoonBody'));
+      return;
+    }
+    fileRef.current?.click();
+  };
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fileKey = await uploadFile(file, 'ai_attachment');
+      setUploading(false);
+      await send('', fileKey);
+    } catch (e) {
+      setUploading(false);
+      toast.error(errorMessage(e));
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   const welcomeText = useMemo(
@@ -181,10 +340,10 @@ export default function AiTutor() {
         <div className="flex flex-wrap gap-2">
           {freshSuggestions.map((s) => (
             <motion.button
-              key={s.en}
+              key={s.en || s.ar}
               type="button"
               whileHover={{ y: -2 }}
-              onClick={() => send(l(s))}
+              onClick={() => void send(l(s))}
               className="rounded-xl border border-accent/30 bg-white px-3.5 py-2 text-start text-sm font-medium text-primary shadow-sm transition-colors hover:border-accent hover:bg-accent/5"
             >
               {l(s)}
@@ -232,7 +391,7 @@ export default function AiTutor() {
               aria-label={t('account.tutor.allowanceAria', { left, total: aiQuota })}
               role="status"
             >
-              <ProgressRing value={(left / aiQuota) * 100} size={26} stroke={3.5} color={locked ? '#DC2626' : '#C9A24A'} />
+              <ProgressRing value={aiQuota ? (left / aiQuota) * 100 : 0} size={26} stroke={3.5} color={locked ? '#DC2626' : '#C9A24A'} />
               <span className="text-xs font-semibold text-primary num">
                 {t('account.tutor.allowance', { left: fmtNumber(left), total: fmtNumber(aiQuota) })}
               </span>
@@ -241,6 +400,7 @@ export default function AiTutor() {
               variant="subtle"
               size="sm"
               onClick={newChat}
+              loading={createConversation.isPending}
               leftIcon={<RotateCcw className="h-4 w-4" aria-hidden />}
               aria-label={t('account.tutor.newChat')}
             >
@@ -255,9 +415,8 @@ export default function AiTutor() {
               aria-label={t('account.tutor.subjectsLabel')}
               className="scrollbar-none -mx-4 flex flex-1 gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-16px),transparent)] sm:mx-0 sm:px-0 sm:[mask-image:none]"
             >
-              {TUTOR_SUBJECTS.map((id) => {
-                const s = getSubject(id);
-                if (!s) return null;
+              {subjects.map((s) => {
+                const id = s.slug;
                 const active = id === subject;
                 return (
                   <button
@@ -266,7 +425,11 @@ export default function AiTutor() {
                     role="radio"
                     aria-checked={active}
                     onClick={() => {
+                      if (busy) abortRef.current?.abort();
+                      setPending(null);
                       setStreamingId(null);
+                      setStreamingLive(false);
+                      setLocal([]);
                       setSubject(id);
                     }}
                     className={cn(
@@ -275,7 +438,7 @@ export default function AiTutor() {
                     )}
                     style={active ? { backgroundColor: `${s.color}14`, borderColor: `${s.color}55`, color: s.color } : undefined}
                   >
-                    <SubjectIcon id={id} className="h-3.5 w-3.5" />
+                    <SubjectIcon id={id} icon={s.icon} className="h-3.5 w-3.5" />
                     {l(s.name)}
                   </button>
                 );
@@ -289,7 +452,7 @@ export default function AiTutor() {
               aria-label={t('account.tutor.allowanceAria', { left, total: aiQuota })}
               role="status"
             >
-              <ProgressRing value={(left / aiQuota) * 100} size={20} stroke={3} color={locked ? '#DC2626' : '#C9A24A'} />
+              <ProgressRing value={aiQuota ? (left / aiQuota) * 100 : 0} size={20} stroke={3} color={locked ? '#DC2626' : '#C9A24A'} />
               <span className="text-[11px] font-semibold text-primary num">
                 {fmtNumber(left)}/{fmtNumber(aiQuota)}
               </span>
@@ -303,8 +466,9 @@ export default function AiTutor() {
           messages={messages}
           typing={pending === subject}
           streamingId={streamingId}
+          streamingLive={streamingLive}
           welcomeText={welcomeText}
-          onStreamDone={() => setStreamingId(null)}
+          onStreamDone={() => (lastConv.current ? finishStream(lastConv.current) : setStreamingId(null))}
           onRate={rate}
           onCopy={copy}
           footer={suggestions}
@@ -319,12 +483,27 @@ export default function AiTutor() {
                   <Crown className="h-5 w-5" aria-hidden />
                 </span>
                 <div className="flex-1">
-                  <p className="font-semibold">{t('account.tutor.quotaTitle')}</p>
-                  <p className="text-sm text-white/70">{t('account.tutor.quotaBody')}</p>
+                  <p className="font-semibold">
+                    {disabledReason === 'NOT_INCLUDED'
+                      ? t('errors.locked.AI_NOT_INCLUDED')
+                      : disabledReason === 'GLOBAL'
+                        ? t('errors.reasons.AI_GLOBALLY_DISABLED')
+                        : disabledReason === 'USER'
+                          ? t('errors.reasons.AI_DISABLED')
+                          : t('account.tutor.quotaTitle')}
+                  </p>
+                  <p className="text-sm text-white/70">
+                    {disabledReason ? t('account.tutor.disabledBody') : t('account.tutor.quotaBody')}
+                    {!disabledReason && allowance?.resetsAt && (
+                      <> {t('account.tutor.resetsOn', { date: new Date(allowance.resetsAt).toLocaleDateString(lang === 'ar' ? 'ar-IQ-u-nu-latn' : 'en-GB') })}</>
+                    )}
+                  </p>
                 </div>
-                <Button variant="gold" size="sm" to="/student/subscription">
-                  {t('account.tutor.quotaCta')}
-                </Button>
+                {(disabledReason === 'NOT_INCLUDED' || !disabledReason) && (
+                  <Button variant="gold" size="sm" to="/student/subscription">
+                    {t('account.tutor.quotaCta')}
+                  </Button>
+                )}
               </div>
             ) : (
               <>
@@ -337,8 +516,17 @@ export default function AiTutor() {
                   placeholder={t('account.tutor.placeholder', { subject: l(subj?.name) })}
                   compactPlaceholder={t('account.tutor.placeholderShort')}
                   busy={busy}
-                  onSend={send}
-                  onAttach={() => toast.info(t('account.tutor.attachSoon'), t('account.tutor.attachSoonBody'))}
+                  onSend={(text) => void send(text)}
+                  onAttach={onAttach}
+                />
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  aria-hidden
+                  tabIndex={-1}
+                  onChange={(e) => void onFile(e.target.files?.[0])}
                 />
               </>
             )}

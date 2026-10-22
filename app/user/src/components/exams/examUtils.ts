@@ -1,65 +1,40 @@
-import { getQuestion } from '@/data';
-import type { AnswerRecord, Attempt } from '@/store';
-import type { ExamBlueprint, Localized, Question } from '@/types';
+import { optionIdAt, optionIndex, toQuestion } from '@/api/adapters';
+import type { AnswerRecordDto } from '@/api/types';
+import type { Question } from '@/types';
 
-/** Resolve the blueprint's questions in paper order (missing ids are skipped). */
-export function examQuestions(exam: ExamBlueprint): Question[] {
-  return exam.questionIds.map((id) => getQuestion(id)).filter((q): q is Question => !!q);
+/** One reviewed answer, in app shape (`chosenIndex` = index in the served options, −1 unanswered). */
+export interface ReviewAnswer {
+  questionId: string;
+  question: Question;
+  chosenIndex: number;
+  correct: boolean;
 }
 
-/** Attempts remaining = blueprint allowance minus attempts used in-app. */
-export function attemptsRemaining(exam: ExamBlueprint, used: number | undefined): number {
-  return Math.max(0, exam.attemptsLeft - (used ?? 0));
-}
-
-export interface ScoredExam {
-  answers: AnswerRecord[];
-  correct: number;
-  total: number;
-  score: number;
-}
-
-/** Score an answer map (questionId → option index). Unanswered → chosenIndex -1. */
-export function scoreExam(questions: Question[], answers: Record<string, number>): ScoredExam {
-  const records: AnswerRecord[] = questions.map((q) => {
-    const chosen = answers[q.id];
-    const chosenIndex = typeof chosen === 'number' && chosen >= 0 ? chosen : -1;
-    return { questionId: q.id, chosenIndex, correct: chosenIndex === q.correctIndex };
+/** Server answer records → review rows. */
+export function toReviewAnswers(records: AnswerRecordDto[]): ReviewAnswer[] {
+  return records.map((a) => {
+    const question = toQuestion(a.question);
+    const idx = a.chosenOptionId ? optionIndex(question, a.chosenOptionId) : a.chosenIndex;
+    return { questionId: a.questionId, question, chosenIndex: idx, correct: a.correct };
   });
-  const correct = records.filter((r) => r.correct).length;
-  const total = questions.length;
-  return { answers: records, correct, total, score: total ? Math.round((correct / total) * 100) : 0 };
 }
 
-export interface TopicStat {
-  key: string;
-  topic: Localized;
-  correct: number;
-  total: number;
-  /** 0–100 */
-  accuracy: number;
-  missed: number;
-  /** Lessons linked to the missed questions in this topic (deduped, in paper order). */
-  missedLessonIds: string[];
-}
-
-/** Group an attempt's answers by question topic. */
-export function topicBreakdown(attempt: Attempt): TopicStat[] {
-  const map = new Map<string, TopicStat>();
-  for (const a of attempt.answers) {
-    const q = getQuestion(a.questionId);
-    if (!q) continue;
-    const key = q.topic.en;
-    const stat =
-      map.get(key) ??
-      ({ key, topic: q.topic, correct: 0, total: 0, accuracy: 0, missed: 0, missedLessonIds: [] } satisfies TopicStat);
-    stat.total += 1;
-    if (a.correct) stat.correct += 1;
-    else {
-      stat.missed += 1;
-      if (q.lessonId && !stat.missedLessonIds.includes(q.lessonId)) stat.missedLessonIds.push(q.lessonId);
-    }
-    map.set(key, stat);
+/** Answer map by option index (UI) → by option id (API). Unanswered questions are sent as null. */
+export function toOptionIdMap(questions: Question[], answers: Record<string, number>): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const q of questions) {
+    const i = answers[q.id];
+    out[q.id] = typeof i === 'number' && i >= 0 ? (optionIdAt(q, i) ?? null) : null;
   }
-  return [...map.values()].map((s) => ({ ...s, accuracy: s.total ? Math.round((s.correct / s.total) * 100) : 0 }));
+  return out;
+}
+
+/** Answer map by option id (API) → by option index (UI). */
+export function toIndexMap(questions: Question[], answers: Record<string, string | null>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const q of questions) {
+    const idx = optionIndex(q, answers[q.id]);
+    if (idx >= 0) out[q.id] = idx;
+  }
+  return out;
 }

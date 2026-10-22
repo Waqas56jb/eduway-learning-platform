@@ -48,11 +48,11 @@
     "lessonsSub": "من {{total}}",
     "quizAvg": "معدل الاختبارات",
     "quizSub": "آخر 30 يوماً",
-    "mistakes": "أخطاء للمراجعة",
+    "mistakes": "للمراجعة",
     "mistakesSub": "اضغط للمراجعة",
     "mistakesClear": "لا أخطاء معلّقة",
-    "ai": "أسئلة المدرس الذكي",
-    "aiSub": "المتبقي لهذه المدة"
+    "ai": "المدرس الذكي",
+    "aiSub": "سؤالاً متبقياً من {{total}}"
   },
   "plan": {
     "title": "خطة اليوم",
@@ -79,7 +79,7 @@
     "totalLabel": "إجمالي وقت الدراسة",
     "hours": "{{value}} ساعة",
     "dailyAvg": "المعدل اليومي {{value}} دقيقة",
-    "vsLastWeek": "{{value}}% مقارنة بالأسبوع الماضي",
+    "vsLastWeek": "{{value}}% عن الأسبوع الماضي",
     "minutes": "{{value}} د",
     "seeProgress": "التقدّم"
   },
@@ -98,5 +98,21 @@
     "wed": "أربعاء",
     "thu": "خميس",
     "fri": "جمعة"
+  },
+  "summary": {
+    "streak": "سلسلة المذاكرة",
+    "plan": "باقتك",
+    "streakUnit_zero": "يوم",
+    "streakUnit_one": "يوم",
+    "streakUnit_two": "يومان",
+    "streakUnit_few": "أيام",
+    "streakUnit_many": "يوماً",
+    "streakUnit_other": "يوم",
+    "daysUnit_zero": "يوم متبقٍ",
+    "daysUnit_one": "يوم متبقٍ",
+    "daysUnit_two": "يومان متبقيان",
+    "daysUnit_few": "أيام متبقية",
+    "daysUnit_many": "يوماً متبقياً",
+    "daysUnit_other": "يوم متبقٍ"
   }
 }

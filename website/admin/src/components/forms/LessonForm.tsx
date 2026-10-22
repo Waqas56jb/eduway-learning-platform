@@ -2,24 +2,38 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Controller, useWatch, type UseFormReturn } from 'react-hook-form';
 import { z } from 'zod';
 import type { TFunction } from 'i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Clapperboard, FileText, Loader2, Plus, RefreshCw, Subtitles, Trash2, UploadCloud, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Lesson, LessonResource, VideoState } from '@/types';
+import type { VideoState } from '@/types';
 import { cn } from '@/utils/cn';
-import { uid } from '@/utils/id';
 import { fmtBytes, fmtDuration } from '@/utils/format';
-import { IMAGES } from '@/utils/images';
-import { teachers } from '@/data/curriculum';
-import { useLessons, useSubjects, useTopics, useUnits } from '@/store/core';
 import { useLocalize } from '@/hooks/useLocale';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Field, Input, Select, Textarea } from '@/components/ui/Input';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { ProgressBar } from '@/components/ui/Feedback';
 import { Button } from '@/components/ui/Button';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { toastError } from '@/api/client';
+import { qk } from '@/api/keys';
+import { uploadFile, useUpload } from '@/api/storage';
+import {
+  lessonsApi,
+  useLessonOptions,
+  useSubjectsQuery,
+  useTeachersQuery,
+  useUnitsQuery,
+  videosApi,
+  type LessonVM,
+  type LessonWriteDto,
+} from '@/api/content';
+import type { Lang } from '@/api/types';
 
 /* ─── Schema & mapping ───────────────────────────────────────────────────── */
+
+const resourceSchema = z.object({ id: z.string(), name: z.string(), sizeKb: z.number(), fileKey: z.string().optional() });
 
 export function lessonSchema(t: TFunction) {
   return z.object({
@@ -34,9 +48,14 @@ export function lessonSchema(t: TFunction) {
     order: z.coerce.number().int().min(1, t('errors.min', { min: 1 })),
     durationMin: z.coerce.number().min(0.5, t('content.editor.errors.duration')).max(240, t('errors.max', { max: 240 })),
     thumbnail: z.string(),
+    /** undefined = unchanged, null = cleared, string = newly uploaded file key. */
+    thumbnailFileKey: z.string().nullable().optional(),
     videoState: z.enum(['none', 'uploading', 'processing', 'ready', 'failed']),
+    /** New lessons only: video uploaded before the lesson exists; registered right after create. */
+    pendingVideoKey: z.string().optional(),
     captions: z.string(),
-    resources: z.array(z.object({ id: z.string(), name: z.string(), sizeKb: z.number() })),
+    captionsFileKey: z.string().nullable().optional(),
+    resources: z.array(resourceSchema),
     completionThreshold: z.coerce.number().int().min(10, t('content.editor.errors.threshold')).max(100, t('content.editor.errors.threshold')),
     prerequisiteId: z.string(),
   });
@@ -44,7 +63,7 @@ export function lessonSchema(t: TFunction) {
 
 export type LessonFormValues = z.infer<ReturnType<typeof lessonSchema>>;
 
-export function lessonToForm(l?: Lesson | null, defaults?: Partial<LessonFormValues>): LessonFormValues {
+export function lessonToForm(l?: LessonVM | null, defaults?: Partial<LessonFormValues>): LessonFormValues {
   if (!l) {
     return {
       title_en: '',
@@ -57,9 +76,12 @@ export function lessonToForm(l?: Lesson | null, defaults?: Partial<LessonFormVal
       teacherId: '',
       order: 1,
       durationMin: 20,
-      thumbnail: IMAGES.laptopStudy,
+      thumbnail: '',
+      thumbnailFileKey: undefined,
       videoState: 'none',
+      pendingVideoKey: undefined,
       captions: '',
+      captionsFileKey: undefined,
       resources: [],
       completionThreshold: 80,
       prerequisiteId: '',
@@ -78,34 +100,45 @@ export function lessonToForm(l?: Lesson | null, defaults?: Partial<LessonFormVal
     order: l.order,
     durationMin: Math.round((l.durationSec / 60) * 10) / 10,
     thumbnail: l.thumbnail,
+    thumbnailFileKey: undefined,
     videoState: l.videoState,
+    pendingVideoKey: undefined,
     captions: l.captions ?? '',
+    captionsFileKey: undefined,
     resources: l.resources,
     completionThreshold: l.completionThreshold,
     prerequisiteId: l.prerequisiteId ?? '',
   };
 }
 
-/** Form values → lesson fields (without id/status/versions). */
-export function formToLesson(v: LessonFormValues): Omit<Lesson, 'id' | 'status' | 'versions' | 'publishAt' | 'updatedAt' | 'views'> {
+const captionLang = (fileName: string): Lang => (/[._-](en|eng|english)[._-]/i.test(`.${fileName}.`) ? 'en' : 'ar');
+
+/** Form values → LessonWriteDto (ADM-LSN-02/04). */
+export function formToWrite(v: LessonFormValues): LessonWriteDto {
   return {
-    title_en: v.title_en.trim(),
-    title_ar: v.title_ar.trim(),
-    description_en: v.description_en.trim(),
-    description_ar: v.description_ar.trim(),
+    title: { en: v.title_en.trim(), ar: v.title_ar.trim() },
+    description: { en: v.description_en.trim(), ar: v.description_ar.trim() },
     subjectId: v.subjectId,
     unitId: v.unitId,
     topicId: v.topicId,
     teacherId: v.teacherId,
     order: v.order,
     durationSec: Math.round(v.durationMin * 60),
-    thumbnail: v.thumbnail,
-    videoState: v.videoState as VideoState,
-    captions: v.captions || null,
-    resources: v.resources as LessonResource[],
     completionThreshold: v.completionThreshold,
     prerequisiteId: v.prerequisiteId || null,
+    ...(v.thumbnailFileKey !== undefined ? { thumbnailFileKey: v.thumbnailFileKey } : {}),
+    ...(v.captionsFileKey !== undefined
+      ? { captions: v.captionsFileKey ? [{ lang: captionLang(v.captions), fileKey: v.captionsFileKey }] : null }
+      : {}),
   };
+}
+
+/** After creating a lesson: attach the video and PDFs uploaded while it did not exist yet. */
+export async function attachPendingMedia(lessonId: string, v: LessonFormValues) {
+  if (v.pendingVideoKey) await videosApi.register({ lessonId, fileKey: v.pendingVideoKey });
+  for (const r of v.resources) {
+    if (r.fileKey) await lessonsApi.addResource(lessonId, { fileKey: r.fileKey, title: { en: r.name, ar: r.name } });
+  }
 }
 
 type FormApi = UseFormReturn<LessonFormValues>;
@@ -150,9 +183,7 @@ export function LessonBasicsSection({ form, icon }: { form: FormApi; icon?: Reac
 export function LessonPlacementSection({ form, icon }: { form: FormApi; icon?: ReactNode }) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
-  const topics = useTopics((s) => s.items);
+  const subjects = useSubjectsQuery().data ?? [];
   const {
     register,
     setValue,
@@ -161,10 +192,12 @@ export function LessonPlacementSection({ form, icon }: { form: FormApi; icon?: R
   } = form;
   const subjectId = useWatch({ control, name: 'subjectId' });
   const unitId = useWatch({ control, name: 'unitId' });
+  const unitsQ = useUnitsQuery(subjectId);
+  const teachers = useTeachersQuery().data ?? [];
 
-  const subjectUnits = units.filter((u) => u.subjectId === subjectId).sort((a, b) => a.order - b.order);
-  const unitTopics = topics.filter((x) => x.unitId === unitId).sort((a, b) => a.order - b.order);
-  const subjectTeachers = teachers.filter((x) => !subjectId || x.subjectId === subjectId);
+  const subjectUnits = unitsQ.data ?? [];
+  const unitTopics = subjectUnits.find((u) => u.id === unitId)?.topics ?? [];
+  const subjectTeachers = teachers.filter((x) => !subjectId || !x.subjectId || x.subjectId === subjectId);
 
   return (
     <Section title={t('content.editor.placement')} icon={icon}>
@@ -217,8 +250,15 @@ const STATE_META: Record<VideoState, { tone: string; icon: ReactNode }> = {
   failed: { tone: 'text-danger', icon: <XCircle className="h-4 w-4" /> },
 };
 
-export function LessonMediaSection({ form, icon, disabled }: { form: FormApi; icon?: ReactNode; disabled?: boolean }) {
+/**
+ * Thumbnail, video and captions. Uploads go straight to storage via signed URLs (STO-01) with real progress.
+ * Existing lessons register the video immediately (ADM-VID-01) and poll ADM-VID-03 until ready/failed;
+ * new lessons keep the file key and register it right after the lesson is created.
+ */
+export function LessonMediaSection({ form, icon, disabled, lesson }: { form: FormApi; icon?: ReactNode; disabled?: boolean; lesson?: LessonVM }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
   const {
     register,
     setValue,
@@ -226,43 +266,101 @@ export function LessonMediaSection({ form, icon, disabled }: { form: FormApi; ic
     formState: { errors },
   } = form;
   const thumbnail = useWatch({ control, name: 'thumbnail' });
-  const videoState = useWatch({ control, name: 'videoState' }) as VideoState;
+  const formVideoState = useWatch({ control, name: 'videoState' }) as VideoState;
   const captions = useWatch({ control, name: 'captions' });
   const durationMin = useWatch({ control, name: 'durationMin' });
-  const [progress, setProgress] = useState(videoState === 'ready' ? 100 : 0);
+  const thumbUpload = useUpload('lesson_thumbnail');
+  const captionUpload = useUpload('lesson_captions');
+  const [progress, setProgress] = useState<number | null>(null);
+  const [processing, setProcessing] = useState<{ id: string; pct: number | null } | null>(null);
   const [videoFile, setVideoFile] = useState<{ name: string; sizeKb: number } | null>(null);
-  const timers = useRef<number[]>([]);
+  const abort = useRef<AbortController | null>(null);
   const videoInput = useRef<HTMLInputElement>(null);
   const captionInput = useRef<HTMLInputElement>(null);
 
-  const clearTimers = () => {
-    timers.current.forEach((id) => window.clearInterval(id));
-    timers.current = [];
-  };
-  useEffect(() => clearTimers, []);
+  useEffect(() => () => abort.current?.abort(), []);
 
-  const startUpload = (file: File) => {
-    clearTimers();
+  // Poll the asset while the server is transcoding (contract §33: every 3 s).
+  const videoId = processing?.id ?? (lesson?.videoState === 'processing' ? lesson.video?.id : undefined);
+  useEffect(() => {
+    if (!videoId || !lesson) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const v = await videosApi.get(videoId);
+        if (stop) return;
+        if (v.streamStatus === 'processing') {
+          setProcessing({ id: videoId, pct: v.processingProgress });
+          return;
+        }
+        setProcessing(null);
+        await qc.invalidateQueries({ queryKey: qk.lessons.detail(lesson.id) });
+        if (v.streamStatus === 'ready') {
+          if (!Number(durationMin) || Number(durationMin) <= 1) setValue('durationMin', Math.round((v.durationSec / 60) * 10) / 10, { shouldDirty: true });
+          toast.success(t('content.editor.uploadDone'));
+        } else toast.error(v.error ?? t('content.editor.videoStates.failed'));
+      } catch {
+        /* keep polling */
+      }
+    };
+    const h = window.setInterval(tick, 3000);
+    tick();
+    return () => {
+      stop = true;
+      window.clearInterval(h);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoId, lesson?.id]);
+
+  const videoState: VideoState = progress !== null ? 'uploading' : processing ? 'processing' : formVideoState;
+  const shownName = videoFile?.name ?? lesson?.video?.fileName ?? (lesson?.video ? lesson.video.assetId : null);
+  const shownSizeKb = videoFile?.sizeKb ?? (lesson?.video ? Math.round(lesson.video.sizeMb * 1024) : null);
+
+  const startUpload = async (file: File) => {
+    abort.current?.abort();
+    const c = new AbortController();
+    abort.current = c;
+    const prevState = formVideoState;
     setVideoFile({ name: file.name, sizeKb: Math.round(file.size / 1024) });
     setProgress(0);
-    setValue('videoState', 'uploading', { shouldDirty: true });
-    let p = 0;
-    const up = window.setInterval(() => {
-      p = Math.min(100, p + 4 + Math.random() * 9);
-      setProgress(p);
-      if (p >= 100) {
-        clearTimers();
+    setValue('videoState', 'uploading');
+    try {
+      const up = await uploadFile(file, 'lesson_video', setProgress, c.signal);
+      setProgress(null);
+      if (lesson) {
+        const v = await videosApi.register({ lessonId: lesson.id, fileKey: up.fileKey, replace: lesson.videoState !== 'none' });
+        setProcessing({ id: v.id, pct: v.processingProgress });
+        setValue('videoState', 'processing');
+      } else {
+        setValue('pendingVideoKey', up.fileKey, { shouldDirty: true });
         setValue('videoState', 'processing', { shouldDirty: true });
-        const proc = window.setTimeout(() => {
-          setValue('videoState', 'ready', { shouldDirty: true });
-          // Mock metadata probe: read duration from the "transcoder".
-          if (!durationMin || Number(durationMin) <= 1) setValue('durationMin', Math.round(14 + Math.random() * 18), { shouldDirty: true });
-          toast.success(t('content.editor.uploadDone'));
-        }, 2200);
-        timers.current.push(proc);
       }
-    }, 180);
-    timers.current.push(up);
+    } catch (e) {
+      setProgress(null);
+      setVideoFile(null);
+      setValue('videoState', prevState);
+      toastError(e);
+    }
+  };
+
+  const removeVideo = async () => {
+    if (lesson && lesson.videoState !== 'none') {
+      const ok = await confirm({ title: t('content.editor.removeVideo'), tone: 'danger', confirmText: t('actions.remove') });
+      if (!ok) return;
+      try {
+        const updated = await lessonsApi.removeVideo(lesson.id);
+        qc.setQueryData(qk.lessons.detail(lesson.id), updated);
+        setValue('videoState', 'none');
+      } catch (e) {
+        toastError(e);
+        return;
+      }
+    } else {
+      setValue('pendingVideoKey', undefined, { shouldDirty: true });
+      setValue('videoState', 'none', { shouldDirty: true });
+    }
+    setVideoFile(null);
+    setProcessing(null);
   };
 
   const meta = STATE_META[videoState];
@@ -272,12 +370,23 @@ export function LessonMediaSection({ form, icon, disabled }: { form: FormApi; ic
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <Field label={t('content.editor.thumbnail')} hint={t('content.editor.thumbnailHint')}>
           <FileUpload
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp"
             maxSizeMb={5}
-            disabled={disabled}
+            disabled={disabled || thumbUpload.uploading}
+            progress={thumbUpload.progress}
             preview={thumbnail || null}
-            onFile={(_, url) => url && setValue('thumbnail', url, { shouldDirty: true })}
-            onClear={() => setValue('thumbnail', '', { shouldDirty: true })}
+            onFile={async (file, url) => {
+              const prev = thumbnail;
+              if (url) setValue('thumbnail', url, { shouldDirty: true });
+              const r = await thumbUpload.start(file);
+              if (r) setValue('thumbnailFileKey', r.fileKey, { shouldDirty: true });
+              else setValue('thumbnail', prev, { shouldDirty: true });
+              thumbUpload.reset();
+            }}
+            onClear={() => {
+              setValue('thumbnail', '', { shouldDirty: true });
+              setValue('thumbnailFileKey', null, { shouldDirty: true });
+            }}
           />
         </Field>
 
@@ -310,44 +419,47 @@ export function LessonMediaSection({ form, icon, disabled }: { form: FormApi; ic
                     <Clapperboard className="h-5 w-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-ink">{videoFile?.name ?? 'lesson-master-1080p.mp4'}</div>
+                    <div className="truncate text-sm font-medium text-ink">{shownName ?? '—'}</div>
                     <div className={cn('mt-0.5 flex items-center gap-1.5 text-xs font-medium', meta.tone)}>
                       {meta.icon}
                       {t(`content.editor.videoStates.${videoState}`)}
-                      {videoState === 'uploading' && <span className="num">· {Math.round(progress)}%</span>}
-                      {videoFile && <span className="text-muted">· {fmtBytes(videoFile.sizeKb)}</span>}
+                      {videoState === 'uploading' && <span className="num">· {Math.round(progress ?? 0)}%</span>}
+                      {videoState === 'processing' && processing?.pct != null && <span className="num">· {Math.round(processing.pct)}%</span>}
+                      {shownSizeKb != null && <span className="text-muted">· {fmtBytes(shownSizeKb)}</span>}
                       {videoState === 'ready' && <span className="text-muted num">· {fmtDuration(Number(durationMin || 0) * 60)}</span>}
                     </div>
                   </div>
+                  {videoState === 'uploading' && (
+                    <Button size="xs" variant="ghost" onClick={() => abort.current?.abort()}>
+                      {t('actions.cancel')}
+                    </Button>
+                  )}
                 </div>
                 {(videoState === 'uploading' || videoState === 'processing') && (
-                  <ProgressBar className="mt-3" size="sm" tone={videoState === 'uploading' ? 'info' : 'warning'} value={videoState === 'uploading' ? progress : 100} label={t(`content.editor.videoStates.${videoState}`)} />
+                  <ProgressBar
+                    className="mt-3"
+                    size="sm"
+                    tone={videoState === 'uploading' ? 'info' : 'warning'}
+                    value={videoState === 'uploading' ? (progress ?? 0) : (processing?.pct ?? 100)}
+                    label={t(`content.editor.videoStates.${videoState}`)}
+                  />
                 )}
-                {videoState === 'processing' && (
+                {videoState === 'processing' && !lesson && <p className="mt-2 text-xs text-muted">{t('content.editor.videoAfterCreate')}</p>}
+                {videoState === 'ready' && lesson?.video?.renditions?.length ? (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {['360p', '480p', '720p', '1080p'].map((r, i) => (
-                      <span key={r} className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold', i < 2 ? 'bg-success/10 text-success' : 'animate-pulse bg-warning/10 text-warning')}>
+                    {lesson.video.renditions.map((r) => (
+                      <span key={r} className="rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success">
                         {r}
                       </span>
                     ))}
                   </div>
-                )}
-                {!disabled && videoState !== 'uploading' && videoState !== 'processing' && (
+                ) : null}
+                {!disabled && videoState !== 'uploading' && !(videoState === 'processing' && lesson) && (
                   <div className="mt-3 flex gap-2">
                     <Button size="xs" variant="secondary" onClick={() => videoInput.current?.click()} icon={<RefreshCw className="h-3.5 w-3.5" />}>
                       {t('content.editor.replaceVideo')}
                     </Button>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      className="text-danger hover:bg-danger/10 hover:text-danger"
-                      onClick={() => {
-                        setVideoFile(null);
-                        setProgress(0);
-                        setValue('videoState', 'none', { shouldDirty: true });
-                      }}
-                      icon={<Trash2 className="h-3.5 w-3.5" />}
-                    >
+                    <Button size="xs" variant="ghost" className="text-danger hover:bg-danger/10 hover:text-danger" onClick={removeVideo} icon={<Trash2 className="h-3.5 w-3.5" />}>
                       {t('content.editor.removeVideo')}
                     </Button>
                   </div>
@@ -378,15 +490,23 @@ export function LessonMediaSection({ form, icon, disabled }: { form: FormApi; ic
           <div className="flex h-10 items-center gap-2 rounded-lg border border-line bg-surface px-3">
             <Subtitles className="h-4 w-4 shrink-0 text-muted" />
             <span className={cn('min-w-0 flex-1 truncate text-sm', captions ? 'text-ink' : 'text-muted')} dir="ltr">
-              {captions || t('content.editor.noCaptions')}
+              {captionUpload.progress != null ? t('api.uploading', { pct: captionUpload.progress }) : captions || t('content.editor.noCaptions')}
             </span>
             {!disabled && (
               <>
-                <button type="button" onClick={() => captionInput.current?.click()} className="text-xs font-semibold text-accent hover:underline">
+                <button type="button" disabled={captionUpload.uploading} onClick={() => captionInput.current?.click()} className="text-xs font-semibold text-accent hover:underline disabled:opacity-50">
                   {t('actions.upload')}
                 </button>
                 {captions && (
-                  <button type="button" onClick={() => setValue('captions', '', { shouldDirty: true })} className="text-muted hover:text-danger" aria-label={t('actions.remove')}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue('captions', '', { shouldDirty: true });
+                      setValue('captionsFileKey', null, { shouldDirty: true });
+                    }}
+                    className="text-muted hover:text-danger"
+                    aria-label={t('actions.remove')}
+                  >
                     <XCircle className="h-4 w-4" />
                   </button>
                 )}
@@ -399,10 +519,15 @@ export function LessonMediaSection({ form, icon, disabled }: { form: FormApi; ic
             accept=".vtt,.srt,text/vtt"
             className="sr-only"
             tabIndex={-1}
-            onChange={(e) => {
+            onChange={async (e) => {
               const f = e.target.files?.[0];
-              if (f) setValue('captions', f.name, { shouldDirty: true });
               e.target.value = '';
+              if (!f) return;
+              const r = await captionUpload.start(f);
+              captionUpload.reset();
+              if (!r) return;
+              setValue('captions', f.name, { shouldDirty: true });
+              setValue('captionsFileKey', r.fileKey, { shouldDirty: true });
             }}
           />
         </Field>
@@ -411,11 +536,52 @@ export function LessonMediaSection({ form, icon, disabled }: { form: FormApi; ic
   );
 }
 
-export function LessonResourcesSection({ form, icon, disabled }: { form: FormApi; icon?: ReactNode; disabled?: boolean }) {
+/**
+ * PDF resources. Existing lessons attach/remove immediately (ADM-LSN-13/15); new lessons keep the uploaded
+ * file keys and attach them right after creation.
+ */
+export function LessonResourcesSection({ form, icon, disabled, lesson }: { form: FormApi; icon?: ReactNode; disabled?: boolean; lesson?: LessonVM }) {
   const { t } = useTranslation();
-  const resources = (useWatch({ control: form.control, name: 'resources' }) ?? []) as LessonResource[];
+  const qc = useQueryClient();
+  const resources = (useWatch({ control: form.control, name: 'resources' }) ?? []) as LessonFormValues['resources'];
   const input = useRef<HTMLInputElement>(null);
-  const set = (next: LessonResource[]) => form.setValue('resources', next, { shouldDirty: true });
+  const [uploading, setUploading] = useState<{ name: string; pct: number } | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const set = (next: LessonFormValues['resources']) => form.setValue('resources', next, { shouldDirty: true });
+  const refresh = () => (lesson ? qc.invalidateQueries({ queryKey: qk.lessons.detail(lesson.id) }) : Promise.resolve());
+
+  const add = async (files: File[]) => {
+    const added: LessonFormValues['resources'] = [];
+    for (const f of files) {
+      setUploading({ name: f.name, pct: 0 });
+      try {
+        const up = await uploadFile(f, 'lesson_resource', (pct) => setUploading({ name: f.name, pct }));
+        if (lesson) await lessonsApi.addResource(lesson.id, { fileKey: up.fileKey, title: { en: f.name.replace(/\.pdf$/i, ''), ar: f.name.replace(/\.pdf$/i, '') } });
+        else added.push({ id: up.fileKey, name: f.name, sizeKb: Math.max(1, Math.round(f.size / 1024)), fileKey: up.fileKey });
+      } catch (e) {
+        toastError(e);
+      }
+    }
+    setUploading(null);
+    if (lesson) await refresh();
+    else if (added.length) set([...resources, ...added]);
+  };
+
+  const remove = async (id: string) => {
+    if (!lesson) {
+      set(resources.filter((x) => x.id !== id));
+      return;
+    }
+    setRemoving(id);
+    try {
+      await lessonsApi.removeResource(lesson.id, id);
+      await refresh();
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   return (
     <Section
@@ -423,32 +589,60 @@ export function LessonResourcesSection({ form, icon, disabled }: { form: FormApi
       icon={icon}
       action={
         !disabled && (
-          <Button size="sm" variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={() => input.current?.click()}>
+          <Button size="sm" variant="secondary" loading={!!uploading} icon={<Plus className="h-4 w-4" />} onClick={() => input.current?.click()}>
             {t('content.editor.addResource')}
           </Button>
         )
       }
     >
+      {uploading && (
+        <div className="rounded-lg border border-line px-4 py-2.5">
+          <div className="flex justify-between text-xs">
+            <span className="truncate text-ink">{uploading.name}</span>
+            <span className="text-muted num">{uploading.pct}%</span>
+          </div>
+          <ProgressBar className="mt-1.5" size="xs" tone="info" value={uploading.pct} label={uploading.name} />
+        </div>
+      )}
       {resources.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-muted">{t('content.editor.noResources')}</p>
+        !uploading && <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-muted">{t('content.editor.noResources')}</p>
       ) : (
         <ul className="divide-y divide-line rounded-xl border border-line">
-          {resources.map((r) => (
-            <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-danger/10 text-danger">
-                <FileText className="h-4 w-4" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-ink">{r.name}</div>
-                <div className="text-xs text-muted num">PDF · {fmtBytes(r.sizeKb)}</div>
-              </div>
-              {!disabled && (
-                <Button variant="ghost" size="icon-sm" className="hover:text-danger" aria-label={`${t('actions.remove')} ${r.name}`} onClick={() => set(resources.filter((x) => x.id !== r.id))}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </li>
-          ))}
+          {resources.map((r) => {
+            const file = lesson?.resourceFiles.find((x) => x.id === r.id);
+            return (
+              <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-danger/10 text-danger">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  {file?.url ? (
+                    <a href={file.url} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium text-ink hover:text-accent">
+                      {r.name}
+                    </a>
+                  ) : (
+                    <div className="truncate text-sm font-medium text-ink">{r.name}</div>
+                  )}
+                  <div className="text-xs text-muted num">
+                    PDF · {fmtBytes(r.sizeKb)}
+                    {file?.pages ? ` · ${file.pages} ${t('content.editor.pages')}` : ''}
+                  </div>
+                </div>
+                {!disabled && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="hover:text-danger"
+                    loading={removing === r.id}
+                    aria-label={`${t('actions.remove')} ${r.name}`}
+                    onClick={() => remove(r.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       <input
@@ -460,8 +654,8 @@ export function LessonResourcesSection({ form, icon, disabled }: { form: FormApi
         tabIndex={-1}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
-          if (files.length) set([...resources, ...files.map((f) => ({ id: uid('res'), name: f.name, sizeKb: Math.max(1, Math.round(f.size / 1024)) }))]);
           e.target.value = '';
+          if (files.length) add(files);
         }}
       />
     </Section>
@@ -471,15 +665,15 @@ export function LessonResourcesSection({ form, icon, disabled }: { form: FormApi
 export function LessonRulesSection({ form, icon, lessonId, disabled }: { form: FormApi; icon?: ReactNode; lessonId?: string; disabled?: boolean }) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const lessons = useLessons((s) => s.items);
   const subjectId = useWatch({ control: form.control, name: 'subjectId' });
+  const optionsQ = useLessonOptions({ subjectId, excludeArchived: true, sort: 'order' }, !!subjectId);
   const options = useMemo(
     () =>
-      lessons
-        .filter((l) => l.subjectId === subjectId && l.id !== lessonId && l.status !== 'archived')
+      (optionsQ.data?.items ?? [])
+        .filter((l) => l.id !== lessonId && l.status !== 'archived')
         .sort((a, b) => a.order - b.order)
         .map((l) => ({ value: l.id, label: `${l.order}. ${L(l, 'title')}` })),
-    [lessons, subjectId, lessonId, L],
+    [optionsQ.data, lessonId, L],
   );
   const {
     formState: { errors },

@@ -1,40 +1,44 @@
 import { Globe, LogOut, MonitorSmartphone, Smartphone, Tablet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import toast from 'react-hot-toast';
-import { Badge, Button, Card, CardHeader, EmptyState, useConfirm } from '@/components/ui';
+import { Badge, Button, Card, CardHeader, EmptyState, Skeleton, useConfirm } from '@/components/ui';
+import { useLang } from '@/hooks/useLocale';
 import { useCan } from '@/store/auth';
-import { useStudents } from '@/store/core';
-import type { DeviceSession, Student } from '@/types';
 import { fmtRelative } from '@/utils/format';
+import { errorMessage } from '@/api/client';
+import { useApiMutation, useApiQuery } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { studentsApi, type AdminStudentDetail } from '@/api/students';
+import type { SessionDto } from '@/api/types';
 
-const iconFor = (s: DeviceSession) =>
-  s.platform === 'web' ? <Globe className="h-5 w-5" /> : /Tab/.test(s.device) ? <Tablet className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />;
+const PLATFORM_LABEL: Record<string, string> = { web: 'WEB', ios: 'iOS', android: 'ANDROID', admin: 'ADMIN' };
 
-export function SessionsTab({ student }: { student: Student }) {
+const iconFor = (s: SessionDto) =>
+  s.platform === 'web' ? <Globe className="h-5 w-5" /> : /Tab|iPad/.test(s.device) ? <Tablet className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />;
+
+export function SessionsTab({ student }: { student: AdminStudentDetail }) {
   const { t } = useTranslation();
+  const lang = useLang();
   const can = useCan();
   const confirm = useConfirm();
-  const update = useStudents((s) => s.update);
   const canEdit = can('users', 'edit');
+  const key = qk.students.sub('sessions', student.id);
+  const q = useApiQuery(key, () => studentsApi.sessions(student.id));
+  const sessions = q.data ?? [];
+  const invalidate = [key, qk.students.detail(student.id)];
 
-  const forceOne = async (s: DeviceSession) => {
+  const one = useApiMutation((s: SessionDto) => studentsApi.revokeSession(student.id, s.id), { invalidate, success: 'users.sessions.loggedOut' });
+  const all = useApiMutation((reason: string) => studentsApi.revokeAllSessions(student.id, reason || undefined), { invalidate, success: 'users.sessions.allLoggedOut' });
+
+  const forceOne = async (s: SessionDto) => {
     const ok = await confirm({ title: t('users.sessions.forceTitle', { device: s.device }), body: t('users.sessions.forceBody'), confirmText: t('users.sessions.forceLogout') });
     if (!ok) return;
-    update(student.id, { sessions: student.sessions.filter((x) => x.id !== s.id) }, {
-      action: 'student.force_logout',
-      summary: `Forced logout of ${s.device} (${s.ip}) for ${student.name_en}`,
-    });
-    toast.success(t('users.sessions.loggedOut'));
+    one.mutate(s);
   };
 
   const logoutAll = async () => {
-    const ok = await confirm({ title: t('users.sessions.allTitle', { count: student.sessions.length }), body: t('users.sessions.allBody'), confirmText: t('users.sessions.logoutAll') });
+    const ok = await confirm({ title: t('users.sessions.allTitle', { count: sessions.length }), body: t('users.sessions.allBody'), confirmText: t('users.sessions.logoutAll') });
     if (!ok) return;
-    update(student.id, { sessions: [] }, {
-      action: 'student.logout_all',
-      summary: `Logged out all ${student.sessions.length} devices for ${student.name_en}`,
-    });
-    toast.success(t('users.sessions.allLoggedOut'));
+    all.mutate(ok.reason);
   };
 
   return (
@@ -45,24 +49,33 @@ export function SessionsTab({ student }: { student: Student }) {
         icon={<MonitorSmartphone className="h-4 w-4" />}
         action={
           canEdit &&
-          student.sessions.length > 0 && (
-            <Button size="sm" variant="danger" icon={<LogOut className="h-4 w-4" />} onClick={logoutAll}>
+          sessions.length > 0 && (
+            <Button size="sm" variant="danger" loading={all.isPending} icon={<LogOut className="h-4 w-4" />} onClick={logoutAll}>
               {t('users.sessions.logoutAll')}
             </Button>
           )
         }
       />
-      {student.sessions.length === 0 ? (
+      {q.isLoading ? (
+        <div className="space-y-3 p-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : q.isError ? (
+        <EmptyState compact title={t('api.loadFailed')} hint={errorMessage(q.error)} action={<Button size="sm" variant="secondary" onClick={() => q.refetch()}>{t('api.retry')}</Button>} />
+      ) : sessions.length === 0 ? (
         <EmptyState compact title={t('users.sessions.none')} hint=" " />
       ) : (
         <ul className="divide-y divide-line">
-          {student.sessions.map((s) => (
+          {sessions.map((s) => (
             <li key={s.id} className="flex flex-wrap items-center gap-4 px-5 py-4">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{iconFor(s)}</span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-ink">{s.device}</span>
-                  <Badge tone="slate">{s.platform.toUpperCase()}</Badge>
+                  <Badge tone="slate">{PLATFORM_LABEL[s.platform] ?? s.platform.toUpperCase()}</Badge>
+                  {s.browser && <span className="text-xs text-muted">{s.browser}</span>}
                   {s.current && (
                     <Badge tone="success" dot>
                       {t('users.sessions.current')}
@@ -73,11 +86,17 @@ export function SessionsTab({ student }: { student: Student }) {
                   <span dir="ltr" className="num">
                     {s.ip}
                   </span>{' '}
-                  · {s.location} · {t('users.sessions.lastSeen', { time: fmtRelative(s.lastSeen) })}
+                  · {s.location?.[lang] ?? '—'} · {t('users.sessions.lastSeen', { time: fmtRelative(s.lastActive) })}
                 </div>
               </div>
               {canEdit && (
-                <Button size="sm" variant="secondary" icon={<LogOut className="h-4 w-4" />} onClick={() => forceOne(s)}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={one.isPending && one.variables?.id === s.id}
+                  icon={<LogOut className="h-4 w-4" />}
+                  onClick={() => forceOne(s)}
+                >
                   {t('users.sessions.forceLogout')}
                 </Button>
               )}

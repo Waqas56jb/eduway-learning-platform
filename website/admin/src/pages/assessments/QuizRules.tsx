@@ -6,14 +6,32 @@ import { z } from 'zod';
 import { Check, Layers, Lock, Pencil, Plus, Repeat, Shuffle, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { QuizRule } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/utils/cn';
-import { uid } from '@/utils/id';
-import { useQuizRules } from '@/store/assessments';
-import { useLessons, useSubjects } from '@/store/core';
 import { useCan } from '@/store/auth';
-import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useLang, useLocalize } from '@/hooks/useLocale';
+import { errorMessage, isApiError } from '@/api/client';
+import { exportRequest, useApiMutation, useApiQuery, useExport, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { useLessonOptions } from '@/api/content';
+import { quizRulesApi, type QuizRuleVM, type QuizRuleWriteDto } from '@/api/assessments';
+
+type QuizRule = QuizRuleVM;
+
+/** Starting values for a subject without a stored default (server upserts on save). */
+const BASE_RULE: Omit<QuizRule, 'id' | 'scope' | 'subjectId' | 'lessonId' | 'subject' | 'lesson'> = {
+  questionCount: 10,
+  poolSize: 30,
+  randomize: true,
+  alternativeSets: 3,
+  passThreshold: 60,
+  retryPolicy: 'unlimited',
+  maxRetries: 3,
+  cooldownMinutes: 60,
+  showExplanation: true,
+  requireCompletionToUnlock: false,
+};
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, Button, Card, DataTable, Drawer, Field, Input, Select, SkeletonCard, Switch, useConfirm } from '@/components/ui';
 
@@ -27,6 +45,7 @@ const schema = z
     passThreshold: z.coerce.number().int().min(0).max(100),
     retryPolicy: z.enum(['unlimited', 'limited', 'cooldown']),
     maxRetries: z.coerce.number().int().min(0).max(10),
+    cooldownMinutes: z.coerce.number().int().min(1).max(10080),
     showExplanation: z.boolean(),
     requireCompletionToUnlock: z.boolean(),
   })
@@ -45,12 +64,12 @@ interface EditorState {
 function RuleDrawer({ state, onClose }: { state: EditorState | null; onClose: () => void }) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const rules = useQuizRules((s) => s.items);
-  const add = useQuizRules((s) => s.add);
-  const update = useQuizRules((s) => s.update);
-  const lessons = useLessons((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
+  const lang = useLang();
+  const qc = useQueryClient();
+  const subjects = useLookups().subjects;
   const rule = state?.rule;
+  const optionsQ = useLessonOptions({ withoutQuizOverride: true, excludeArchived: true }, state?.mode === 'lesson-new');
+  const [saving, setSaving] = useState(false);
 
   const {
     register,
@@ -61,32 +80,55 @@ function RuleDrawer({ state, onClose }: { state: EditorState | null; onClose: ()
     formState: { errors },
   } = useForm<Form>({ resolver: zodResolver(schema), values: rule ? { ...rule } : undefined });
 
-  const taken = new Set(rules.filter((r) => r.lessonId).map((r) => r.lessonId));
-  const lessonOptions = lessons
-    .filter((l) => !taken.has(l.id) || l.id === rule?.lessonId)
-    .sort((a, b) => a.subjectId.localeCompare(b.subjectId) || a.order - b.order)
-    .map((l) => ({ value: l.id, label: `${L(subjects.find((s) => s.id === l.subjectId), 'name')} · ${l.order}. ${L(l, 'title')}` }));
+  const lessonOptions =
+    state?.mode === 'lesson-edit' && rule?.lesson
+      ? [{ value: rule.lesson.id, label: rule.lesson.title[lang] }]
+      : (optionsQ.data?.items ?? [])
+          .sort((a, b) => (a.subject?.name.en ?? '').localeCompare(b.subject?.name.en ?? '') || a.order - b.order)
+          .map((l) => ({ value: l.id, label: `${l.subject ? l.subject.name[lang] : ''} · ${l.order}. ${L(l, 'title')}` }));
 
-  const onSubmit = (v: Form) => {
+  const onSubmit = async (v: Form) => {
     if (!state || !rule) return;
-    if (state.mode === 'lesson-new') {
-      const lesson = lessons.find((l) => l.id === v.lessonId);
-      if (!lesson) {
-        toast.error(t('assessments.quiz.selectLesson'));
-        return;
+    const body: QuizRuleWriteDto = {
+      questionCount: v.questionCount,
+      poolSize: v.poolSize,
+      randomize: v.randomize,
+      alternativeSets: v.alternativeSets,
+      passThreshold: v.passThreshold,
+      retryPolicy: v.retryPolicy,
+      maxRetries: v.maxRetries,
+      cooldownMinutes: v.cooldownMinutes,
+      showExplanation: v.showExplanation,
+      requireCompletionToUnlock: v.requireCompletionToUnlock,
+    };
+    setSaving(true);
+    try {
+      if (state.mode === 'lesson-new') {
+        if (!v.lessonId) {
+          toast.error(t('assessments.quiz.selectLesson'));
+          return;
+        }
+        await quizRulesApi.create({ ...body, lessonId: v.lessonId });
+        toast.success(t('toast.created', { entity: t('assessments.quiz.override') }));
+      } else if (state.mode === 'subject') {
+        await quizRulesApi.upsertSubject(rule.subjectId, body);
+        toast.success(t('toast.updated', { entity: t('assessments.quiz.rule') }));
+      } else {
+        await quizRulesApi.update(rule.id, body);
+        toast.success(t('toast.updated', { entity: t('assessments.quiz.rule') }));
       }
-      add({ ...rule, ...v, id: uid('qr'), scope: 'lesson', subjectId: lesson.subjectId, lessonId: lesson.id }, { summary: `Created quiz override for lesson “${lesson.title_en}”` });
-      toast.success(t('toast.created', { entity: t('assessments.quiz.override') }));
-    } else {
-      update(rule.id, { ...v, lessonId: rule.lessonId });
-      toast.success(t('toast.updated', { entity: t('assessments.quiz.rule') }));
+      await Promise.all([qc.invalidateQueries({ queryKey: qk.quizRules.all }), qc.invalidateQueries({ queryKey: qk.lessons.all })]);
+      reset();
+      onClose();
+    } catch (e) {
+      toast.error(isApiError(e) && e.status === 409 ? t('assessments.quiz.overrideExists') : errorMessage(e));
+    } finally {
+      setSaving(false);
     }
-    reset();
-    onClose();
   };
 
   const err = (k: keyof Form) => (errors[k] ? (k === 'poolSize' && errors[k]?.message === 'pool' ? t('assessments.quiz.poolTooSmall') : t('errors.required')) : undefined);
-  const subject = subjects.find((s) => s.id === rule?.subjectId);
+  const subject = subjects.find((s) => s.id === rule?.subjectId) ?? (rule?.subject ? { name_en: rule.subject.name.en, name_ar: rule.subject.name.ar } : undefined);
   const policy = watch('retryPolicy');
 
   return (
@@ -100,7 +142,7 @@ function RuleDrawer({ state, onClose }: { state: EditorState | null; onClose: ()
           <Button variant="secondary" onClick={onClose}>
             {t('actions.cancel')}
           </Button>
-          <Button type="submit" form="quiz-rule-form">
+          <Button type="submit" form="quiz-rule-form" loading={saving}>
             {t('actions.saveChanges')}
           </Button>
         </>
@@ -153,6 +195,11 @@ function RuleDrawer({ state, onClose }: { state: EditorState | null; onClose: ()
             <Field label={t('assessments.quiz.maxRetries')} hint={policy === 'unlimited' ? t('assessments.quiz.notApplicable') : undefined}>
               <Input type="number" min={0} max={10} disabled={policy === 'unlimited'} {...register('maxRetries')} />
             </Field>
+            {policy === 'cooldown' && (
+              <Field label={t('assessments.quiz.cooldownMinutes')} error={errors.cooldownMinutes ? t('errors.required') : undefined}>
+                <Input type="number" min={1} suffix={t('common.minutes')} invalid={!!errors.cooldownMinutes} {...register('cooldownMinutes')} />
+              </Field>
+            )}
           </div>
           <div className="space-y-4 rounded-xl border border-line bg-surface-2 p-4">
             <Switch label={t('assessments.quiz.randomize')} description={t('assessments.quiz.randomizeHint')} checked={watch('randomize')} onChange={(v) => setValue('randomize', v, { shouldDirty: true })} />
@@ -170,45 +217,57 @@ export default function QuizRules() {
   const L = useLocalize();
   const can = useCan();
   const confirm = useConfirm();
-  const loading = useMockLoading();
-  const rules = useQuizRules((s) => s.items);
-  const remove = useQuizRules((s) => s.remove);
-  const subjects = useSubjects((s) => s.items);
-  const lessons = useLessons((s) => s.items);
+  const lang = useLang();
+  const subjects = useLookups().subjects;
   const [editor, setEditor] = useState<EditorState | null>(null);
   const canEdit = can('assessments', 'edit');
 
-  const defaults = subjects.map((s) => ({ subject: s, rule: rules.find((r) => r.scope === 'subject' && r.subjectId === s.id) })).filter((x) => x.rule);
-  const overrides = rules.filter((r) => r.scope === 'lesson');
+  const defaultsQ = useApiQuery(qk.quizRules.list({ scope: 'subject' }), () => quizRulesApi.list({ scope: 'subject', pageSize: 100 }));
+  const loading = defaultsQ.isLoading;
+  const defaults = subjects.map((s) => ({
+    subject: s,
+    rule:
+      defaultsQ.data?.items.find((r) => r.subjectId === s.id) ??
+      ({ ...BASE_RULE, id: `default-${s.id}`, scope: 'subject', subjectId: s.id, lessonId: null, subject: null, lesson: null } as QuizRule),
+  }));
+  const overridesList = usePagedList<QuizRule>({ key: qk.quizRules.list, fetcher: quizRulesApi.list, filters: { scope: 'lesson' } });
+  const overrides = overridesList.items;
+  const removeMut = useApiMutation((id: string) => quizRulesApi.remove(id), {
+    invalidate: [qk.quizRules.all, qk.lessons.all],
+    success: () => t('toast.deleted', { entity: t('assessments.quiz.override') }),
+  });
+  const exp = useExport('/admin/quiz-rules/export', 'quiz-overrides');
 
   const columns = useMemo<ColumnDef<QuizRule, unknown>[]>(
     () => [
       {
         id: 'lesson',
-        accessorFn: (r) => L(lessons.find((l) => l.id === r.lessonId), 'title'),
+        accessorFn: (r) => r.lesson?.title[lang] ?? '',
         header: t('common.lesson'),
+        enableSorting: false,
         meta: { label: t('common.lesson') },
         cell: ({ row }) => {
-          const l = lessons.find((x) => x.id === row.original.lessonId);
-          const s = subjects.find((x) => x.id === row.original.subjectId);
+          const l = row.original.lesson;
+          const s = row.original.subject;
           return (
             <div className="min-w-[14rem]">
-              <div className="font-medium text-ink">{L(l, 'title')}</div>
+              <div className="font-medium text-ink">{l?.title[lang] ?? '—'}</div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: s?.color }} />
-                {L(s, 'name')} · {t('assessments.quiz.lessonNo', { n: l?.order ?? '—' })}
+                {s?.name[lang]} · {t('assessments.quiz.lessonNo', { n: l?.order ?? '—' })}
               </div>
             </div>
           );
         },
       },
-      { id: 'count', accessorKey: 'questionCount', header: t('assessments.quiz.questionsShort'), meta: { label: t('assessments.quiz.questionCount'), align: 'end' } },
-      { id: 'pool', accessorKey: 'poolSize', header: t('assessments.quiz.pool'), meta: { label: t('assessments.quiz.poolSize'), align: 'end' } },
-      { id: 'sets', accessorKey: 'alternativeSets', header: t('assessments.quiz.sets'), meta: { label: t('assessments.quiz.alternativeSets'), align: 'end' } },
-      { id: 'pass', accessorKey: 'passThreshold', header: t('assessments.quiz.pass'), meta: { label: t('assessments.quiz.passThreshold'), align: 'end' }, cell: ({ row }) => `${row.original.passThreshold}%` },
+      { id: 'count', enableSorting: false, accessorKey: 'questionCount', header: t('assessments.quiz.questionsShort'), meta: { label: t('assessments.quiz.questionCount'), align: 'end' } },
+      { id: 'pool', enableSorting: false, accessorKey: 'poolSize', header: t('assessments.quiz.pool'), meta: { label: t('assessments.quiz.poolSize'), align: 'end' } },
+      { id: 'sets', enableSorting: false, accessorKey: 'alternativeSets', header: t('assessments.quiz.sets'), meta: { label: t('assessments.quiz.alternativeSets'), align: 'end' } },
+      { id: 'pass', enableSorting: false, accessorKey: 'passThreshold', header: t('assessments.quiz.pass'), meta: { label: t('assessments.quiz.passThreshold'), align: 'end' }, cell: ({ row }) => `${row.original.passThreshold}%` },
       {
         id: 'retry',
         accessorKey: 'retryPolicy',
+        enableSorting: false,
         header: t('assessments.quiz.retryPolicy'),
         meta: { label: t('assessments.quiz.retryPolicy') },
         cell: ({ row }) => (
@@ -218,9 +277,9 @@ export default function QuizRules() {
           </span>
         ),
       },
-      { id: 'random', accessorKey: 'randomize', header: t('assessments.quiz.randomShort'), meta: { label: t('assessments.quiz.randomize'), align: 'center' }, cell: ({ row }) => <span className="inline-flex justify-center"><YesNo on={row.original.randomize} /></span> },
-      { id: 'expl', accessorKey: 'showExplanation', header: t('assessments.quiz.explShort'), meta: { label: t('assessments.quiz.showExplanation'), align: 'center' }, cell: ({ row }) => <span className="inline-flex justify-center"><YesNo on={row.original.showExplanation} /></span> },
-      { id: 'unlock', accessorKey: 'requireCompletionToUnlock', header: t('assessments.quiz.unlockShort'), meta: { label: t('assessments.quiz.requireCompletion'), align: 'center' }, cell: ({ row }) => <span className="inline-flex justify-center"><YesNo on={row.original.requireCompletionToUnlock} /></span> },
+      { id: 'random', enableSorting: false, accessorKey: 'randomize', header: t('assessments.quiz.randomShort'), meta: { label: t('assessments.quiz.randomize'), align: 'center' }, cell: ({ row }) => <span className="inline-flex justify-center"><YesNo on={row.original.randomize} /></span> },
+      { id: 'expl', enableSorting: false, accessorKey: 'showExplanation', header: t('assessments.quiz.explShort'), meta: { label: t('assessments.quiz.showExplanation'), align: 'center' }, cell: ({ row }) => <span className="inline-flex justify-center"><YesNo on={row.original.showExplanation} /></span> },
+      { id: 'unlock', enableSorting: false, accessorKey: 'requireCompletionToUnlock', header: t('assessments.quiz.unlockShort'), meta: { label: t('assessments.quiz.requireCompletion'), align: 'center' }, cell: ({ row }) => <span className="inline-flex justify-center"><YesNo on={row.original.requireCompletionToUnlock} /></span> },
       {
         id: 'actions',
         header: '',
@@ -242,8 +301,7 @@ export default function QuizRules() {
                   onClick={async () => {
                     const ok = await confirm({ title: t('assessments.quiz.removeOverrideTitle'), body: t('assessments.quiz.removeOverrideBody'), confirmText: t('actions.remove') });
                     if (!ok) return;
-                    remove(row.original.id);
-                    toast.success(t('toast.deleted', { entity: t('assessments.quiz.override') }));
+                    removeMut.mutate(row.original.id);
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -253,7 +311,8 @@ export default function QuizRules() {
           ) : null,
       },
     ],
-    [t, L, lessons, subjects, canEdit, can, confirm, remove],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, lang, canEdit, can, confirm],
   );
 
   const stat = (icon: ReactNode, label: string, value: ReactNode) => (
@@ -276,8 +335,8 @@ export default function QuizRules() {
             <Button
               icon={<Plus className="h-4 w-4" />}
               onClick={() => {
-                const base = rules.find((r) => r.scope === 'subject')!;
-                setEditor({ mode: 'lesson-new', rule: { ...base, id: 'new', scope: 'lesson', lessonId: null } });
+                const base = defaults[0]?.rule ?? ({ ...BASE_RULE, subjectId: '', subject: null } as QuizRule);
+                setEditor({ mode: 'lesson-new', rule: { ...base, id: 'new', scope: 'lesson', lessonId: null, lesson: null } });
               }}
             >
               {t('assessments.quiz.newOverride')}
@@ -334,12 +393,12 @@ export default function QuizRules() {
       <DataTable
         data={overrides}
         columns={columns}
-        loading={loading}
-        exportName={can('assessments', 'export') ? 'quiz-overrides' : undefined}
-        searchText={(r) => {
-          const l = lessons.find((x) => x.id === r.lessonId);
-          return `${l?.title_en ?? ''} ${l?.title_ar ?? ''}`;
-        }}
+        loading={overridesList.isLoading}
+        error={overridesList.error}
+        onRetry={() => overridesList.refetch()}
+        server={overridesList.server}
+        onExport={can('assessments', 'export') ? (ids) => exp.mutate(exportRequest('csv', overridesList.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         emptyTitle={t('assessments.quiz.noOverrides')}
         emptyHint={t('assessments.quiz.noOverridesHint')}
       />

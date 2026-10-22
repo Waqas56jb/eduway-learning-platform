@@ -1,4 +1,6 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
+import { toQuestion } from '@/api/adapters';
+import { useBankQuestion } from '@/api/bank';
 import { StyleSheet, View } from 'react-native';
 import { BottomSheet, Button, Text } from '@/components/ui';
 import { QuestionView } from '@/components/student';
@@ -22,7 +24,13 @@ export function QuestionDetailSheet({ question: current, onClose, onPractice }: 
   // Keep rendering the last question while the sheet animates out.
   const last = useRef<Question | null>(current);
   if (current) last.current = current;
-  const question = current ?? last.current;
+  const shown = current ?? last.current;
+  // BNK-03: the full question with answer + explanation (entitled subjects only).
+  const { data: review } = useBankQuestion(current && !current.locked ? current.id : undefined);
+  const question = useMemo(
+    () => (shown && review && review.id === shown.id ? toQuestion(review) : shown),
+    [shown, review],
+  );
 
   return (
     <BottomSheet
@@ -57,7 +65,7 @@ export function QuestionDetailSheet({ question: current, onClose, onPractice }: 
             revealed
             showExplanation
             onSelect={noop}
-            headerRight={<BookmarkStar questionId={question.id} surface />}
+            headerRight={<BookmarkStar initial={question.bookmarked} questionId={question.id} surface />}
           />
         </View>
       ) : null}

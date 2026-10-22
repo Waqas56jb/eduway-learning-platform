@@ -1,39 +1,97 @@
 import { memo, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Badge, Card, Chip, LineChart, Text, toast } from '@/components/ui';
-import { quizTrend } from '@/data';
+import { Badge, Card, LineChart, PressableScale, Text, toast } from '@/components/ui';
+import { useScoreTrend } from '@/api/progress';
 import { useI18n } from '@/hooks/useI18n';
-import { space, subjectColors } from '@/theme';
+import { radius, space, subjectColors, useTheme } from '@/theme';
 import type { SubjectId } from '@/types';
 import { haptic } from '@/utils/haptics';
 
-const SUBJECT_IDS: SubjectId[] = ['math', 'physics', 'chemistry', 'biology', 'english'];
+/** Carry the last known weekly score forward over weeks without quizzes (the chart needs numbers). */
+function fillGaps(values: (number | null | undefined)[]): number[] {
+  const firstKnown = values.find((v) => typeof v === 'number') ?? 0;
+  let last = firstKnown;
+  return values.map((v) => {
+    if (typeof v === 'number') last = v;
+    return last;
+  });
+}
+
+/** Legend chip that keeps the subject color visible in both states (filled dot = shown). */
+const LegendChip = memo(function LegendChip({
+  label,
+  color,
+  on,
+  a11y,
+  onPress,
+}: {
+  label: string;
+  color: string;
+  on: boolean;
+  a11y: string;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={onPress}
+      haptics={false}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={a11y}
+      hitSlop={6}
+      style={[
+        styles.chip,
+        on
+          ? { backgroundColor: `${color}1F`, borderColor: `${color}66` }
+          : { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
+      <View style={[styles.dot, on ? { backgroundColor: color } : { borderWidth: 1.5, borderColor: colors.muted }]} />
+      <Text variant="label" color={on ? 'ink' : 'muted'} numberOfLines={1}>
+        {label}
+      </Text>
+    </PressableScale>
+  );
+});
 
 /** 8-week quiz score trend per subject with toggleable legend chips. */
 export const ScoreTrend = memo(function ScoreTrend() {
   const { t } = useI18n('progress');
   const [hidden, setHidden] = useState<Set<SubjectId>>(() => new Set());
+  const { data } = useScoreTrend(8);
+  const weeks = useMemo(() => data?.weeks ?? [], [data]);
+  const SUBJECT_IDS = useMemo(() => (data?.subjects ?? []).map((s) => s.slug as SubjectId), [data]);
+  const colorOf = useMemo(() => {
+    const m = new Map((data?.subjects ?? []).map((s) => [s.slug, s.color]));
+    return (id: SubjectId) => subjectColors[id] ?? m.get(id) ?? '#C9A24A';
+  }, [data]);
 
-  const labels = useMemo(() => quizTrend.map((w) => t('trend.week', { n: w.week })), [t]);
+  const labels = useMemo(() => weeks.map((w) => t('trend.week', { n: w.week })), [t, weeks]);
+
+  const filled = useMemo(() => {
+    const out: Record<string, number[]> = {};
+    for (const id of SUBJECT_IDS) out[id] = fillGaps(weeks.map((w) => w.scores[id]));
+    return out;
+  }, [SUBJECT_IDS, weeks]);
 
   const series = useMemo(
     () =>
       SUBJECT_IDS.filter((id) => !hidden.has(id)).map((id) => ({
         key: id,
-        color: subjectColors[id],
-        values: quizTrend.map((w) => w[id]),
+        color: colorOf(id),
+        values: filled[id] ?? [],
       })),
-    [hidden],
+    [hidden, SUBJECT_IDS, filled, colorOf],
   );
 
   const { average, delta } = useMemo(() => {
     const visible = SUBJECT_IDS.filter((id) => !hidden.has(id));
-    const first = quizTrend[0];
-    const last = quizTrend[quizTrend.length - 1];
-    if (!first || !last || !visible.length) return { average: 0, delta: 0 };
-    const avg = (row: typeof last) => visible.reduce((acc, id) => acc + row[id], 0) / visible.length;
-    return { average: Math.round(avg(last)), delta: Math.round(avg(last) - avg(first)) };
-  }, [hidden]);
+    const n = weeks.length;
+    if (n === 0 || !visible.length) return { average: 0, delta: 0 };
+    const avg = (i: number) => visible.reduce((acc, id) => acc + (filled[id]?.[i] ?? 0), 0) / visible.length;
+    return { average: Math.round(avg(n - 1)), delta: Math.round(avg(n - 1) - avg(0)) };
+  }, [hidden, SUBJECT_IDS, weeks, filled]);
 
   const toggle = (id: SubjectId) => {
     if (!hidden.has(id) && hidden.size >= SUBJECT_IDS.length - 1) {
@@ -70,12 +128,14 @@ export const ScoreTrend = memo(function ScoreTrend() {
 
       <View style={styles.legend}>
         {SUBJECT_IDS.map((id) => {
+          const label = t(`common:subjects.${id}`);
           return (
-            <Chip
+            <LegendChip
               key={id}
-              label={t(`common:subjects.${id}`)}
-              color={subjectColors[id]}
-              selected={!hidden.has(id)}
+              label={label}
+              color={colorOf(id)}
+              on={!hidden.has(id)}
+              a11y={t('trend.toggleA11y', { subject: label })}
               onPress={() => toggle(id)}
             />
           );
@@ -89,5 +149,15 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.sm },
   flex: { flex: 1 },
   chart: { marginTop: space.lg, marginHorizontal: -space.xs },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs + 2,
+    minHeight: 34,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  dot: { width: 10, height: 10, borderRadius: 5 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.lg },
 });

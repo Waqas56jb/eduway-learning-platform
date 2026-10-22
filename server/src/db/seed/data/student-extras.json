@@ -1,0 +1,881 @@
+{
+ "weeklyStudy": [
+  {
+   "day": {
+    "en": "Sat",
+    "ar": "السبت"
+   },
+   "minutes": 95,
+   "questions": 34
+  },
+  {
+   "day": {
+    "en": "Sun",
+    "ar": "الأحد"
+   },
+   "minutes": 120,
+   "questions": 41
+  },
+  {
+   "day": {
+    "en": "Mon",
+    "ar": "الاثنين"
+   },
+   "minutes": 80,
+   "questions": 22
+  },
+  {
+   "day": {
+    "en": "Tue",
+    "ar": "الثلاثاء"
+   },
+   "minutes": 145,
+   "questions": 58
+  },
+  {
+   "day": {
+    "en": "Wed",
+    "ar": "الأربعاء"
+   },
+   "minutes": 110,
+   "questions": 37
+  },
+  {
+   "day": {
+    "en": "Thu",
+    "ar": "الخميس"
+   },
+   "minutes": 165,
+   "questions": 64
+  },
+  {
+   "day": {
+    "en": "Fri",
+    "ar": "الجمعة"
+   },
+   "minutes": 60,
+   "questions": 18
+  }
+ ],
+ "quizTrend": [
+  {
+   "week": 1,
+   "math": 62,
+   "physics": 58,
+   "chemistry": 66,
+   "biology": 70,
+   "english": 74
+  },
+  {
+   "week": 2,
+   "math": 66,
+   "physics": 61,
+   "chemistry": 64,
+   "biology": 72,
+   "english": 76
+  },
+  {
+   "week": 3,
+   "math": 71,
+   "physics": 63,
+   "chemistry": 69,
+   "biology": 71,
+   "english": 79
+  },
+  {
+   "week": 4,
+   "math": 69,
+   "physics": 68,
+   "chemistry": 72,
+   "biology": 75,
+   "english": 81
+  },
+  {
+   "week": 5,
+   "math": 75,
+   "physics": 70,
+   "chemistry": 71,
+   "biology": 78,
+   "english": 83
+  },
+  {
+   "week": 6,
+   "math": 79,
+   "physics": 72,
+   "chemistry": 76,
+   "biology": 80,
+   "english": 84
+  },
+  {
+   "week": 7,
+   "math": 82,
+   "physics": 76,
+   "chemistry": 78,
+   "biology": 81,
+   "english": 87
+  },
+  {
+   "week": 8,
+   "math": 86,
+   "physics": 79,
+   "chemistry": 81,
+   "biology": 84,
+   "english": 89
+  }
+ ],
+ "weakTopics": [
+  {
+   "subjectId": "physics",
+   "topic": {
+    "en": "Transformers & turns ratio",
+    "ar": "المحولات ونسبة اللفات"
+   },
+   "accuracy": 48,
+   "lessonId": "physics-l10"
+  },
+  {
+   "subjectId": "math",
+   "topic": {
+    "en": "Rolle's theorem conditions",
+    "ar": "شروط مبرهنة رول"
+   },
+   "accuracy": 54,
+   "lessonId": "math-l9"
+  },
+  {
+   "subjectId": "biology",
+   "topic": {
+    "en": "Sex-linked inheritance",
+    "ar": "الوراثة المرتبطة بالجنس"
+   },
+   "accuracy": 57,
+   "lessonId": "biology-l9"
+  },
+  {
+   "subjectId": "chemistry",
+   "topic": {
+    "en": "Electrode potentials",
+    "ar": "جهود الأقطاب"
+   },
+   "accuracy": 61,
+   "lessonId": "chemistry-l7"
+  },
+  {
+   "subjectId": "english",
+   "topic": {
+    "en": "Reported questions",
+    "ar": "نقل الأسئلة"
+   },
+   "accuracy": 66,
+   "lessonId": "english-l4"
+  }
+ ],
+ "activityHeatmap": [
+  {
+   "date": "2026-07-03",
+   "level": 2
+  },
+  {
+   "date": "2026-07-04",
+   "level": 3
+  },
+  {
+   "date": "2026-07-05",
+   "level": 0
+  },
+  {
+   "date": "2026-07-06",
+   "level": 1
+  },
+  {
+   "date": "2026-07-07",
+   "level": 2
+  },
+  {
+   "date": "2026-07-08",
+   "level": 3
+  },
+  {
+   "date": "2026-07-09",
+   "level": 0
+  },
+  {
+   "date": "2026-07-10",
+   "level": 4
+  },
+  {
+   "date": "2026-07-11",
+   "level": 3
+  },
+  {
+   "date": "2026-07-12",
+   "level": 2
+  },
+  {
+   "date": "2026-07-13",
+   "level": 2
+  },
+  {
+   "date": "2026-07-14",
+   "level": 4
+  },
+  {
+   "date": "2026-07-15",
+   "level": 3
+  },
+  {
+   "date": "2026-07-16",
+   "level": 0
+  },
+  {
+   "date": "2026-07-17",
+   "level": 2
+  },
+  {
+   "date": "2026-07-18",
+   "level": 1
+  },
+  {
+   "date": "2026-07-19",
+   "level": 3
+  },
+  {
+   "date": "2026-07-20",
+   "level": 0
+  },
+  {
+   "date": "2026-07-21",
+   "level": 3
+  },
+  {
+   "date": "2026-07-22",
+   "level": 2
+  },
+  {
+   "date": "2026-07-23",
+   "level": 0
+  },
+  {
+   "date": "2026-07-24",
+   "level": 0
+  },
+  {
+   "date": "2026-07-25",
+   "level": 4
+  },
+  {
+   "date": "2026-07-26",
+   "level": 4
+  },
+  {
+   "date": "2026-07-27",
+   "level": 0
+  },
+  {
+   "date": "2026-07-28",
+   "level": 2
+  },
+  {
+   "date": "2026-07-29",
+   "level": 4
+  },
+  {
+   "date": "2026-07-30",
+   "level": 1
+  },
+  {
+   "date": "2026-07-31",
+   "level": 2
+  },
+  {
+   "date": "2026-08-01",
+   "level": 3
+  },
+  {
+   "date": "2026-08-02",
+   "level": 3
+  },
+  {
+   "date": "2026-08-03",
+   "level": 2
+  },
+  {
+   "date": "2026-08-04",
+   "level": 0
+  },
+  {
+   "date": "2026-08-05",
+   "level": 4
+  },
+  {
+   "date": "2026-08-06",
+   "level": 2
+  },
+  {
+   "date": "2026-08-07",
+   "level": 1
+  },
+  {
+   "date": "2026-08-08",
+   "level": 3
+  },
+  {
+   "date": "2026-08-09",
+   "level": 2
+  },
+  {
+   "date": "2026-08-10",
+   "level": 0
+  },
+  {
+   "date": "2026-08-11",
+   "level": 4
+  },
+  {
+   "date": "2026-08-12",
+   "level": 2
+  },
+  {
+   "date": "2026-08-13",
+   "level": 2
+  },
+  {
+   "date": "2026-08-14",
+   "level": 0
+  },
+  {
+   "date": "2026-08-15",
+   "level": 4
+  },
+  {
+   "date": "2026-08-16",
+   "level": 1
+  },
+  {
+   "date": "2026-08-17",
+   "level": 4
+  },
+  {
+   "date": "2026-08-18",
+   "level": 2
+  },
+  {
+   "date": "2026-08-19",
+   "level": 1
+  },
+  {
+   "date": "2026-08-20",
+   "level": 3
+  },
+  {
+   "date": "2026-08-21",
+   "level": 2
+  },
+  {
+   "date": "2026-08-22",
+   "level": 4
+  },
+  {
+   "date": "2026-08-23",
+   "level": 3
+  },
+  {
+   "date": "2026-08-24",
+   "level": 0
+  },
+  {
+   "date": "2026-08-25",
+   "level": 1
+  },
+  {
+   "date": "2026-08-26",
+   "level": 2
+  },
+  {
+   "date": "2026-08-27",
+   "level": 0
+  },
+  {
+   "date": "2026-08-28",
+   "level": 0
+  },
+  {
+   "date": "2026-08-29",
+   "level": 2
+  },
+  {
+   "date": "2026-08-30",
+   "level": 3
+  },
+  {
+   "date": "2026-08-31",
+   "level": 3
+  },
+  {
+   "date": "2026-09-01",
+   "level": 4
+  },
+  {
+   "date": "2026-09-02",
+   "level": 2
+  },
+  {
+   "date": "2026-09-03",
+   "level": 2
+  },
+  {
+   "date": "2026-09-04",
+   "level": 2
+  },
+  {
+   "date": "2026-09-05",
+   "level": 2
+  },
+  {
+   "date": "2026-09-06",
+   "level": 4
+  },
+  {
+   "date": "2026-09-07",
+   "level": 2
+  },
+  {
+   "date": "2026-09-08",
+   "level": 2
+  },
+  {
+   "date": "2026-09-09",
+   "level": 2
+  },
+  {
+   "date": "2026-09-10",
+   "level": 1
+  },
+  {
+   "date": "2026-09-11",
+   "level": 3
+  },
+  {
+   "date": "2026-09-12",
+   "level": 0
+  },
+  {
+   "date": "2026-09-13",
+   "level": 2
+  },
+  {
+   "date": "2026-09-14",
+   "level": 4
+  },
+  {
+   "date": "2026-09-15",
+   "level": 4
+  },
+  {
+   "date": "2026-09-16",
+   "level": 4
+  },
+  {
+   "date": "2026-09-17",
+   "level": 4
+  },
+  {
+   "date": "2026-09-18",
+   "level": 4
+  },
+  {
+   "date": "2026-09-19",
+   "level": 3
+  },
+  {
+   "date": "2026-09-20",
+   "level": 3
+  },
+  {
+   "date": "2026-09-21",
+   "level": 3
+  },
+  {
+   "date": "2026-09-22",
+   "level": 0
+  },
+  {
+   "date": "2026-09-23",
+   "level": 2
+  },
+  {
+   "date": "2026-09-24",
+   "level": 2
+  },
+  {
+   "date": "2026-09-25",
+   "level": 1
+  },
+  {
+   "date": "2026-09-26",
+   "level": 2
+  },
+  {
+   "date": "2026-09-27",
+   "level": 3
+  },
+  {
+   "date": "2026-09-28",
+   "level": 3
+  },
+  {
+   "date": "2026-09-29",
+   "level": 2
+  },
+  {
+   "date": "2026-09-30",
+   "level": 4
+  },
+  {
+   "date": "2026-10-01",
+   "level": 0
+  },
+  {
+   "date": "2026-10-02",
+   "level": 2
+  },
+  {
+   "date": "2026-10-03",
+   "level": 3
+  },
+  {
+   "date": "2026-10-04",
+   "level": 2
+  },
+  {
+   "date": "2026-10-05",
+   "level": 0
+  },
+  {
+   "date": "2026-10-06",
+   "level": 4
+  },
+  {
+   "date": "2026-10-07",
+   "level": 2
+  },
+  {
+   "date": "2026-10-08",
+   "level": 4
+  },
+  {
+   "date": "2026-10-09",
+   "level": 3
+  },
+  {
+   "date": "2026-10-10",
+   "level": 2
+  },
+  {
+   "date": "2026-10-11",
+   "level": 2
+  },
+  {
+   "date": "2026-10-12",
+   "level": 4
+  },
+  {
+   "date": "2026-10-13",
+   "level": 4
+  },
+  {
+   "date": "2026-10-14",
+   "level": 3
+  },
+  {
+   "date": "2026-10-15",
+   "level": 2
+  },
+  {
+   "date": "2026-10-16",
+   "level": 2
+  },
+  {
+   "date": "2026-10-17",
+   "level": 3
+  },
+  {
+   "date": "2026-10-18",
+   "level": 3
+  },
+  {
+   "date": "2026-10-19",
+   "level": 3
+  },
+  {
+   "date": "2026-10-20",
+   "level": 4
+  },
+  {
+   "date": "2026-10-21",
+   "level": 2
+  },
+  {
+   "date": "2026-10-22",
+   "level": 4
+  }
+ ],
+ "recentActivity": [
+  {
+   "id": "a1",
+   "kind": "lesson",
+   "title": {
+    "en": "Completed “Related Rates”",
+    "ar": "أكملت درس \"المعدلات المرتبطة\""
+   },
+   "meta": {
+    "en": "Mathematics · 18 min",
+    "ar": "الرياضيات · 18 دقيقة"
+   },
+   "date": "2026-10-22T07:40:00Z"
+  },
+  {
+   "id": "a2",
+   "kind": "quiz",
+   "title": {
+    "en": "Scored 4/5 on Electromagnetic Induction quiz",
+    "ar": "حصلت على 4/5 في اختبار الحث الكهرومغناطيسي"
+   },
+   "meta": {
+    "en": "Physics · Quiz",
+    "ar": "الفيزياء · اختبار"
+   },
+   "date": "2026-10-21T19:15:00Z"
+  },
+  {
+   "id": "a3",
+   "kind": "ai",
+   "title": {
+    "en": "Asked the AI Tutor about Kc vs Kp",
+    "ar": "سألت المدرس الذكي عن الفرق بين Kc و Kp"
+   },
+   "meta": {
+    "en": "Chemistry · AI Tutor",
+    "ar": "الكيمياء · المدرس الذكي"
+   },
+   "date": "2026-10-21T16:02:00Z"
+  },
+  {
+   "id": "a4",
+   "kind": "exam",
+   "title": {
+    "en": "Mathematics mock exam — 78%",
+    "ar": "امتحان الرياضيات التجريبي — 78%"
+   },
+   "meta": {
+    "en": "Exam Simulator",
+    "ar": "محاكي الامتحانات"
+   },
+   "date": "2026-10-20T18:30:00Z"
+  },
+  {
+   "id": "a5",
+   "kind": "lesson",
+   "title": {
+    "en": "Completed “Passive with Modal Verbs”",
+    "ar": "أكملت درس \"المجهول مع الأفعال الناقصة\""
+   },
+   "meta": {
+    "en": "English · 14 min",
+    "ar": "الإنكليزي · 14 دقيقة"
+   },
+   "date": "2026-10-20T15:10:00Z"
+  }
+ ],
+ "upcomingExams": [
+  {
+   "id": "u1",
+   "examId": "exam-math-final",
+   "title": {
+    "en": "Mathematics — Ministerial Mock",
+    "ar": "الرياضيات — وزاري تجريبي"
+   },
+   "date": "2026-10-23T15:00:00Z"
+  },
+  {
+   "id": "u2",
+   "examId": "exam-physics-mid",
+   "title": {
+    "en": "Physics — Capacitors & Induction",
+    "ar": "الفيزياء — المتسعات والحث"
+   },
+   "date": "2026-10-26T15:00:00Z"
+  },
+  {
+   "id": "u3",
+   "examId": "exam-chem-organic",
+   "title": {
+    "en": "Chemistry — Comprehensive Review",
+    "ar": "الكيمياء — مراجعة شاملة"
+   },
+   "date": "2026-11-02T15:00:00Z"
+  }
+ ],
+ "tutorAnswers": [
+  {
+   "keywords": [
+    "induction",
+    "faraday",
+    "فاراداي",
+    "الحث",
+    "emf"
+   ],
+   "subjectId": "physics",
+   "answer": {
+    "en": "Great question! **Faraday's law** says the induced emf equals the rate of change of magnetic flux through the coil:\n\n$$\\varepsilon = -N\\frac{d\\Phi_B}{dt}$$\n\n- **N** is the number of turns\n- $\\Phi_B = BA\\cos\\theta$ is the magnetic flux\n- The minus sign is **Lenz's law**: the induced current opposes the change.\n\n**Example:** a 200-turn coil whose flux drops from 0.05 Wb to 0 in 0.1 s gives $\\varepsilon = \\frac{200 \\times 0.05}{0.1} = 100\\,\\text{V}$.",
+    "ar": "سؤال ممتاز! **قانون فاراداي** ينص على أن القوة الدافعة المحتثة تساوي المعدل الزمني لتغير الفيض المغناطيسي خلال الملف:\n\n$$\\varepsilon = -N\\frac{d\\Phi_B}{dt}$$\n\n- **N** عدد اللفات\n- $\\Phi_B = BA\\cos\\theta$ الفيض المغناطيسي\n- الإشارة السالبة تمثل **قانون لنز**: التيار المحتث يعاكس التغير.\n\n**مثال:** ملف 200 لفة يتغير فيضه من 0.05 Wb إلى صفر خلال 0.1 s يعطي $\\varepsilon = \\frac{200 \\times 0.05}{0.1} = 100\\,\\text{V}$."
+   }
+  },
+  {
+   "keywords": [
+    "capacitor",
+    "capacitance",
+    "متسعة",
+    "المتسعات",
+    "السعة"
+   ],
+   "subjectId": "physics",
+   "answer": {
+    "en": "A capacitor stores charge Q at voltage V. Its capacitance is:\n\n$$C = \\frac{Q}{V} = \\frac{\\varepsilon_0 \\kappa A}{d}$$\n\nThe stored energy is $U = \\tfrac{1}{2}CV^2$.\n\n- **Series:** $\\frac{1}{C_{eq}} = \\sum \\frac{1}{C_i}$\n- **Parallel:** $C_{eq} = \\sum C_i$",
+    "ar": "المتسعة تخزن شحنة Q عند فرق جهد V. وسعتها:\n\n$$C = \\frac{Q}{V} = \\frac{\\varepsilon_0 \\kappa A}{d}$$\n\nوالطاقة المختزنة $U = \\tfrac{1}{2}CV^2$.\n\n- **التوالي:** $\\frac{1}{C_{eq}} = \\sum \\frac{1}{C_i}$\n- **التوازي:** $C_{eq} = \\sum C_i$"
+   }
+  },
+  {
+   "keywords": [
+    "derivative",
+    "differentiat",
+    "chain rule",
+    "مشتقة",
+    "المشتقات",
+    "التفاضل",
+    "السلسلة"
+   ],
+   "subjectId": "math",
+   "answer": {
+    "en": "The derivative measures the instantaneous rate of change. Key rules:\n\n$$\\frac{d}{dx}x^n = nx^{n-1}, \\quad \\frac{d}{dx}\\sin x = \\cos x$$\n\n**Chain rule:** $\\frac{d}{dx}f(g(x)) = f'(g(x))\\cdot g'(x)$\n\n**Example:** $y = \\sin(3x^2) \\Rightarrow y' = 6x\\cos(3x^2)$.",
+    "ar": "المشتقة تقيس معدل التغير اللحظي. أهم القواعد:\n\n$$\\frac{d}{dx}x^n = nx^{n-1}, \\quad \\frac{d}{dx}\\sin x = \\cos x$$\n\n**قاعدة السلسلة:** $\\frac{d}{dx}f(g(x)) = f'(g(x))\\cdot g'(x)$\n\n**مثال:** $y = \\sin(3x^2) \\Rightarrow y' = 6x\\cos(3x^2)$."
+   }
+  },
+  {
+   "keywords": [
+    "integral",
+    "integrat",
+    "تكامل",
+    "التكامل"
+   ],
+   "subjectId": "math",
+   "answer": {
+    "en": "Integration reverses differentiation:\n\n$$\\int x^n\\,dx = \\frac{x^{n+1}}{n+1} + c \\quad (n \\neq -1)$$\n\nFor a definite integral, evaluate the antiderivative at the limits:\n\n$$\\int_a^b f(x)\\,dx = F(b) - F(a)$$",
+    "ar": "التكامل عكس التفاضل:\n\n$$\\int x^n\\,dx = \\frac{x^{n+1}}{n+1} + c \\quad (n \\neq -1)$$\n\nوللتكامل المحدد نعوض الحدود في المشتقة العكسية:\n\n$$\\int_a^b f(x)\\,dx = F(b) - F(a)$$"
+   }
+  },
+  {
+   "keywords": [
+    "kc",
+    "kp",
+    "equilibrium",
+    "chatelier",
+    "اتزان",
+    "الاتزان",
+    "لوشاتلييه"
+   ],
+   "subjectId": "chemistry",
+   "answer": {
+    "en": "**Kc** uses molar concentrations, **Kp** uses partial pressures. They are related by:\n\n$$K_p = K_c (RT)^{\\Delta n}$$\n\nwhere Δn = moles of gaseous products − moles of gaseous reactants. If Δn = 0, then **Kp = Kc**.",
+    "ar": "**Kc** يستخدم التراكيز المولارية و**Kp** يستخدم الضغوط الجزيئية. والعلاقة بينهما:\n\n$$K_p = K_c (RT)^{\\Delta n}$$\n\nحيث Δn = مولات النواتج الغازية − مولات المتفاعلات الغازية. إذا كانت Δn = 0 فإن **Kp = Kc**."
+   }
+  },
+  {
+   "keywords": [
+    "genetic",
+    "mendel",
+    "cross",
+    "codominance",
+    "وراثة",
+    "الوراثة",
+    "مندل",
+    "تضريب"
+   ],
+   "subjectId": "biology",
+   "answer": {
+    "en": "For a monohybrid cross **Tt × Tt**:\n\n- Genotypes: 1 TT : 2 Tt : 1 tt\n- Phenotypes: **3 dominant : 1 recessive**\n\nFor a dihybrid cross **AaBb × AaBb** the phenotypic ratio is **9 : 3 : 3 : 1**.",
+    "ar": "في التضريب الأحادي **Tt × Tt**:\n\n- الطرز الجينية: 1 TT : 2 Tt : 1 tt\n- الطرز المظهرية: **3 سائد : 1 متنحي**\n\nوفي التضريب الثنائي **AaBb × AaBb** تكون النسبة المظهرية **9 : 3 : 3 : 1**."
+   }
+  },
+  {
+   "keywords": [
+    "passive",
+    "reported",
+    "المجهول",
+    "مجهول",
+    "منقول"
+   ],
+   "subjectId": "english",
+   "answer": {
+    "en": "The **passive voice** = form of **be** + **past participle**.\n\n- Present: *The lesson **is explained** by the teacher.*\n- Past: *The bridge **was built** in 1990.*\n- Modal: *The report **must be finished** today.*\n\nUse it when the action matters more than who did it.",
+    "ar": "**المبني للمجهول** = صيغة من **be** + **التصريف الثالث**.\n\n- المضارع: *The lesson **is explained** by the teacher.*\n- الماضي: *The bridge **was built** in 1990.*\n- مع الأفعال الناقصة: *The report **must be finished** today.*\n\nنستخدمه عندما يكون الحدث أهم من الفاعل."
+   }
+  }
+ ],
+ "tutorFallback": {
+  "en": "Here's how I'd approach it:\n\n1. **Identify** what is given and what is asked.\n2. **Pick** the law or rule that links them.\n3. **Substitute** carefully with units.\n\nFor example, Newton's second law:\n\n$$F = ma$$\n\nShare the exact question from your book and I'll solve it step by step.",
+  "ar": "إليك طريقة الحل:\n\n1. **حدّد** المعطيات والمطلوب.\n2. **اختر** القانون الذي يربط بينهما.\n3. **عوّض** بعناية مع الوحدات.\n\nمثلاً قانون نيوتن الثاني:\n\n$$F = ma$$\n\nأرسل السؤال كما هو في كتابك وسأحله خطوة بخطوة."
+ },
+ "tutorSuggestions": {
+  "math": [
+   {
+    "en": "Explain the chain rule with an example",
+    "ar": "اشرح قاعدة السلسلة مع مثال"
+   },
+   {
+    "en": "How do I evaluate a definite integral?",
+    "ar": "كيف أحسب التكامل المحدد؟"
+   }
+  ],
+  "physics": [
+   {
+    "en": "Explain Faraday's law of induction",
+    "ar": "اشرح قانون فاراداي للحث"
+   },
+   {
+    "en": "How are capacitors combined in series?",
+    "ar": "كيف تربط المتسعات على التوالي؟"
+   }
+  ],
+  "chemistry": [
+   {
+    "en": "What is the difference between Kc and Kp?",
+    "ar": "ما الفرق بين Kc و Kp؟"
+   },
+   {
+    "en": "Explain Le Chatelier's principle",
+    "ar": "اشرح مبدأ لوشاتلييه في الاتزان"
+   }
+  ],
+  "biology": [
+   {
+    "en": "Solve a Mendel cross Tt × Tt",
+    "ar": "حل تضريب مندل Tt × Tt"
+   },
+   {
+    "en": "What is codominance in genetics?",
+    "ar": "ما هي السيادة المشتركة في الوراثة؟"
+   }
+  ],
+  "english": [
+   {
+    "en": "When do I use the passive voice?",
+    "ar": "متى أستخدم المبني للمجهول؟"
+   },
+   {
+    "en": "Turn a question into reported speech",
+    "ar": "حوّل سؤالاً إلى كلام منقول"
+   }
+  ]
+ }
+}

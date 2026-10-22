@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { forwardRef, memo, useCallback, useImperativeHandle, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { BottomSheet, PressableScale, Text } from '@/components/ui';
 import { BLURHASH, images } from '@/constants/images';
@@ -83,7 +83,10 @@ export const Composer = memo(
               {t('composer.imageAttached')}
             </Text>
             <Pressable
-              onPress={() => setImageUri(undefined)}
+              onPress={() => {
+              haptic.light();
+              setImageUri(undefined);
+            }}
               hitSlop={HIT_SLOP}
               accessibilityRole="button"
               accessibilityLabel={t('composer.removeImage')}
@@ -114,7 +117,10 @@ export const Composer = memo(
             hitSlop={HIT_SLOP}
             accessibilityRole="button"
             accessibilityLabel={t('composer.attach')}
-            style={({ pressed }) => [styles.iconBtn, pressed && { backgroundColor: colors.surfaceMuted }]}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && { backgroundColor: colors.surfaceMuted, transform: [{ scale: 0.92 }] },
+            ]}
           >
             <Icon name="paperclip" size={22} color={imageUri ? colors.accent : colors.muted} />
           </Pressable>
@@ -133,6 +139,8 @@ export const Composer = memo(
             onBlur={() => setFocused(false)}
             accessibilityLabel={placeholder}
             textAlignVertical="center"
+            scrollEnabled
+            maxLength={1200}
             style={[
               styles.input,
               {
@@ -146,27 +154,26 @@ export const Composer = memo(
           <PressableScale
             onPress={submit}
             disabled={!canSend}
+            disabledOpacity={1}
+            scaleTo={0.9}
+            haptics={false}
             accessibilityRole="button"
             accessibilityLabel={t('composer.send')}
             accessibilityState={{ disabled: !canSend }}
-            style={styles.sendWrap}
+            style={styles.send}
           >
-            {canSend ? (
-              <Animated.View entering={ZoomIn.duration(180)}>
-                <LinearGradient
-                  colors={gradients.gold}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.send, shadows.gold]}
-                >
-                  <Icon name="send" size={20} color={palette.navy} mirrorInRTL />
-                </LinearGradient>
-              </Animated.View>
-            ) : (
-              <View style={[styles.send, { backgroundColor: colors.surfaceMuted }]}>
-                <Icon name="send" size={20} color={colors.muted} mirrorInRTL />
-              </View>
-            )}
+            <View style={[styles.sendFill, { backgroundColor: colors.surfaceMuted }]} pointerEvents="none">
+              <Icon name="send" size={20} color={colors.muted} mirrorInRTL />
+            </View>
+            <View style={[styles.sendFill, !canSend && styles.hidden]} pointerEvents="none">
+              <LinearGradient
+                colors={gradients.gold}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[StyleSheet.absoluteFill, styles.round]}
+              />
+              <Icon name="send" size={20} color={palette.navy} mirrorInRTL />
+            </View>
           </PressableScale>
         </View>
 
@@ -208,7 +215,8 @@ export const Composer = memo(
   }),
 );
 
-const SEND = 40;
+const SEND = 44;
+const BAR_PAD = 4;
 
 const styles = StyleSheet.create({
   wrap: { gap: space.sm },
@@ -218,34 +226,46 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     gap: space.sm,
     padding: 4,
-    paddingEnd: space.sm,
+    paddingEnd: 4,
     borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
   previewImg: { width: 32, height: 32, borderRadius: 16 },
-  previewClose: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  previewClose: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   bar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: space.xs,
-    paddingHorizontal: space.xs + 2,
-    paddingVertical: space.xs + 2,
-    borderRadius: radius.xl,
+    gap: 2,
+    padding: BAR_PAD,
+    borderRadius: (SEND + BAR_PAD * 2) / 2,
     borderWidth: 1,
   },
   iconBtn: { width: SEND, height: SEND, borderRadius: SEND / 2, alignItems: 'center', justifyContent: 'center' },
   input: {
     flex: 1,
+    minWidth: 0,
     fontSize: 15,
     lineHeight: LINE_HEIGHT,
     minHeight: SEND,
     maxHeight: LINE_HEIGHT * MAX_LINES + V_PAD * 2,
-    paddingTop: V_PAD,
-    paddingBottom: V_PAD,
+    paddingTop: V_PAD + 1,
+    paddingBottom: V_PAD + 1,
     paddingHorizontal: space.xs,
   },
-  sendWrap: { width: SEND, height: SEND },
-  send: { width: SEND, height: SEND, borderRadius: SEND / 2, alignItems: 'center', justifyContent: 'center' },
+  send: { width: SEND, height: SEND, borderRadius: SEND / 2 },
+  sendFill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    start: 0,
+    end: 0,
+    borderRadius: SEND / 2,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  round: { borderRadius: SEND / 2 },
+  hidden: { opacity: 0 },
   attachHint: { marginBottom: space.lg },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, paddingBottom: space.lg },
   tile: {

@@ -11,17 +11,18 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAnswerPractice, useFinishPractice } from '@/api/practice';
+import type { AnswerFeedback, PracticeResultDto, PracticeStartDto } from '@/api/types';
 import { AccordionItem, Badge, Button, Modal, ProgressBar, ProgressRing, Tabs } from '@/components/ui';
 import { QuizCard } from '@/components/student/QuizCard';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { cn, formatClock } from '@/lib/utils';
-import type { Question } from '@/types';
 
 interface PracticeSessionProps {
-  questions: Question[];
+  /** Server-created session (PRA-01): questions are shuffled server-side, answers revealed per answer. */
+  session: PracticeStartDto;
   /** Leave the session and return to the question bank. */
   onExit: () => void;
   /** Start a fresh session with a new sample. */
@@ -31,19 +32,25 @@ interface PracticeSessionProps {
 type ReviewFilter = 'all' | 'incorrect' | 'skipped';
 
 /** In-page practice runner: one question at a time with instant feedback, then a results summary. */
-export function PracticeSession({ questions, onExit, onRestart }: PracticeSessionProps) {
+export function PracticeSession({ session, onExit, onRestart }: PracticeSessionProps) {
   const { t } = useTranslation();
-  const { addMistake } = useStudent();
+  const { l } = useLang();
+  const questions = session.questions;
+  // PRA-02 per answer (instant reveal + mistake upsert), PRA-03 to finish.
+  const answerMutation = useAnswerPractice();
+  const finishMutation = useFinishPractice();
   const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, { index: number; feedback: AnswerFeedback | null }>>({});
   const [startedAt] = useState(() => Date.now());
-  const [finishedAt, setFinishedAt] = useState<number | null>(null);
+  const [result, setResult] = useState<PracticeResultDto | null>(null);
+  const finishedAt = !!result;
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   const total = questions.length;
   const q = questions[index];
   const answeredCount = Object.keys(answers).length;
+  const entry = q ? answers[q.id] : undefined;
 
   useEffect(() => {
     if (finishedAt) return;
@@ -54,17 +61,35 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
   const onSelect = useCallback(
     (choice: number) => {
       if (!q || answers[q.id] !== undefined) return;
-      setAnswers((a) => ({ ...a, [q.id]: choice }));
-      if (choice !== q.correctIndex) addMistake(q.id, choice, 'bank');
+      setAnswers((a) => ({ ...a, [q.id]: { index: choice, feedback: null } }));
+      answerMutation.mutate(
+        { sessionId: session.sessionId, body: { questionId: q.id, optionId: q.options[choice]?.id } },
+        {
+          onSuccess: (fb) => setAnswers((a) => ({ ...a, [q.id]: { index: choice, feedback: fb } })),
+          onError: () =>
+            setAnswers((a) => {
+              const next = { ...a };
+              delete next[q.id];
+              return next;
+            }),
+        },
+      );
     },
-    [q, answers, addMistake],
+    [q, answers, answerMutation, session.sessionId],
   );
 
   const finish = useCallback(() => {
     setConfirmFinish(false);
-    setFinishedAt(Date.now());
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+    finishMutation.mutate(
+      { sessionId: session.sessionId, timeSpentSec: Math.round((Date.now() - startedAt) / 1000) },
+      {
+        onSuccess: (res) => {
+          setResult(res);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+      },
+    );
+  }, [finishMutation, session.sessionId, startedAt]);
 
   const requestFinish = () => (answeredCount < total ? setConfirmFinish(true) : finish());
 
@@ -82,16 +107,8 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
     return () => window.removeEventListener('keydown', onKey);
   }, [finishedAt, total]);
 
-  if (finishedAt) {
-    return (
-      <PracticeResults
-        questions={questions}
-        answers={answers}
-        timeSec={Math.round((finishedAt - startedAt) / 1000)}
-        onExit={onExit}
-        onRestart={onRestart}
-      />
-    );
+  if (result) {
+    return <PracticeResults result={result} onExit={onExit} onRestart={onRestart} />;
   }
 
   if (!q) return null;
@@ -103,7 +120,7 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 id="practice-session-title" className="font-sans text-lg font-bold tracking-normal text-primary">
-              {t('practice.session.title')}
+              {l(session.title) || t('practice.session.title')}
             </h2>
             <p className="text-sm text-muted num">
               {t('practice.session.answered', { done: answeredCount, total })}
@@ -130,7 +147,7 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
           <ol className="scrollbar-none flex gap-1.5 overflow-x-auto pb-1">
             {questions.map((qq, i) => {
               const a = answers[qq.id];
-              const state = a === undefined ? 'idle' : a === qq.correctIndex ? 'correct' : 'wrong';
+              const state = !a?.feedback ? 'idle' : a.feedback.correct ? 'correct' : 'wrong';
               return (
                 <li key={qq.id}>
                   <button
@@ -165,9 +182,12 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
         >
           <QuizCard
             question={q}
-            selected={answers[q.id] ?? null}
+            selected={entry?.index ?? null}
             onSelect={onSelect}
             mode="instant"
+            correctIndex={entry?.feedback?.correctIndex ?? null}
+            explanation={entry?.feedback ? entry.feedback.explanation : undefined}
+            pending={!!entry && !entry.feedback}
             index={index}
             total={total}
           />
@@ -187,12 +207,12 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
         </Button>
         <div className="flex items-center gap-2">
           {!isLast && (
-            <Button variant="ghost" onClick={requestFinish} leftIcon={<Flag className="h-4 w-4" />} className="px-3 sm:px-4">
+            <Button variant="ghost" onClick={requestFinish} loading={finishMutation.isPending} leftIcon={<Flag className="h-4 w-4" />} className="px-3 sm:px-4">
               {t('practice.session.finish')}
             </Button>
           )}
           {isLast ? (
-            <Button variant="gold" onClick={requestFinish} leftIcon={<Flag className="h-4 w-4" />}>
+            <Button variant="gold" onClick={requestFinish} loading={finishMutation.isPending} leftIcon={<Flag className="h-4 w-4" />}>
               {t('practice.session.finish')}
             </Button>
           ) : (
@@ -215,7 +235,7 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
             <Button variant="subtle" onClick={() => setConfirmFinish(false)}>
               {t('practice.session.keepGoing')}
             </Button>
-            <Button variant="gold" onClick={finish}>
+            <Button variant="gold" onClick={finish} loading={finishMutation.isPending}>
               {t('practice.session.finishNow')}
             </Button>
           </>
@@ -225,47 +245,27 @@ export function PracticeSession({ questions, onExit, onRestart }: PracticeSessio
   );
 }
 
-function PracticeResults({
-  questions,
-  answers,
-  timeSec,
-  onExit,
-  onRestart,
-}: {
-  questions: Question[];
-  answers: Record<string, number>;
-  timeSec: number;
-  onExit: () => void;
-  onRestart: () => void;
-}) {
+/** PRA-03 result: server-scored summary + per-question review (QuestionReview with answers/explanations). */
+function PracticeResults({ result, onExit, onRestart }: { result: PracticeResultDto; onExit: () => void; onRestart: () => void }) {
   const { t } = useTranslation();
   const { l } = useLang();
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [open, setOpen] = useState<string | null>(null);
 
-  const stats = useMemo(() => {
-    let correct = 0;
-    let incorrect = 0;
-    for (const q of questions) {
-      const a = answers[q.id];
-      if (a === undefined) continue;
-      if (a === q.correctIndex) correct++;
-      else incorrect++;
-    }
-    const skipped = questions.length - correct - incorrect;
-    return { correct, incorrect, skipped, pct: Math.round((correct / Math.max(1, questions.length)) * 100) };
-  }, [questions, answers]);
+  const stats = { correct: result.correct, incorrect: result.incorrect, skipped: result.skipped, pct: Math.round(result.score) };
+  const timeSec = result.timeSpentSec;
+  const records = result.answers;
+  const questions = records;
+  const isSkipped = (r: (typeof records)[number]) => r.chosenIndex < 0 && !r.textAnswer;
 
-  const list = questions.filter((q) => {
-    const a = answers[q.id];
-    if (filter === 'incorrect') return a !== undefined && a !== q.correctIndex;
-    if (filter === 'skipped') return a === undefined;
+  const list = records.filter((r) => {
+    if (filter === 'incorrect') return !isSkipped(r) && !r.correct;
+    if (filter === 'skipped') return isSkipped(r);
     return true;
   });
 
   const ringColor = stats.pct >= 75 ? '#059669' : stats.pct >= 50 ? '#C9A24A' : '#DC2626';
-  const headline =
-    stats.pct >= 85 ? 'excellent' : stats.pct >= 65 ? 'good' : stats.pct >= 50 ? 'fair' : 'low';
+  const headline = result.band;
 
   return (
     <section aria-labelledby="practice-results-title" className="mx-auto max-w-3xl">
@@ -346,15 +346,15 @@ function PracticeResults({
       </div>
 
       <ul className="mt-5 space-y-3">
-        {list.map((q) => {
-          const i = questions.indexOf(q);
-          const a = answers[q.id];
-          const state = a === undefined ? 'skipped' : a === q.correctIndex ? 'correct' : 'wrong';
+        {list.map((r) => {
+          const q = r.question;
+          const i = questions.indexOf(r);
+          const state = isSkipped(r) ? 'skipped' : r.correct ? 'correct' : 'wrong';
           return (
-            <li key={q.id} className="card px-4 py-3 sm:px-5">
+            <li key={r.questionId} className="card px-4 py-3 sm:px-5">
               <AccordionItem
-                open={open === q.id}
-                onToggle={() => setOpen((o) => (o === q.id ? null : q.id))}
+                open={open === r.questionId}
+                onToggle={() => setOpen((o) => (o === r.questionId ? null : r.questionId))}
                 headerClassName="py-2"
                 title={
                   <span className="flex items-center gap-3">
@@ -378,7 +378,13 @@ function PracticeResults({
                 }
               >
                 <div className="pb-2 pt-3">
-                  <QuizCard question={q} selected={a ?? null} onSelect={() => undefined} mode="review" className="!shadow-none" />
+                  <QuizCard
+                    question={q}
+                    selected={r.chosenIndex >= 0 ? r.chosenIndex : null}
+                    onSelect={() => undefined}
+                    mode="review"
+                    className="!shadow-none"
+                  />
                 </div>
               </AccordionItem>
             </li>

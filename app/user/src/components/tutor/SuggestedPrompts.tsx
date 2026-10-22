@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -12,10 +12,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Icon, SubjectIcon } from '@/components/icons';
 import { PressableScale, Text } from '@/components/ui';
-import { tutorSuggestions } from '@/data';
+import { useTutorSuggestions } from '@/api/tutor';
 import { useI18n } from '@/hooks/useI18n';
 import type { SubjectId } from '@/types';
-import { gradients, palette, radius, shadows, space, subjectColors, useTheme } from '@/theme';
+import { gradients, palette, radius, SCREEN_PADDING, shadows, space, subjectColors, useTheme } from '@/theme';
 import type { IconName } from '@/components/icons';
 
 interface SuggestedPromptsProps {
@@ -25,7 +25,7 @@ interface SuggestedPromptsProps {
 }
 
 /** Hero illustration: gold sparkle orb with a slowly breathing halo. */
-const Hero = memo(function Hero() {
+const Hero = memo(function Hero({ compact }: { compact: boolean }) {
   const { colors } = useTheme();
   const pulse = useSharedValue(0);
   useEffect(() => {
@@ -37,7 +37,7 @@ const Hero = memo(function Hero() {
     opacity: 0.55 - pulse.value * 0.3,
   }));
   return (
-    <View style={styles.hero}>
+    <View style={[styles.hero, compact && styles.heroCompact]}>
       <Animated.View style={[styles.halo, { backgroundColor: colors.accentSoft }, halo]} />
       <View style={[styles.haloInner, { borderColor: colors.accent }]} />
       <LinearGradient colors={gradients.gold} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.orb, shadows.gold]}>
@@ -64,12 +64,19 @@ export const SuggestedPrompts = memo(function SuggestedPrompts({ subjectId, onSe
   const { colors } = useTheme();
   const { t, L } = useI18n('tutor');
   const color = subjectColors[subjectId];
-  const prompts = tutorSuggestions[subjectId];
+  const { data: suggestions } = useTutorSuggestions(subjectId);
+  const prompts = suggestions ?? [];
+  const { width } = useWindowDimensions();
+  // Even grid: two columns from the window width (one column on very narrow screens).
+  const inner = width - SCREEN_PADDING * 2;
+  const cols = inner >= 270 ? 2 : 1;
+  const cardWidth = Math.floor((inner - GRID_GAP * (cols - 1)) / cols);
+  const compactHero = width < 360;
 
   return (
     <View style={styles.container}>
       <Animated.View entering={FadeInDown.duration(320)} style={styles.center}>
-        <Hero />
+        <Hero compact={compactHero} />
         <View style={[styles.badge, { backgroundColor: colors.accentSoft }]}>
           <Text variant="overline" color="accent">
             {t('empty.badge')}
@@ -93,32 +100,40 @@ export const SuggestedPrompts = memo(function SuggestedPrompts({ subjectId, onSe
         </View>
       </Animated.View>
 
-      <Text variant="overline" color="muted" style={styles.sectionTitle}>
-        {t('empty.tryAsking')}
-      </Text>
-      <View style={styles.list}>
+      <View style={styles.sectionHead}>
+        <View style={[styles.rule, { backgroundColor: colors.border }]} />
+        <Text variant="overline" color="accent">
+          {t('empty.tryAsking')}
+        </Text>
+        <View style={[styles.rule, { backgroundColor: colors.border }]} />
+      </View>
+      <View style={styles.grid}>
         {prompts.map((p, i) => {
           const label = L(p);
           return (
-            <Animated.View key={`${subjectId}-${i}`} entering={FadeInDown.duration(280).delay(120 + i * 60)}>
+            <Animated.View
+              key={`${subjectId}-${i}`}
+              entering={FadeInDown.duration(300).delay(Math.min(120 + i * 60, 300))}
+              style={{ width: cardWidth }}
+            >
               <PressableScale
                 onPress={() => onSelect(label)}
                 disabled={disabled}
                 accessibilityRole="button"
                 accessibilityLabel={label}
-                style={[
-                  styles.card,
-                  shadows.sm,
-                  { backgroundColor: colors.surface, borderColor: colors.border, opacity: disabled ? 0.5 : 1 },
-                ]}
+                style={[styles.card, shadows.sm, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >
-                <View style={[styles.cardIcon, { backgroundColor: `${color}1F` }]}>
-                  <SubjectIcon subjectId={subjectId} size={18} color={color} />
+                <View style={styles.cardTop}>
+                  <View style={[styles.cardIcon, { backgroundColor: `${color}1F` }]}>
+                    <SubjectIcon subjectId={subjectId} size={18} color={color} />
+                  </View>
+                  <View style={[styles.cardArrow, { backgroundColor: colors.accentSoft }]}>
+                    <Icon name="arrow" size={14} color={colors.accent} />
+                  </View>
                 </View>
-                <Text variant="bodyMedium" style={styles.cardText}>
+                <Text variant="bodyMedium" numberOfLines={4}>
                   {label}
                 </Text>
-                <Icon name="arrow" size={18} color={colors.accent} />
               </PressableScale>
             </Animated.View>
           );
@@ -129,11 +144,13 @@ export const SuggestedPrompts = memo(function SuggestedPrompts({ subjectId, onSe
 });
 
 const ORB = 88;
+const GRID_GAP = space.md;
 
 const styles = StyleSheet.create({
   container: { gap: space.md },
-  center: { alignItems: 'center', gap: space.md, paddingTop: space.lg },
+  center: { alignItems: 'center', gap: space.md },
   hero: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center', marginBottom: space.xs },
+  heroCompact: { transform: [{ scale: 0.82 }], marginVertical: -12 },
   halo: { position: 'absolute', width: 150, height: 150, borderRadius: 75 },
   haloInner: {
     position: 'absolute',
@@ -160,18 +177,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  sectionTitle: { marginTop: space.lg },
-  list: { gap: space.sm },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.xl },
+  rule: { flex: 1, height: StyleSheet.hairlineWidth },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP, alignItems: 'stretch' },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flex: 1,
     gap: space.md,
-    minHeight: 60,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
+    minHeight: 120,
+    padding: space.lg,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  cardText: { flex: 1 },
+  cardArrow: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

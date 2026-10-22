@@ -1,6 +1,11 @@
-import { getQuestion, getSubject, subjects } from '@/data';
-import type { MistakeEntry } from '@/store';
+import type { MistakeEntryDto } from '@/api/types';
 import type { Localized, MistakeStatus, SubjectId } from '@/types';
+
+/** A mistake as returned by the API (embedded question with answer + explanation, subject/unit/topic refs). */
+export type MistakeEntry = MistakeEntryDto;
+
+/** UI filter; "repeated" = repeatCount >= 2 regardless of status. */
+export type MistakeFilter = MistakeStatus | 'repeated';
 
 export interface MistakeSection {
   key: string;
@@ -10,41 +15,31 @@ export interface MistakeSection {
   data: MistakeEntry[];
 }
 
-const subjectOrder = (id: SubjectId) => {
-  const i = subjects.findIndex((s) => s.id === id);
-  return i < 0 ? 99 : i;
-};
-
-/** Group mistakes by subject → unit, preserving curriculum order; entries newest first. */
+/**
+ * Group mistakes by subject → unit. The server already orders entries by subject order → unit order → date,
+ * so sections keep first-appearance order; entries inside a section are newest first.
+ */
 export function groupMistakes(entries: MistakeEntry[]): MistakeSection[] {
-  const map = new Map<string, MistakeSection & { order: number }>();
+  const map = new Map<string, MistakeSection>();
   for (const entry of entries) {
-    const q = getQuestion(entry.questionId);
-    if (!q) continue;
-    const subject = getSubject(q.subjectId);
-    if (!subject) continue;
-    const key = `${q.subjectId}:${q.unitId}`;
+    const key = `${entry.subject.slug}:${entry.unit.id}`;
     let section = map.get(key);
     if (!section) {
-      const unitIndex = subject.units.findIndex((u) => u.id === q.unitId);
       section = {
         key,
-        subjectId: q.subjectId,
-        subjectName: subject.name,
-        unitTitle: subject.units[unitIndex]?.title ?? null,
+        subjectId: entry.subject.slug as SubjectId,
+        subjectName: entry.subject.name,
+        unitTitle: entry.unit.name ?? null,
         data: [],
-        order: subjectOrder(q.subjectId) * 100 + (unitIndex < 0 ? 99 : unitIndex),
       };
       map.set(key, section);
     }
     section.data.push(entry);
   }
-  return [...map.values()]
-    .sort((a, b) => a.order - b.order)
-    .map(({ order: _order, ...s }) => ({
-      ...s,
-      data: [...s.data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    }));
+  return [...map.values()].map((s) => ({
+    ...s,
+    data: [...s.data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+  }));
 }
 
 export const statusTone = (status: MistakeStatus): 'danger' | 'info' | 'success' =>

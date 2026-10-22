@@ -4,12 +4,13 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Ban, CheckCircle2, GraduationCap, Pencil, Plus, School as SchoolIcon, Trash2, Wallet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { School } from '@/types';
-import { governorateById, governorates, SCHOOL_TIERS } from '@/data';
-import { useMarketers, useSchools } from '@/store/core';
+import { qk } from '@/api/keys';
+import { exportRequest, useApiMutation, useExport, usePagedList } from '@/api/hooks';
+import { useLookups } from '@/api/lookups';
+import { partnerKeys, schoolsApi, useSchoolStats, type SchoolVM } from '@/api/partners';
+import type { BulkResult } from '@/api/types';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
 import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SchoolForm } from '@/components/forms/SchoolForm';
@@ -22,49 +23,49 @@ export default function Schools() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const can = useCan();
-  const loading = useMockLoading();
-  const schools = useSchools((s) => s.items);
-  const remove = useSchools((s) => s.remove);
-  const updateMany = useSchools((s) => s.updateMany);
-  const marketers = useMarketers((s) => s.items);
+  const lookups = useLookups();
+  const stats = useSchoolStats();
 
   const [status, setStatus] = useState('');
   const [gov, setGov] = useState('');
   const [mkt, setMkt] = useState('');
   const [tier, setTier] = useState('');
-  const [editing, setEditing] = useState<School | null>(null);
+  const [editing, setEditing] = useState<SchoolVM | null>(null);
   const [drawer, setDrawer] = useState(false);
 
-  const marketerName = (id: string | null) => {
-    const m = marketers.find((x) => x.id === id);
-    return m ? L(m, 'name') : null;
+  const list = usePagedList({
+    key: qk.schools.list,
+    fetcher: schoolsApi.list,
+    filters: { status, governorateId: gov, marketerId: mkt, tier },
+    initialSort: '-verifiedPaidStudents',
+  });
+  const exp = useExport('/admin/schools/export', 'schools');
+
+  const bulkToast = (r: BulkResult) => {
+    if (r.succeeded.length) toast.success(t('toast.bulkDone', { count: r.succeeded.length }));
+    if (r.failed.length) toast.error(t('schools.bulkFailed', { count: r.failed.length, reason: r.failed[0]?.message ?? '' }));
   };
+  const bulkStatus = useApiMutation((v: { ids: string[]; status: 'active' | 'suspended' }) => schoolsApi.bulkStatus(v), {
+    invalidate: [...partnerKeys],
+    onSuccess: bulkToast,
+  });
+  const removeM = useApiMutation((id: string) => schoolsApi.remove(id), {
+    invalidate: [...partnerKeys],
+    success: () => t('toast.deleted', { entity: t('schools.entity') }),
+  });
 
-  const rows = useMemo(
-    () =>
-      schools.filter(
-        (s) =>
-          (!status || s.status === status) &&
-          (!gov || s.governorateId === gov) &&
-          (!mkt || (mkt === '__none' ? !s.marketerId : s.marketerId === mkt)) &&
-          (!tier || s.tier === tier),
-      ),
-    [schools, status, gov, mkt, tier],
-  );
-
-  const openEdit = (s: School | null) => {
+  const openEdit = (s: SchoolVM | null) => {
     setEditing(s);
     setDrawer(true);
   };
 
-  const del = async (s: School) => {
+  const del = async (s: SchoolVM) => {
     const ok = await confirm({ title: t('confirm.deleteTitle', { entity: L(s, 'name') }), body: t('schools.deleteBody'), confirmText: t('actions.delete') });
     if (!ok) return;
-    remove(s.id);
-    toast.success(t('toast.deleted', { entity: t('schools.entity') }));
+    removeM.mutate(s.id);
   };
 
-  const columns = useMemo<ColumnDef<School>[]>(
+  const columns = useMemo<ColumnDef<SchoolVM>[]>(
     () => [
       {
         id: 'name',
@@ -83,28 +84,30 @@ export default function Schools() {
           </div>
         ),
       },
-      { accessorKey: 'code', header: t('schools.fields.code'), cell: ({ getValue }) => <code className="rounded bg-ink/5 px-1.5 py-0.5 text-xs font-semibold" dir="ltr">{getValue<string>()}</code> },
+      { id: 'code', accessorKey: 'code', header: t('schools.fields.code'), cell: ({ getValue }) => <code className="rounded bg-ink/5 px-1.5 py-0.5 text-xs font-semibold" dir="ltr">{getValue<string>()}</code> },
       {
         id: 'location',
-        accessorFn: (r) => `${L(r, 'city')} · ${L(governorateById(r.governorateId), 'name')}`,
+        accessorFn: (r) => `${L(r, 'city')} · ${L(r, 'governorateName')}`,
         header: t('schools.fields.location'),
+        enableSorting: false,
         cell: ({ row }) => (
           <div className="whitespace-nowrap">
             <div>{L(row.original, 'city')}</div>
-            <div className="text-xs text-muted">{L(governorateById(row.original.governorateId), 'name')}</div>
+            <div className="text-xs text-muted">{L(row.original, 'governorateName')}</div>
           </div>
         ),
       },
-      { accessorKey: 'contactMobile', header: t('schools.fields.contactMobile'), cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{getValue<string>()}</span> },
+      { id: 'contactMobile', accessorKey: 'contactMobile', header: t('schools.fields.contactMobile'), enableSorting: false, cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{getValue<string>()}</span> },
       {
         id: 'marketer',
-        accessorFn: (r) => marketerName(r.marketerId) ?? '',
+        accessorFn: (r) => (r.marketer ? L(r.marketer, 'name') : ''),
         header: t('schools.fields.marketer'),
+        enableSorting: false,
         cell: ({ row }) => {
-          const m = marketers.find((x) => x.id === row.original.marketerId);
+          const m = row.original.marketer;
           return m ? (
             <span className="flex items-center gap-2 whitespace-nowrap">
-              <Avatar name={m.name_en} src={m.avatar} size="xs" />
+              <Avatar name={m.name_en} src={m.avatarUrl ?? undefined} size="xs" />
               {L(m, 'name')}
             </span>
           ) : (
@@ -113,20 +116,20 @@ export default function Schools() {
         },
       },
       {
-        id: 'contract',
+        id: 'contractEnd',
         accessorFn: (r) => r.contractEnd,
         header: t('schools.fields.contract'),
-        meta: { exportValue: (r: School) => `${r.contractStart.slice(0, 10)} → ${r.contractEnd.slice(0, 10)}` },
+        meta: { exportValue: (r: SchoolVM) => `${r.contractStart.slice(0, 10)} → ${r.contractEnd.slice(0, 10)}` },
         cell: ({ row }) => (
           <span className="whitespace-nowrap text-xs text-muted">
             {fmtDate(row.original.contractStart, 'MMM yyyy')} – {fmtDate(row.original.contractEnd, 'MMM yyyy')}
           </span>
         ),
       },
-      { accessorKey: 'status', header: t('common.status'), cell: ({ getValue }) => <StatusBadge status={getValue<string>()} /> },
-      { accessorKey: 'verifiedPaidStudents', header: t('schools.fields.paidStudents'), meta: { align: 'end' }, cell: ({ getValue }) => <span className="font-semibold">{fmtNumber(getValue<number>())}</span> },
-      { accessorKey: 'tier', header: t('schools.fields.tier'), cell: ({ getValue }) => <TierBadge tier={getValue<string>()} /> },
-      { accessorKey: 'pendingSettlement', header: t('schools.fields.pendingSettlement'), meta: { align: 'end' }, cell: ({ getValue }) => fmtMoney(getValue<number>()) },
+      { id: 'status', accessorKey: 'status', header: t('common.status'), cell: ({ getValue }) => <StatusBadge status={getValue<string>()} /> },
+      { id: 'verifiedPaidStudents', accessorKey: 'verifiedPaidStudents', header: t('schools.fields.paidStudents'), meta: { align: 'end' }, cell: ({ getValue }) => <span className="font-semibold">{fmtNumber(getValue<number>())}</span> },
+      { id: 'tier', accessorKey: 'tier', header: t('schools.fields.tier'), enableSorting: false, cell: ({ getValue }) => (getValue<string>() ? <TierBadge tier={getValue<string>()} /> : <span className="text-muted">—</span>) },
+      { id: 'pendingSettlement', accessorKey: 'pendingSettlement', header: t('schools.fields.pendingSettlement'), meta: { align: 'end' }, cell: ({ getValue }) => fmtMoney(getValue<number>()) },
       {
         id: 'actions',
         header: '',
@@ -154,12 +157,10 @@ export default function Schools() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, L, marketers, can],
+    [t, L, can],
   );
 
-  const active = schools.filter((s) => s.status === 'active').length;
-  const paid = schools.reduce((a, s) => a + s.verifiedPaidStudents, 0);
-  const pending = schools.reduce((a, s) => a + s.pendingSettlement, 0);
+  const st = stats.data;
 
   return (
     <>
@@ -176,20 +177,29 @@ export default function Schools() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard loading={loading} label={t('schools.kpi.total')} value={fmtNumber(schools.length)} icon={<SchoolIcon />} color="#0B1F3A" />
-        <StatCard loading={loading} label={t('schools.kpi.active')} value={fmtNumber(active)} icon={<CheckCircle2 />} color="#16A34A" hint={`${fmtNumber(schools.length - active)} ${t('status.pending')} / ${t('status.suspended')}`} />
-        <StatCard loading={loading} label={t('schools.kpi.paid')} value={fmtNumber(paid)} icon={<GraduationCap />} color="#2563EB" />
-        <StatCard loading={loading} label={t('schools.kpi.pending')} value={fmtMoney(pending, 'IQD', true)} icon={<Wallet />} color="#C9A24A" onClick={() => navigate('/schools/settlements')} />
+        <StatCard loading={stats.isLoading} label={t('schools.kpi.total')} value={fmtNumber(st?.total ?? 0)} icon={<SchoolIcon />} color="#0B1F3A" />
+        <StatCard
+          loading={stats.isLoading}
+          label={t('schools.kpi.active')}
+          value={fmtNumber(st?.active ?? 0)}
+          icon={<CheckCircle2 />}
+          color="#16A34A"
+          hint={`${fmtNumber((st?.pending ?? 0) + (st?.suspended ?? 0))} ${t('status.pending')} / ${t('status.suspended')}`}
+        />
+        <StatCard loading={stats.isLoading} label={t('schools.kpi.paid')} value={fmtNumber(st?.verifiedPaidStudents ?? 0)} icon={<GraduationCap />} color="#2563EB" />
+        <StatCard loading={stats.isLoading} label={t('schools.kpi.pending')} value={fmtMoney(st?.pendingSettlement ?? 0, 'IQD', true)} icon={<Wallet />} color="#C9A24A" onClick={() => navigate('/schools/settlements')} />
       </div>
 
       <DataTable
-        data={rows}
+        data={list.items}
         columns={columns}
-        loading={loading}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
         onRowClick={(s) => navigate(`/schools/${s.id}`)}
-        searchText={(s) => `${s.name_en} ${s.name_ar} ${s.code} ${s.city_en} ${s.city_ar} ${s.contactName} ${s.contactMobile}`}
-        exportName={can('schools', 'export') ? 'schools' : undefined}
-        initialSort={[{ id: 'verifiedPaidStudents', desc: true }]}
+        onExport={can('schools', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         initialHidden={['contactMobile']}
         emptyAction={
           can('schools', 'create') ? (
@@ -201,19 +211,14 @@ export default function Schools() {
         toolbar={
           <>
             <FilterSelect label={t('schools.filters.status')} value={status} onChange={setStatus} options={(['active', 'pending', 'suspended'] as const).map((s) => ({ value: s, label: t(`status.${s}`) }))} />
-            <FilterSelect
-              label={t('schools.filters.governorate')}
-              value={gov}
-              onChange={setGov}
-              options={governorates.filter((g) => schools.some((s) => s.governorateId === g.id)).map((g) => ({ value: g.id, label: L(g, 'name') }))}
-            />
+            <FilterSelect label={t('schools.filters.governorate')} value={gov} onChange={setGov} options={lookups.governorates.map((g) => ({ value: g.id, label: L(g, 'name') }))} />
             <FilterSelect
               label={t('schools.filters.marketer')}
               value={mkt}
               onChange={setMkt}
-              options={[{ value: '__none', label: t('schools.unassigned') }, ...marketers.map((m) => ({ value: m.id, label: L(m, 'name') }))]}
+              options={[{ value: '__none', label: t('schools.unassigned') }, ...lookups.marketers.map((m) => ({ value: m.id, label: L(m, 'name') }))]}
             />
-            <FilterSelect label={t('schools.filters.tier')} value={tier} onChange={setTier} options={SCHOOL_TIERS.map((x) => ({ value: x.name, label: x.name }))} />
+            <FilterSelect label={t('schools.filters.tier')} value={tier} onChange={setTier} options={(st?.tiers ?? []).map((x) => ({ value: x, label: x }))} />
           </>
         }
         bulkActions={
@@ -224,11 +229,8 @@ export default function Schools() {
                     size="sm"
                     variant="secondary"
                     icon={<CheckCircle2 className="h-4 w-4" />}
-                    onClick={() => {
-                      updateMany(sel.map((s) => s.id), { status: 'active' }, { action: 'school.bulk_activate', summary: `Activated ${sel.length} schools` });
-                      toast.success(t('toast.bulkDone', { count: sel.length }));
-                      clear();
-                    }}
+                    loading={bulkStatus.isPending && bulkStatus.variables?.status === 'active'}
+                    onClick={() => bulkStatus.mutate({ ids: sel.map((s) => s.id), status: 'active' }, { onSuccess: clear })}
                   >
                     {t('schools.bulk.activate')}
                   </Button>
@@ -236,11 +238,10 @@ export default function Schools() {
                     size="sm"
                     variant="danger"
                     icon={<Ban className="h-4 w-4" />}
+                    loading={bulkStatus.isPending && bulkStatus.variables?.status === 'suspended'}
                     onClick={async () => {
                       if (!(await confirm({ title: t('schools.bulk.suspendTitle', { count: sel.length }), body: t('schools.bulk.suspendBody'), confirmText: t('schools.bulk.suspend') }))) return;
-                      updateMany(sel.map((s) => s.id), { status: 'suspended' }, { action: 'school.bulk_suspend', summary: `Suspended ${sel.length} schools` });
-                      toast.success(t('toast.bulkDone', { count: sel.length }));
-                      clear();
+                      bulkStatus.mutate({ ids: sel.map((s) => s.id), status: 'suspended' }, { onSuccess: clear });
                     }}
                   >
                     {t('schools.bulk.suspend')}

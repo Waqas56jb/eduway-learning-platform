@@ -1,0 +1,2900 @@
+[
+  {
+    "id": "math-l1",
+    "subjectId": "math",
+    "unitId": "math-u1",
+    "chapterId": "math-u1-c1",
+    "order": 1,
+    "title": {
+      "en": "Introduction to Complex Numbers",
+      "ar": "مقدمة في الأعداد المركبة"
+    },
+    "description": {
+      "en": "In this lesson we cover Introduction to Complex Numbers from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح مقدمة في الأعداد المركبة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Introduction to Complex Numbers — Lesson Summary",
+          "ar": "مقدمة في الأعداد المركبة — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Introduction to Complex Numbers — Ministerial Questions",
+          "ar": "مقدمة في الأعداد المركبة — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "math-l2",
+    "subjectId": "math",
+    "unitId": "math-u1",
+    "chapterId": "math-u1-c1",
+    "order": 2,
+    "title": {
+      "en": "Operations on Complex Numbers",
+      "ar": "العمليات على الأعداد المركبة"
+    },
+    "description": {
+      "en": "In this lesson we cover Operations on Complex Numbers from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح العمليات على الأعداد المركبة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Operations on Complex Numbers — Lesson Summary",
+          "ar": "العمليات على الأعداد المركبة — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Operations on Complex Numbers — Ministerial Questions",
+          "ar": "العمليات على الأعداد المركبة — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "math-l3",
+    "subjectId": "math",
+    "unitId": "math-u1",
+    "chapterId": "math-u1-c1",
+    "order": 3,
+    "title": {
+      "en": "Complex Conjugate & Division",
+      "ar": "المرافق والقسمة"
+    },
+    "description": {
+      "en": "In this lesson we cover Complex Conjugate & Division from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المرافق والقسمة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Complex Conjugate & Division — Lesson Summary",
+          "ar": "المرافق والقسمة — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Complex Conjugate & Division — Ministerial Questions",
+          "ar": "المرافق والقسمة — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "math-l4",
+    "subjectId": "math",
+    "unitId": "math-u1",
+    "chapterId": "math-u1-c2",
+    "order": 4,
+    "title": {
+      "en": "Polar Form of a Complex Number",
+      "ar": "الصيغة القطبية للعدد المركب"
+    },
+    "description": {
+      "en": "In this lesson we cover Polar Form of a Complex Number from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الصيغة القطبية للعدد المركب من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Polar Form of a Complex Number — Lesson Summary",
+          "ar": "الصيغة القطبية للعدد المركب — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Polar Form of a Complex Number — Ministerial Questions",
+          "ar": "الصيغة القطبية للعدد المركب — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "math-l5",
+    "subjectId": "math",
+    "unitId": "math-u1",
+    "chapterId": "math-u1-c2",
+    "order": 5,
+    "title": {
+      "en": "De Moivre's Theorem",
+      "ar": "مبرهنة ديموافر"
+    },
+    "description": {
+      "en": "In this lesson we cover De Moivre's Theorem from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح مبرهنة ديموافر من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "De Moivre's Theorem — Lesson Summary",
+          "ar": "مبرهنة ديموافر — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "De Moivre's Theorem — Ministerial Questions",
+          "ar": "مبرهنة ديموافر — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "math-l6",
+    "subjectId": "math",
+    "unitId": "math-u2",
+    "chapterId": "math-u2-c1",
+    "order": 6,
+    "title": {
+      "en": "Derivatives",
+      "ar": "المشتقات"
+    },
+    "description": {
+      "en": "In this lesson we cover Derivatives from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المشتقات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Derivatives — Lesson Summary",
+          "ar": "المشتقات — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Derivatives — Ministerial Questions",
+          "ar": "المشتقات — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "math-l7",
+    "subjectId": "math",
+    "unitId": "math-u2",
+    "chapterId": "math-u2-c1",
+    "order": 7,
+    "title": {
+      "en": "Higher-Order Derivatives",
+      "ar": "المشتقات العليا"
+    },
+    "description": {
+      "en": "In this lesson we cover Higher-Order Derivatives from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المشتقات العليا من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Higher-Order Derivatives — Lesson Summary",
+          "ar": "المشتقات العليا — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Higher-Order Derivatives — Ministerial Questions",
+          "ar": "المشتقات العليا — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "math-l8",
+    "subjectId": "math",
+    "unitId": "math-u2",
+    "chapterId": "math-u2-c1",
+    "order": 8,
+    "title": {
+      "en": "Related Rates",
+      "ar": "المعدلات المرتبطة"
+    },
+    "description": {
+      "en": "In this lesson we cover Related Rates from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المعدلات المرتبطة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Related Rates — Lesson Summary",
+          "ar": "المعدلات المرتبطة — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Related Rates — Ministerial Questions",
+          "ar": "المعدلات المرتبطة — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "math-l9",
+    "subjectId": "math",
+    "unitId": "math-u2",
+    "chapterId": "math-u2-c2",
+    "order": 9,
+    "title": {
+      "en": "Rolle's & Mean Value Theorems",
+      "ar": "مبرهنتا رول والقيمة المتوسطة"
+    },
+    "description": {
+      "en": "In this lesson we cover Rolle's & Mean Value Theorems from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح مبرهنتا رول والقيمة المتوسطة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "in-progress",
+    "progress": 58,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Rolle's & Mean Value Theorems — Lesson Summary",
+          "ar": "مبرهنتا رول والقيمة المتوسطة — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Rolle's & Mean Value Theorems — Ministerial Questions",
+          "ar": "مبرهنتا رول والقيمة المتوسطة — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "math-l10",
+    "subjectId": "math",
+    "unitId": "math-u2",
+    "chapterId": "math-u2-c2",
+    "order": 10,
+    "title": {
+      "en": "Maxima, Minima & Curve Sketching",
+      "ar": "القيم العظمى والصغرى ورسم المنحنيات"
+    },
+    "description": {
+      "en": "In this lesson we cover Maxima, Minima & Curve Sketching from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح القيم العظمى والصغرى ورسم المنحنيات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Maxima, Minima & Curve Sketching — Lesson Summary",
+          "ar": "القيم العظمى والصغرى ورسم المنحنيات — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Maxima, Minima & Curve Sketching — Ministerial Questions",
+          "ar": "القيم العظمى والصغرى ورسم المنحنيات — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "math-l11",
+    "subjectId": "math",
+    "unitId": "math-u3",
+    "chapterId": "math-u3-c1",
+    "order": 11,
+    "title": {
+      "en": "Antiderivatives",
+      "ar": "المشتقات العكسية"
+    },
+    "description": {
+      "en": "In this lesson we cover Antiderivatives from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المشتقات العكسية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Antiderivatives — Lesson Summary",
+          "ar": "المشتقات العكسية — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Antiderivatives — Ministerial Questions",
+          "ar": "المشتقات العكسية — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "math-l12",
+    "subjectId": "math",
+    "unitId": "math-u3",
+    "chapterId": "math-u3-c1",
+    "order": 12,
+    "title": {
+      "en": "Integration of Trigonometric Functions",
+      "ar": "تكامل الدوال المثلثية"
+    },
+    "description": {
+      "en": "In this lesson we cover Integration of Trigonometric Functions from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح تكامل الدوال المثلثية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Integration of Trigonometric Functions — Lesson Summary",
+          "ar": "تكامل الدوال المثلثية — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Integration of Trigonometric Functions — Ministerial Questions",
+          "ar": "تكامل الدوال المثلثية — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "math-l13",
+    "subjectId": "math",
+    "unitId": "math-u3",
+    "chapterId": "math-u3-c2",
+    "order": 13,
+    "title": {
+      "en": "The Definite Integral",
+      "ar": "التكامل المحدد"
+    },
+    "description": {
+      "en": "In this lesson we cover The Definite Integral from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح التكامل المحدد من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "The Definite Integral — Lesson Summary",
+          "ar": "التكامل المحدد — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "The Definite Integral — Ministerial Questions",
+          "ar": "التكامل المحدد — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "math-l14",
+    "subjectId": "math",
+    "unitId": "math-u3",
+    "chapterId": "math-u3-c2",
+    "order": 14,
+    "title": {
+      "en": "Area Between Curves",
+      "ar": "المساحة بين منحنيين"
+    },
+    "description": {
+      "en": "In this lesson we cover Area Between Curves from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المساحة بين منحنيين من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Area Between Curves — Lesson Summary",
+          "ar": "المساحة بين منحنيين — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Area Between Curves — Ministerial Questions",
+          "ar": "المساحة بين منحنيين — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "math-l15",
+    "subjectId": "math",
+    "unitId": "math-u3",
+    "chapterId": "math-u3-c2",
+    "order": 15,
+    "title": {
+      "en": "Volumes of Revolution",
+      "ar": "الحجوم الدورانية"
+    },
+    "description": {
+      "en": "In this lesson we cover Volumes of Revolution from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الحجوم الدورانية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Mustafa Al-Rubaie",
+      "ar": "د. مصطفى الربيعي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Volumes of Revolution — Lesson Summary",
+          "ar": "الحجوم الدورانية — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Volumes of Revolution — Ministerial Questions",
+          "ar": "الحجوم الدورانية — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "physics-l1",
+    "subjectId": "physics",
+    "unitId": "physics-u1",
+    "chapterId": "physics-u1-c1",
+    "order": 1,
+    "title": {
+      "en": "Capacitance & the Parallel-Plate Capacitor",
+      "ar": "السعة والمتسعة ذات الصفيحتين"
+    },
+    "description": {
+      "en": "In this lesson we cover Capacitance & the Parallel-Plate Capacitor from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح السعة والمتسعة ذات الصفيحتين من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1453733190371-0a9bedd82893?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Capacitance & the Parallel-Plate Capacitor — Lesson Summary",
+          "ar": "السعة والمتسعة ذات الصفيحتين — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Capacitance & the Parallel-Plate Capacitor — Ministerial Questions",
+          "ar": "السعة والمتسعة ذات الصفيحتين — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "physics-l2",
+    "subjectId": "physics",
+    "unitId": "physics-u1",
+    "chapterId": "physics-u1-c1",
+    "order": 2,
+    "title": {
+      "en": "Dielectrics",
+      "ar": "العوازل الكهربائية"
+    },
+    "description": {
+      "en": "In this lesson we cover Dielectrics from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح العوازل الكهربائية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Dielectrics — Lesson Summary",
+          "ar": "العوازل الكهربائية — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Dielectrics — Ministerial Questions",
+          "ar": "العوازل الكهربائية — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "physics-l3",
+    "subjectId": "physics",
+    "unitId": "physics-u1",
+    "chapterId": "physics-u1-c2",
+    "order": 3,
+    "title": {
+      "en": "Capacitors in Series & Parallel",
+      "ar": "ربط المتسعات على التوالي والتوازي"
+    },
+    "description": {
+      "en": "In this lesson we cover Capacitors in Series & Parallel from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح ربط المتسعات على التوالي والتوازي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Capacitors in Series & Parallel — Lesson Summary",
+          "ar": "ربط المتسعات على التوالي والتوازي — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Capacitors in Series & Parallel — Ministerial Questions",
+          "ar": "ربط المتسعات على التوالي والتوازي — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "physics-l4",
+    "subjectId": "physics",
+    "unitId": "physics-u1",
+    "chapterId": "physics-u1-c2",
+    "order": 4,
+    "title": {
+      "en": "Energy Stored in a Capacitor",
+      "ar": "الطاقة المختزنة في المتسعة"
+    },
+    "description": {
+      "en": "In this lesson we cover Energy Stored in a Capacitor from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الطاقة المختزنة في المتسعة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Energy Stored in a Capacitor — Lesson Summary",
+          "ar": "الطاقة المختزنة في المتسعة — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Energy Stored in a Capacitor — Ministerial Questions",
+          "ar": "الطاقة المختزنة في المتسعة — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "physics-l5",
+    "subjectId": "physics",
+    "unitId": "physics-u1",
+    "chapterId": "physics-u1-c2",
+    "order": 5,
+    "title": {
+      "en": "Charging & Discharging (RC)",
+      "ar": "الشحن والتفريغ"
+    },
+    "description": {
+      "en": "In this lesson we cover Charging & Discharging (RC) from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الشحن والتفريغ من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1453733190371-0a9bedd82893?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Charging & Discharging (RC) — Lesson Summary",
+          "ar": "الشحن والتفريغ — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Charging & Discharging (RC) — Ministerial Questions",
+          "ar": "الشحن والتفريغ — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "physics-l6",
+    "subjectId": "physics",
+    "unitId": "physics-u2",
+    "chapterId": "physics-u2-c1",
+    "order": 6,
+    "title": {
+      "en": "Electromagnetic Induction",
+      "ar": "الحث الكهرومغناطيسي"
+    },
+    "description": {
+      "en": "In this lesson we cover Electromagnetic Induction from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الحث الكهرومغناطيسي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Electromagnetic Induction — Lesson Summary",
+          "ar": "الحث الكهرومغناطيسي — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Electromagnetic Induction — Ministerial Questions",
+          "ar": "الحث الكهرومغناطيسي — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "physics-l7",
+    "subjectId": "physics",
+    "unitId": "physics-u2",
+    "chapterId": "physics-u2-c1",
+    "order": 7,
+    "title": {
+      "en": "Faraday's Law",
+      "ar": "قانون فاراداي"
+    },
+    "description": {
+      "en": "In this lesson we cover Faraday's Law from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح قانون فاراداي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "in-progress",
+    "progress": 44,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Faraday's Law — Lesson Summary",
+          "ar": "قانون فاراداي — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Faraday's Law — Ministerial Questions",
+          "ar": "قانون فاراداي — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "physics-l8",
+    "subjectId": "physics",
+    "unitId": "physics-u2",
+    "chapterId": "physics-u2-c1",
+    "order": 8,
+    "title": {
+      "en": "Lenz's Law",
+      "ar": "قانون لنز"
+    },
+    "description": {
+      "en": "In this lesson we cover Lenz's Law from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح قانون لنز من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Lenz's Law — Lesson Summary",
+          "ar": "قانون لنز — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Lenz's Law — Ministerial Questions",
+          "ar": "قانون لنز — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "physics-l9",
+    "subjectId": "physics",
+    "unitId": "physics-u2",
+    "chapterId": "physics-u2-c2",
+    "order": 9,
+    "title": {
+      "en": "Self-Inductance",
+      "ar": "الحث الذاتي"
+    },
+    "description": {
+      "en": "In this lesson we cover Self-Inductance from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الحث الذاتي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1453733190371-0a9bedd82893?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Self-Inductance — Lesson Summary",
+          "ar": "الحث الذاتي — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Self-Inductance — Ministerial Questions",
+          "ar": "الحث الذاتي — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "physics-l10",
+    "subjectId": "physics",
+    "unitId": "physics-u2",
+    "chapterId": "physics-u2-c2",
+    "order": 10,
+    "title": {
+      "en": "Generators & Transformers",
+      "ar": "المولدات والمحولات"
+    },
+    "description": {
+      "en": "In this lesson we cover Generators & Transformers from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المولدات والمحولات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Generators & Transformers — Lesson Summary",
+          "ar": "المولدات والمحولات — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Generators & Transformers — Ministerial Questions",
+          "ar": "المولدات والمحولات — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "physics-l11",
+    "subjectId": "physics",
+    "unitId": "physics-u3",
+    "chapterId": "physics-u3-c1",
+    "order": 11,
+    "title": {
+      "en": "RMS Values",
+      "ar": "القيم المؤثرة"
+    },
+    "description": {
+      "en": "In this lesson we cover RMS Values from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح القيم المؤثرة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "RMS Values — Lesson Summary",
+          "ar": "القيم المؤثرة — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "RMS Values — Ministerial Questions",
+          "ar": "القيم المؤثرة — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "physics-l12",
+    "subjectId": "physics",
+    "unitId": "physics-u3",
+    "chapterId": "physics-u3-c1",
+    "order": 12,
+    "title": {
+      "en": "Reactance & Impedance",
+      "ar": "الرادة والممانعة"
+    },
+    "description": {
+      "en": "In this lesson we cover Reactance & Impedance from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الرادة والممانعة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Reactance & Impedance — Lesson Summary",
+          "ar": "الرادة والممانعة — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Reactance & Impedance — Ministerial Questions",
+          "ar": "الرادة والممانعة — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "physics-l13",
+    "subjectId": "physics",
+    "unitId": "physics-u3",
+    "chapterId": "physics-u3-c2",
+    "order": 13,
+    "title": {
+      "en": "RLC Series Circuits",
+      "ar": "دائرة RLC على التوالي"
+    },
+    "description": {
+      "en": "In this lesson we cover RLC Series Circuits from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح دائرة RLC على التوالي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1453733190371-0a9bedd82893?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "RLC Series Circuits — Lesson Summary",
+          "ar": "دائرة RLC على التوالي — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "RLC Series Circuits — Ministerial Questions",
+          "ar": "دائرة RLC على التوالي — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "physics-l14",
+    "subjectId": "physics",
+    "unitId": "physics-u3",
+    "chapterId": "physics-u3-c2",
+    "order": 14,
+    "title": {
+      "en": "Resonance & Power Factor",
+      "ar": "الرنين وعامل القدرة"
+    },
+    "description": {
+      "en": "In this lesson we cover Resonance & Power Factor from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الرنين وعامل القدرة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1636466497217-26a8cbeaf0aa?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Prof. Haider Al-Jubouri",
+      "ar": "أ. حيدر الجبوري"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Resonance & Power Factor — Lesson Summary",
+          "ar": "الرنين وعامل القدرة — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Resonance & Power Factor — Ministerial Questions",
+          "ar": "الرنين وعامل القدرة — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l1",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u1",
+    "chapterId": "chemistry-u1-c1",
+    "order": 1,
+    "title": {
+      "en": "Reversible Reactions",
+      "ar": "التفاعلات الانعكاسية"
+    },
+    "description": {
+      "en": "In this lesson we cover Reversible Reactions from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح التفاعلات الانعكاسية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Reversible Reactions — Lesson Summary",
+          "ar": "التفاعلات الانعكاسية — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Reversible Reactions — Ministerial Questions",
+          "ar": "التفاعلات الانعكاسية — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l2",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u1",
+    "chapterId": "chemistry-u1-c1",
+    "order": 2,
+    "title": {
+      "en": "The Equilibrium Constant Kc & Kp",
+      "ar": "ثابت الاتزان Kc و Kp"
+    },
+    "description": {
+      "en": "In this lesson we cover The Equilibrium Constant Kc & Kp from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح ثابت الاتزان Kc و Kp من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "The Equilibrium Constant Kc & Kp — Lesson Summary",
+          "ar": "ثابت الاتزان Kc و Kp — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "The Equilibrium Constant Kc & Kp — Ministerial Questions",
+          "ar": "ثابت الاتزان Kc و Kp — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l3",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u1",
+    "chapterId": "chemistry-u1-c2",
+    "order": 3,
+    "title": {
+      "en": "Le Chatelier's Principle",
+      "ar": "مبدأ لوشاتلييه"
+    },
+    "description": {
+      "en": "In this lesson we cover Le Chatelier's Principle from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح مبدأ لوشاتلييه من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Le Chatelier's Principle — Lesson Summary",
+          "ar": "مبدأ لوشاتلييه — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Le Chatelier's Principle — Ministerial Questions",
+          "ar": "مبدأ لوشاتلييه — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l4",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u1",
+    "chapterId": "chemistry-u1-c2",
+    "order": 4,
+    "title": {
+      "en": "Reaction Quotient Q",
+      "ar": "حاصل التفاعل Q"
+    },
+    "description": {
+      "en": "In this lesson we cover Reaction Quotient Q from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح حاصل التفاعل Q من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Reaction Quotient Q — Lesson Summary",
+          "ar": "حاصل التفاعل Q — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Reaction Quotient Q — Ministerial Questions",
+          "ar": "حاصل التفاعل Q — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l5",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u2",
+    "chapterId": "chemistry-u2-c1",
+    "order": 5,
+    "title": {
+      "en": "Redox Reactions",
+      "ar": "تفاعلات الأكسدة والاختزال"
+    },
+    "description": {
+      "en": "In this lesson we cover Redox Reactions from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح تفاعلات الأكسدة والاختزال من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Redox Reactions — Lesson Summary",
+          "ar": "تفاعلات الأكسدة والاختزال — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Redox Reactions — Ministerial Questions",
+          "ar": "تفاعلات الأكسدة والاختزال — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l6",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u2",
+    "chapterId": "chemistry-u2-c1",
+    "order": 6,
+    "title": {
+      "en": "Galvanic Cells",
+      "ar": "الخلايا الكلفانية"
+    },
+    "description": {
+      "en": "In this lesson we cover Galvanic Cells from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الخلايا الكلفانية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "in-progress",
+    "progress": 37,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Galvanic Cells — Lesson Summary",
+          "ar": "الخلايا الكلفانية — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Galvanic Cells — Ministerial Questions",
+          "ar": "الخلايا الكلفانية — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l7",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u2",
+    "chapterId": "chemistry-u2-c1",
+    "order": 7,
+    "title": {
+      "en": "Standard Electrode Potential",
+      "ar": "جهد القطب القياسي"
+    },
+    "description": {
+      "en": "In this lesson we cover Standard Electrode Potential from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح جهد القطب القياسي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Standard Electrode Potential — Lesson Summary",
+          "ar": "جهد القطب القياسي — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Standard Electrode Potential — Ministerial Questions",
+          "ar": "جهد القطب القياسي — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l8",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u2",
+    "chapterId": "chemistry-u2-c2",
+    "order": 8,
+    "title": {
+      "en": "Electrolytic Cells",
+      "ar": "خلايا التحليل الكهربائي"
+    },
+    "description": {
+      "en": "In this lesson we cover Electrolytic Cells from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح خلايا التحليل الكهربائي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Electrolytic Cells — Lesson Summary",
+          "ar": "خلايا التحليل الكهربائي — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Electrolytic Cells — Ministerial Questions",
+          "ar": "خلايا التحليل الكهربائي — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l9",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u2",
+    "chapterId": "chemistry-u2-c2",
+    "order": 9,
+    "title": {
+      "en": "Faraday's Laws of Electrolysis",
+      "ar": "قوانين فاراداي للتحليل"
+    },
+    "description": {
+      "en": "In this lesson we cover Faraday's Laws of Electrolysis from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح قوانين فاراداي للتحليل من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Faraday's Laws of Electrolysis — Lesson Summary",
+          "ar": "قوانين فاراداي للتحليل — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Faraday's Laws of Electrolysis — Ministerial Questions",
+          "ar": "قوانين فاراداي للتحليل — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l10",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u3",
+    "chapterId": "chemistry-u3-c1",
+    "order": 10,
+    "title": {
+      "en": "Organic Chemistry – Alkanes",
+      "ar": "الكيمياء العضوية – الألكانات"
+    },
+    "description": {
+      "en": "In this lesson we cover Organic Chemistry – Alkanes from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الكيمياء العضوية – الألكانات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Organic Chemistry – Alkanes — Lesson Summary",
+          "ar": "الكيمياء العضوية – الألكانات — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Organic Chemistry – Alkanes — Ministerial Questions",
+          "ar": "الكيمياء العضوية – الألكانات — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l11",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u3",
+    "chapterId": "chemistry-u3-c1",
+    "order": 11,
+    "title": {
+      "en": "Alkenes & Alkynes",
+      "ar": "الألكينات والألكاينات"
+    },
+    "description": {
+      "en": "In this lesson we cover Alkenes & Alkynes from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الألكينات والألكاينات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Alkenes & Alkynes — Lesson Summary",
+          "ar": "الألكينات والألكاينات — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Alkenes & Alkynes — Ministerial Questions",
+          "ar": "الألكينات والألكاينات — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l12",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u3",
+    "chapterId": "chemistry-u3-c2",
+    "order": 12,
+    "title": {
+      "en": "Alcohols & Ethers",
+      "ar": "الكحولات والإيثرات"
+    },
+    "description": {
+      "en": "In this lesson we cover Alcohols & Ethers from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الكحولات والإيثرات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Alcohols & Ethers — Lesson Summary",
+          "ar": "الكحولات والإيثرات — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Alcohols & Ethers — Ministerial Questions",
+          "ar": "الكحولات والإيثرات — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l13",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u3",
+    "chapterId": "chemistry-u3-c2",
+    "order": 13,
+    "title": {
+      "en": "Aldehydes & Ketones",
+      "ar": "الألديهايدات والكيتونات"
+    },
+    "description": {
+      "en": "In this lesson we cover Aldehydes & Ketones from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الألديهايدات والكيتونات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Aldehydes & Ketones — Lesson Summary",
+          "ar": "الألديهايدات والكيتونات — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Aldehydes & Ketones — Ministerial Questions",
+          "ar": "الألديهايدات والكيتونات — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "chemistry-l14",
+    "subjectId": "chemistry",
+    "unitId": "chemistry-u3",
+    "chapterId": "chemistry-u3-c2",
+    "order": 14,
+    "title": {
+      "en": "Carboxylic Acids & Esters",
+      "ar": "الحوامض الكاربوكسيلية والإسترات"
+    },
+    "description": {
+      "en": "In this lesson we cover Carboxylic Acids & Esters from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الحوامض الكاربوكسيلية والإسترات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Zainab Al-Hashimi",
+      "ar": "د. زينب الهاشمي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Carboxylic Acids & Esters — Lesson Summary",
+          "ar": "الحوامض الكاربوكسيلية والإسترات — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Carboxylic Acids & Esters — Ministerial Questions",
+          "ar": "الحوامض الكاربوكسيلية والإسترات — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "biology-l1",
+    "subjectId": "biology",
+    "unitId": "biology-u1",
+    "chapterId": "biology-u1-c1",
+    "order": 1,
+    "title": {
+      "en": "Asexual Reproduction",
+      "ar": "التكاثر اللاجنسي"
+    },
+    "description": {
+      "en": "In this lesson we cover Asexual Reproduction from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح التكاثر اللاجنسي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1530210124550-912dc1381cb8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Asexual Reproduction — Lesson Summary",
+          "ar": "التكاثر اللاجنسي — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Asexual Reproduction — Ministerial Questions",
+          "ar": "التكاثر اللاجنسي — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "biology-l2",
+    "subjectId": "biology",
+    "unitId": "biology-u1",
+    "chapterId": "biology-u1-c1",
+    "order": 2,
+    "title": {
+      "en": "Reproduction in Flowering Plants",
+      "ar": "التكاثر في النباتات الزهرية"
+    },
+    "description": {
+      "en": "In this lesson we cover Reproduction in Flowering Plants from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح التكاثر في النباتات الزهرية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Reproduction in Flowering Plants — Lesson Summary",
+          "ar": "التكاثر في النباتات الزهرية — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Reproduction in Flowering Plants — Ministerial Questions",
+          "ar": "التكاثر في النباتات الزهرية — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "biology-l3",
+    "subjectId": "biology",
+    "unitId": "biology-u1",
+    "chapterId": "biology-u1-c2",
+    "order": 3,
+    "title": {
+      "en": "Human Reproductive System",
+      "ar": "الجهاز التكاثري في الإنسان"
+    },
+    "description": {
+      "en": "In this lesson we cover Human Reproductive System from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الجهاز التكاثري في الإنسان من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Human Reproductive System — Lesson Summary",
+          "ar": "الجهاز التكاثري في الإنسان — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Human Reproductive System — Ministerial Questions",
+          "ar": "الجهاز التكاثري في الإنسان — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "biology-l4",
+    "subjectId": "biology",
+    "unitId": "biology-u1",
+    "chapterId": "biology-u1-c2",
+    "order": 4,
+    "title": {
+      "en": "Fertilization & Embryonic Development",
+      "ar": "الإخصاب والتكوين الجنيني"
+    },
+    "description": {
+      "en": "In this lesson we cover Fertilization & Embryonic Development from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الإخصاب والتكوين الجنيني من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1614935151651-0bea6508db6b?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Fertilization & Embryonic Development — Lesson Summary",
+          "ar": "الإخصاب والتكوين الجنيني — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Fertilization & Embryonic Development — Ministerial Questions",
+          "ar": "الإخصاب والتكوين الجنيني — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "biology-l5",
+    "subjectId": "biology",
+    "unitId": "biology-u1",
+    "chapterId": "biology-u1-c2",
+    "order": 5,
+    "title": {
+      "en": "Hormonal Regulation",
+      "ar": "التنظيم الهرموني"
+    },
+    "description": {
+      "en": "In this lesson we cover Hormonal Regulation from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح التنظيم الهرموني من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1530210124550-912dc1381cb8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "in-progress",
+    "progress": 70,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Hormonal Regulation — Lesson Summary",
+          "ar": "التنظيم الهرموني — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Hormonal Regulation — Ministerial Questions",
+          "ar": "التنظيم الهرموني — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "biology-l6",
+    "subjectId": "biology",
+    "unitId": "biology-u2",
+    "chapterId": "biology-u2-c1",
+    "order": 6,
+    "title": {
+      "en": "Genetics",
+      "ar": "علم الوراثة"
+    },
+    "description": {
+      "en": "In this lesson we cover Genetics from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح علم الوراثة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Genetics — Lesson Summary",
+          "ar": "علم الوراثة — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Genetics — Ministerial Questions",
+          "ar": "علم الوراثة — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "biology-l7",
+    "subjectId": "biology",
+    "unitId": "biology-u2",
+    "chapterId": "biology-u2-c1",
+    "order": 7,
+    "title": {
+      "en": "Mendel's Laws",
+      "ar": "قوانين مندل"
+    },
+    "description": {
+      "en": "In this lesson we cover Mendel's Laws from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح قوانين مندل من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Mendel's Laws — Lesson Summary",
+          "ar": "قوانين مندل — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Mendel's Laws — Ministerial Questions",
+          "ar": "قوانين مندل — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "biology-l8",
+    "subjectId": "biology",
+    "unitId": "biology-u2",
+    "chapterId": "biology-u2-c1",
+    "order": 8,
+    "title": {
+      "en": "Incomplete Dominance & Codominance",
+      "ar": "السيادة غير التامة والمشتركة"
+    },
+    "description": {
+      "en": "In this lesson we cover Incomplete Dominance & Codominance from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح السيادة غير التامة والمشتركة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1614935151651-0bea6508db6b?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Incomplete Dominance & Codominance — Lesson Summary",
+          "ar": "السيادة غير التامة والمشتركة — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Incomplete Dominance & Codominance — Ministerial Questions",
+          "ar": "السيادة غير التامة والمشتركة — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "biology-l9",
+    "subjectId": "biology",
+    "unitId": "biology-u2",
+    "chapterId": "biology-u2-c2",
+    "order": 9,
+    "title": {
+      "en": "Sex-Linked Inheritance",
+      "ar": "الصفات المرتبطة بالجنس"
+    },
+    "description": {
+      "en": "In this lesson we cover Sex-Linked Inheritance from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الصفات المرتبطة بالجنس من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1530210124550-912dc1381cb8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Sex-Linked Inheritance — Lesson Summary",
+          "ar": "الصفات المرتبطة بالجنس — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Sex-Linked Inheritance — Ministerial Questions",
+          "ar": "الصفات المرتبطة بالجنس — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "biology-l10",
+    "subjectId": "biology",
+    "unitId": "biology-u2",
+    "chapterId": "biology-u2-c2",
+    "order": 10,
+    "title": {
+      "en": "Human Genetic Disorders",
+      "ar": "الاضطرابات الوراثية في الإنسان"
+    },
+    "description": {
+      "en": "In this lesson we cover Human Genetic Disorders from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الاضطرابات الوراثية في الإنسان من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Human Genetic Disorders — Lesson Summary",
+          "ar": "الاضطرابات الوراثية في الإنسان — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Human Genetic Disorders — Ministerial Questions",
+          "ar": "الاضطرابات الوراثية في الإنسان — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "biology-l11",
+    "subjectId": "biology",
+    "unitId": "biology-u3",
+    "chapterId": "biology-u3-c1",
+    "order": 11,
+    "title": {
+      "en": "DNA Structure & Replication",
+      "ar": "تركيب الـDNA وتضاعفه"
+    },
+    "description": {
+      "en": "In this lesson we cover DNA Structure & Replication from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح تركيب الـDNA وتضاعفه من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "DNA Structure & Replication — Lesson Summary",
+          "ar": "تركيب الـDNA وتضاعفه — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "DNA Structure & Replication — Ministerial Questions",
+          "ar": "تركيب الـDNA وتضاعفه — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "biology-l12",
+    "subjectId": "biology",
+    "unitId": "biology-u3",
+    "chapterId": "biology-u3-c1",
+    "order": 12,
+    "title": {
+      "en": "Protein Synthesis",
+      "ar": "بناء البروتين"
+    },
+    "description": {
+      "en": "In this lesson we cover Protein Synthesis from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح بناء البروتين من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1614935151651-0bea6508db6b?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Protein Synthesis — Lesson Summary",
+          "ar": "بناء البروتين — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Protein Synthesis — Ministerial Questions",
+          "ar": "بناء البروتين — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "biology-l13",
+    "subjectId": "biology",
+    "unitId": "biology-u3",
+    "chapterId": "biology-u3-c2",
+    "order": 13,
+    "title": {
+      "en": "Mutations",
+      "ar": "الطفرات"
+    },
+    "description": {
+      "en": "In this lesson we cover Mutations from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الطفرات من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1530210124550-912dc1381cb8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Mutations — Lesson Summary",
+          "ar": "الطفرات — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Mutations — Ministerial Questions",
+          "ar": "الطفرات — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "biology-l14",
+    "subjectId": "biology",
+    "unitId": "biology-u3",
+    "chapterId": "biology-u3-c2",
+    "order": 14,
+    "title": {
+      "en": "Genetic Engineering",
+      "ar": "الهندسة الوراثية"
+    },
+    "description": {
+      "en": "In this lesson we cover Genetic Engineering from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الهندسة الوراثية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Dr. Noor Al-Saadi",
+      "ar": "د. نور الساعدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Genetic Engineering — Lesson Summary",
+          "ar": "الهندسة الوراثية — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Genetic Engineering — Ministerial Questions",
+          "ar": "الهندسة الوراثية — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "english-l1",
+    "subjectId": "english",
+    "unitId": "english-u1",
+    "chapterId": "english-u1-c1",
+    "order": 1,
+    "title": {
+      "en": "Passive Voice",
+      "ar": "المبني للمجهول"
+    },
+    "description": {
+      "en": "In this lesson we cover Passive Voice from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المبني للمجهول من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Passive Voice — Lesson Summary",
+          "ar": "المبني للمجهول — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Passive Voice — Ministerial Questions",
+          "ar": "المبني للمجهول — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "english-l2",
+    "subjectId": "english",
+    "unitId": "english-u1",
+    "chapterId": "english-u1-c1",
+    "order": 2,
+    "title": {
+      "en": "Passive with Modal Verbs",
+      "ar": "المجهول مع الأفعال الناقصة"
+    },
+    "description": {
+      "en": "In this lesson we cover Passive with Modal Verbs from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المجهول مع الأفعال الناقصة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Passive with Modal Verbs — Lesson Summary",
+          "ar": "المجهول مع الأفعال الناقصة — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Passive with Modal Verbs — Ministerial Questions",
+          "ar": "المجهول مع الأفعال الناقصة — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "english-l3",
+    "subjectId": "english",
+    "unitId": "english-u1",
+    "chapterId": "english-u1-c2",
+    "order": 3,
+    "title": {
+      "en": "Reported Speech",
+      "ar": "الكلام المنقول"
+    },
+    "description": {
+      "en": "In this lesson we cover Reported Speech from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الكلام المنقول من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1571260899304-425eee4c7efc?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Reported Speech — Lesson Summary",
+          "ar": "الكلام المنقول — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Reported Speech — Ministerial Questions",
+          "ar": "الكلام المنقول — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "english-l4",
+    "subjectId": "english",
+    "unitId": "english-u1",
+    "chapterId": "english-u1-c2",
+    "order": 4,
+    "title": {
+      "en": "Reported Questions & Commands",
+      "ar": "نقل الأسئلة والأوامر"
+    },
+    "description": {
+      "en": "In this lesson we cover Reported Questions & Commands from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح نقل الأسئلة والأوامر من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Reported Questions & Commands — Lesson Summary",
+          "ar": "نقل الأسئلة والأوامر — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Reported Questions & Commands — Ministerial Questions",
+          "ar": "نقل الأسئلة والأوامر — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "english-l5",
+    "subjectId": "english",
+    "unitId": "english-u2",
+    "chapterId": "english-u2-c1",
+    "order": 5,
+    "title": {
+      "en": "Conditional Sentences (Types 1–3)",
+      "ar": "الجمل الشرطية بأنواعها"
+    },
+    "description": {
+      "en": "In this lesson we cover Conditional Sentences (Types 1–3) from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الجمل الشرطية بأنواعها من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Conditional Sentences (Types 1–3) — Lesson Summary",
+          "ar": "الجمل الشرطية بأنواعها — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Conditional Sentences (Types 1–3) — Ministerial Questions",
+          "ar": "الجمل الشرطية بأنواعها — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "english-l6",
+    "subjectId": "english",
+    "unitId": "english-u2",
+    "chapterId": "english-u2-c1",
+    "order": 6,
+    "title": {
+      "en": "Wishes & Regrets",
+      "ar": "التمني والندم"
+    },
+    "description": {
+      "en": "In this lesson we cover Wishes & Regrets from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح التمني والندم من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Wishes & Regrets — Lesson Summary",
+          "ar": "التمني والندم — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Wishes & Regrets — Ministerial Questions",
+          "ar": "التمني والندم — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "english-l7",
+    "subjectId": "english",
+    "unitId": "english-u2",
+    "chapterId": "english-u2-c2",
+    "order": 7,
+    "title": {
+      "en": "Relative Clauses",
+      "ar": "جمل الصلة"
+    },
+    "description": {
+      "en": "In this lesson we cover Relative Clauses from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح جمل الصلة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1571260899304-425eee4c7efc?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "completed",
+    "progress": 100,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Relative Clauses — Lesson Summary",
+          "ar": "جمل الصلة — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 9
+      },
+      {
+        "title": {
+          "en": "Relative Clauses — Ministerial Questions",
+          "ar": "جمل الصلة — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 7
+      }
+    ]
+  },
+  {
+    "id": "english-l8",
+    "subjectId": "english",
+    "unitId": "english-u2",
+    "chapterId": "english-u2-c2",
+    "order": 8,
+    "title": {
+      "en": "Gerunds & Infinitives",
+      "ar": "المصدر وصيغة ing"
+    },
+    "description": {
+      "en": "In this lesson we cover Gerunds & Infinitives from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح المصدر وصيغة ing من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "in-progress",
+    "progress": 51,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Gerunds & Infinitives — Lesson Summary",
+          "ar": "المصدر وصيغة ing — ملخص الدرس"
+        },
+        "size": "2.8 MB",
+        "pages": 10
+      },
+      {
+        "title": {
+          "en": "Gerunds & Infinitives — Ministerial Questions",
+          "ar": "المصدر وصيغة ing — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 8
+      }
+    ]
+  },
+  {
+    "id": "english-l9",
+    "subjectId": "english",
+    "unitId": "english-u3",
+    "chapterId": "english-u3-c1",
+    "order": 9,
+    "title": {
+      "en": "Reading Comprehension Strategies",
+      "ar": "استراتيجيات الاستيعاب القرائي"
+    },
+    "description": {
+      "en": "In this lesson we cover Reading Comprehension Strategies from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح استراتيجيات الاستيعاب القرائي من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 653,
+    "thumbnail": "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/ElephantsDream/ed_hd.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Reading Comprehension Strategies — Lesson Summary",
+          "ar": "استراتيجيات الاستيعاب القرائي — ملخص الدرس"
+        },
+        "size": "1.2 MB",
+        "pages": 11
+      },
+      {
+        "title": {
+          "en": "Reading Comprehension Strategies — Ministerial Questions",
+          "ar": "استراتيجيات الاستيعاب القرائي — أسئلة وزارية"
+        },
+        "size": "1.1 MB",
+        "pages": 4
+      }
+    ]
+  },
+  {
+    "id": "english-l10",
+    "subjectId": "english",
+    "unitId": "english-u3",
+    "chapterId": "english-u3-c1",
+    "order": 10,
+    "title": {
+      "en": "Literature: The Old Man and the Sea",
+      "ar": "الأدب: العجوز والبحر"
+    },
+    "description": {
+      "en": "In this lesson we cover Literature: The Old Man and the Sea from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الأدب: العجوز والبحر من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Literature: The Old Man and the Sea — Lesson Summary",
+          "ar": "الأدب: العجوز والبحر — ملخص الدرس"
+        },
+        "size": "1.6 MB",
+        "pages": 6
+      },
+      {
+        "title": {
+          "en": "Literature: The Old Man and the Sea — Ministerial Questions",
+          "ar": "الأدب: العجوز والبحر — أسئلة وزارية"
+        },
+        "size": "1.4 MB",
+        "pages": 5
+      }
+    ]
+  },
+  {
+    "id": "english-l11",
+    "subjectId": "english",
+    "unitId": "english-u3",
+    "chapterId": "english-u3-c2",
+    "order": 11,
+    "title": {
+      "en": "Paragraph Writing",
+      "ar": "كتابة الفقرة"
+    },
+    "description": {
+      "en": "In this lesson we cover Paragraph Writing from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح كتابة الفقرة من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 888,
+    "thumbnail": "https://images.unsplash.com/photo-1571260899304-425eee4c7efc?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/Sintel/sintel-2048-surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Paragraph Writing — Lesson Summary",
+          "ar": "كتابة الفقرة — ملخص الدرس"
+        },
+        "size": "2.0 MB",
+        "pages": 7
+      },
+      {
+        "title": {
+          "en": "Paragraph Writing — Ministerial Questions",
+          "ar": "كتابة الفقرة — أسئلة وزارية"
+        },
+        "size": "1.7 MB",
+        "pages": 6
+      }
+    ]
+  },
+  {
+    "id": "english-l12",
+    "subjectId": "english",
+    "unitId": "english-u3",
+    "chapterId": "english-u3-c2",
+    "order": 12,
+    "title": {
+      "en": "Formal Letters & Emails",
+      "ar": "الرسائل الرسمية"
+    },
+    "description": {
+      "en": "In this lesson we cover Formal Letters & Emails from first principles, work through ministerial-exam examples step by step, and finish with common pitfalls and quick memory tricks.",
+      "ar": "في هذا الدرس نشرح الرسائل الرسمية من الأساس، ونحل أمثلة من الأسئلة الوزارية خطوة بخطوة، ونختم بالأخطاء الشائعة وحيل سريعة للحفظ."
+    },
+    "duration": 596,
+    "thumbnail": "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=800&q=80",
+    "teacher": {
+      "en": "Ms. Sarah Al-Obaidi",
+      "ar": "أ. سارة العبيدي"
+    },
+    "status": "not-started",
+    "progress": 0,
+    "videoUrl": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+    "resources": [
+      {
+        "title": {
+          "en": "Formal Letters & Emails — Lesson Summary",
+          "ar": "الرسائل الرسمية — ملخص الدرس"
+        },
+        "size": "2.4 MB",
+        "pages": 8
+      },
+      {
+        "title": {
+          "en": "Formal Letters & Emails — Ministerial Questions",
+          "ar": "الرسائل الرسمية — أسئلة وزارية"
+        },
+        "size": "0.8 MB",
+        "pages": 7
+      }
+    ]
+  }
+]

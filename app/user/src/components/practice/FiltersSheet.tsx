@@ -3,16 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { BottomSheet, Button, Chip, SegmentedControl, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { subjects } from '@/data';
+import { useBankFacets } from '@/api/bank';
 import { space, subjectColors } from '@/theme';
 import type { SubjectId } from '@/types';
 import {
   DEFAULT_COUNT,
   SESSION_COUNTS,
-  filterQuestions,
-  tagsFor,
-  topicsFor,
-  unitsFor,
+  toBankQuery,
   type DifficultyFilter,
   type PracticeFilters,
 } from '@/utils/practice';
@@ -23,6 +20,8 @@ interface Props {
   onClose(): void;
   value: PracticeFilters;
   count: number;
+  /** Session sizes from app-config (`learning.practiceSessionSizes`). */
+  sizes?: number[];
   onApply(filters: PracticeFilters, count: number): void;
 }
 
@@ -40,8 +39,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** Practice filters: subject → unit → topic, difficulty, tags and session size. Edits a draft until Apply. */
-export function FiltersSheet({ visible, onClose, value, count, onApply }: Props) {
-  const { t, L, lang } = useI18n('practice');
+export function FiltersSheet({ visible, onClose, value, count, sizes, onApply }: Props) {
+  const { t, L } = useI18n('practice');
+  const sessionSizes = sizes?.length ? sizes : [...SESSION_COUNTS];
   const [draft, setDraft] = useState<PracticeFilters>(value);
   const [draftCount, setDraftCount] = useState<number>(count);
 
@@ -53,12 +53,23 @@ export function FiltersSheet({ visible, onClose, value, count, onApply }: Props)
     }
   }, [visible, value, count]);
 
-  const units = useMemo(() => unitsFor(draft.subjectId), [draft.subjectId]);
-  const topics = useMemo(() => topicsFor(draft.subjectId, draft.unitId), [draft.subjectId, draft.unitId]);
-  const tags = useMemo(() => tagsFor(draft.subjectId, draft.unitId), [draft.subjectId, draft.unitId]);
-  const matches = useMemo(() => filterQuestions(draft, lang).length, [draft, lang]);
+  // BNK-02 for the draft: subject counts, units/topics/tags of the selection and the live match count.
+  const query = useMemo(() => toBankQuery(draft), [draft]);
+  const { data: facets } = useBankFacets(query, visible);
+  const subjects = facets?.subjects ?? [];
+  const units = facets?.units ?? [];
+  const topics = useMemo(
+    () => (facets?.topics ?? []).map((tp) => ({ key: tp.topicId, label: tp.label })),
+    [facets?.topics],
+  );
+  const tags = useMemo(() => (facets?.tags ?? []).map((tg) => tg.slug), [facets?.tags]);
+  const tagLabels = useMemo(
+    () => new Map((facets?.tags ?? []).map((tg) => [tg.slug, tg.label] as const)),
+    [facets?.tags],
+  );
+  const matches = facets?.matchCount ?? 0;
 
-  const setSubject = (id?: SubjectId) => {
+  const setSubject = (id?: string) => {
     haptic.selection();
     setDraft((d) => ({ ...d, subjectId: d.subjectId === id ? undefined : id, unitId: undefined, topic: undefined, tags: [] }));
   };
@@ -80,13 +91,13 @@ export function FiltersSheet({ visible, onClose, value, count, onApply }: Props)
   const reset = () => {
     haptic.light();
     setDraft({ search: draft.search, difficulty: 'all', tags: [] });
-    setDraftCount(DEFAULT_COUNT);
+    setDraftCount(sessionSizes[0] ?? DEFAULT_COUNT);
   };
 
   const footer = (
     <View style={styles.footer}>
-      <Text variant="label" color={matches ? 'muted' : 'danger'} align="center" style={styles.matchText}>
-        {matches
+      <Text variant="label" color={matches || !facets ? 'muted' : 'danger'} align="center" style={styles.matchText}>
+        {matches || !facets
           ? t('matchCount', { questions: t('common:units.questions', { count: matches }) })
           : t('noMatch')}
       </Text>
@@ -99,7 +110,7 @@ export function FiltersSheet({ visible, onClose, value, count, onApply }: Props)
             haptic.medium();
             onApply(draft, draftCount);
           }}
-          style={styles.flex2}
+          style={styles.flex1}
           icon="check"
         />
       </View>
@@ -114,12 +125,12 @@ export function FiltersSheet({ visible, onClose, value, count, onApply }: Props)
             <Chip label={t('filters.allSubjects')} selected={!draft.subjectId} onPress={() => setSubject(undefined)} />
             {subjects.map((s) => (
               <Chip
-                key={s.id}
-                label={t(`common:subjects.${s.id}`)}
-                color={subjectColors[s.id]}
-                selected={draft.subjectId === s.id}
-                onPress={() => setSubject(s.id)}
-                count={filterQuestions({ subjectId: s.id }, lang).length}
+                key={s.slug}
+                label={t(`common:subjects.${s.slug}`, { defaultValue: L(s.name) })}
+                color={subjectColors[s.slug as SubjectId]}
+                selected={draft.subjectId === s.slug}
+                onPress={() => setSubject(s.slug)}
+                count={s.count}
               />
             ))}
           </View>
@@ -132,11 +143,11 @@ export function FiltersSheet({ visible, onClose, value, count, onApply }: Props)
                 <Chip label={t('filters.allUnits')} selected={!draft.unitId} onPress={() => setUnit(undefined)} />
                 {units.map((u) => (
                   <Chip
-                    key={u.id}
+                    key={u.unitId}
                     label={L(u.title)}
-                    color={subjectColors[draft.subjectId!]}
-                    selected={draft.unitId === u.id}
-                    onPress={() => setUnit(u.id)}
+                    color={subjectColors[draft.subjectId as SubjectId]}
+                    selected={draft.unitId === u.unitId}
+                    onPress={() => setUnit(u.unitId)}
                   />
                 ))}
               </View>
@@ -169,7 +180,7 @@ export function FiltersSheet({ visible, onClose, value, count, onApply }: Props)
             {tags.map((tag) => (
               <Chip
                 key={tag}
-                label={t(`tags.${tag}`, { defaultValue: tag })}
+                label={t(`tags.${tag}`, { defaultValue: tagLabels.get(tag) ? L(tagLabels.get(tag)!) : tag })}
                 icon={draft.tags?.includes(tag) ? 'check' : undefined}
                 selected={!!draft.tags?.includes(tag)}
                 onPress={() => toggleTag(tag)}
@@ -180,7 +191,7 @@ export function FiltersSheet({ visible, onClose, value, count, onApply }: Props)
 
         <Section title={t('filters.count')}>
           <SegmentedControl
-            options={SESSION_COUNTS.map((c) => ({ key: String(c), label: t('filters.countOption', { count: c }) }))}
+            options={sessionSizes.map((c) => ({ key: String(c), label: t('filters.countOption', { count: c }) }))}
             value={String(draftCount)}
             onChange={(k) => setDraftCount(Number(k))}
           />
@@ -199,5 +210,4 @@ const styles = StyleSheet.create({
   matchText: { marginBottom: space.xxs },
   footerRow: { flexDirection: 'row', gap: space.md },
   flex1: { flex: 1 },
-  flex2: { flex: 2 },
 });

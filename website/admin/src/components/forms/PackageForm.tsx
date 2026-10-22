@@ -1,17 +1,20 @@
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
-import { Check } from 'lucide-react';
-import type { Package } from '@/types';
+import { Check, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { useSubjects } from '@/store/core';
+import { useLookups } from '@/api/lookups';
+import type { PackageFormInput } from '@/api/packages';
 import { useLocalize } from '@/hooks/useLocale';
+import { Button } from '@/components/ui/Button';
 import { Field, Input, Select, Textarea } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { Segmented } from '@/components/ui/Tabs';
 
-export type PackageFormValues = Omit<Package, 'id' | 'subscribers'>;
+export type PackageFormValues = PackageFormInput;
+
+const numOrNull = (v: string) => (v.trim() === '' ? null : Number(v));
 
 interface Props {
   formId: string;
@@ -26,7 +29,7 @@ const fromDateInput = (d: string, endOfDay = false) => (d ? new Date(`${d}T${end
 export function PackageForm({ formId, defaultValues, onSubmit, disabled }: Props) {
   const { t } = useTranslation();
   const L = useLocalize();
-  const subjects = useSubjects((s) => s.items);
+  const { subjects } = useLookups();
 
   const schema = z
     .object({
@@ -46,6 +49,26 @@ export function PackageForm({ formId, defaultValues, onSubmit, disabled }: Props
       accessStartDate: z.string(),
       status: z.enum(['active', 'draft', 'archived']),
       featured: z.boolean(),
+      tagline_en: z.string(),
+      tagline_ar: z.string(),
+      yearlyPrice: z.string().refine((v) => v.trim() === '' || Number(v) >= 0, t('packages.errors.price')),
+      yearlyValidityDays: z.number({ invalid_type_error: t('packages.errors.duration') }).int().min(1, t('packages.errors.duration')),
+      order: z.number({ invalid_type_error: t('packages.errors.order') }).int().min(0, t('packages.errors.order')),
+      aiQuota: z.string().refine((v) => v.trim() === '' || (Number.isInteger(Number(v)) && Number(v) >= 0), t('packages.errors.aiQuota')),
+      features: z.array(z.object({ en: z.string(), ar: z.string() })),
+      comparison: z.object({
+        subjectsCount: z.number({ invalid_type_error: t('packages.errors.duration') }).int().min(0),
+        lessons: z.boolean(),
+        quizzes: z.boolean(),
+        questionBank: z.enum(['subject', 'full', 'unlimited']),
+        mistakes: z.boolean(),
+        examSimulator: z.enum(['false', 'true', 'unlimited']),
+        aiQuota: z.number({ invalid_type_error: t('packages.errors.aiQuota') }).int().min(0),
+        pdfResources: z.boolean(),
+        analytics: z.boolean(),
+        devices: z.number({ invalid_type_error: t('packages.errors.duration') }).int().min(1),
+        prioritySupport: z.boolean(),
+      }),
     })
     .superRefine((v, ctx) => {
       if (v.validityType !== 'until_date' && !(v.validityValue >= 1)) {
@@ -72,8 +95,12 @@ export function PackageForm({ formId, defaultValues, onSubmit, disabled }: Props
       ...defaultValues,
       validUntil: toDateInput(defaultValues.validUntil),
       accessStartDate: toDateInput(defaultValues.accessStartDate),
+      yearlyPrice: defaultValues.yearlyPrice == null ? '' : String(defaultValues.yearlyPrice),
+      aiQuota: defaultValues.aiQuota == null ? '' : String(defaultValues.aiQuota),
+      comparison: { ...defaultValues.comparison, examSimulator: String(defaultValues.comparison.examSimulator) as 'false' | 'true' | 'unlimited' },
     },
   });
+  const features = useFieldArray({ control, name: 'features' });
 
   const validityType = watch('validityType');
   const accessStart = watch('accessStart');
@@ -85,6 +112,9 @@ export function PackageForm({ formId, defaultValues, onSubmit, disabled }: Props
       validityValue: v.validityType === 'until_date' ? 0 : v.validityValue,
       validUntil: v.validityType === 'until_date' ? fromDateInput(v.validUntil, true) : null,
       accessStartDate: v.accessStart === 'from_date' ? fromDateInput(v.accessStartDate) : null,
+      yearlyPrice: numOrNull(v.yearlyPrice),
+      aiQuota: numOrNull(v.aiQuota),
+      comparison: { ...v.comparison, examSimulator: v.comparison.examSimulator === 'unlimited' ? 'unlimited' : v.comparison.examSimulator === 'true' },
     });
 
   const section = 'space-y-4 border-b border-line pb-6 last:border-0 last:pb-0';
@@ -109,6 +139,14 @@ export function PackageForm({ formId, defaultValues, onSubmit, disabled }: Props
           <Field label={t('common.descriptionAr')} htmlFor="pk-desc-ar">
             <Textarea id="pk-desc-ar" rows={2} dir="rtl" {...register('description_ar')} />
           </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t('packages.taglineEn')} htmlFor="pk-tag-en">
+              <Input id="pk-tag-en" {...register('tagline_en')} />
+            </Field>
+            <Field label={t('packages.taglineAr')} htmlFor="pk-tag-ar">
+              <Input id="pk-tag-ar" dir="rtl" {...register('tagline_ar')} />
+            </Field>
+          </div>
           <Field label={t('packages.subjectsIncluded')} required error={errors.subjectIds?.message}>
             <Controller
               control={control}
@@ -152,6 +190,17 @@ export function PackageForm({ formId, defaultValues, onSubmit, disabled }: Props
           </div>
           <Field label={t('packages.taxBehavior')} htmlFor="pk-tax">
             <Select id="pk-tax" options={(['inclusive', 'exclusive', 'exempt'] as const).map((v) => ({ value: v, label: t(`packages.tax.${v}`) }))} {...register('taxBehavior')} />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label={t('packages.yearlyPrice')} hint={t('packages.yearlyPriceHint')} error={errors.yearlyPrice?.message} htmlFor="pk-yprice" className="sm:col-span-2">
+              <Input id="pk-yprice" type="number" min={0} step={currency === 'USD' ? 1 : 1000} suffix={currency} invalid={!!errors.yearlyPrice} {...register('yearlyPrice')} />
+            </Field>
+            <Field label={t('packages.yearlyValidityDays')} error={errors.yearlyValidityDays?.message} htmlFor="pk-ydays">
+              <Input id="pk-ydays" type="number" min={1} suffix={t('common.days')} invalid={!!errors.yearlyValidityDays} {...register('yearlyValidityDays', { valueAsNumber: true })} />
+            </Field>
+          </div>
+          <Field label={t('packages.aiQuota')} hint={t('packages.aiQuotaHint')} error={errors.aiQuota?.message} htmlFor="pk-ai">
+            <Input id="pk-ai" type="number" min={0} invalid={!!errors.aiQuota} {...register('aiQuota')} />
           </Field>
         </div>
 
@@ -205,7 +254,63 @@ export function PackageForm({ formId, defaultValues, onSubmit, disabled }: Props
         </div>
 
         <div className={section}>
+          <h3 className={heading}>{t('packages.features')}</h3>
+          <p className="-mt-2 text-xs text-muted">{t('packages.featuresHint')}</p>
+          <div className="space-y-2">
+            {features.fields.map((f, i) => (
+              <div key={f.id} className="flex items-start gap-2">
+                <Input aria-label={`${t('packages.featureEn')} ${i + 1}`} placeholder={t('packages.featureEn')} {...register(`features.${i}.en` as const)} />
+                <Input aria-label={`${t('packages.featureAr')} ${i + 1}`} placeholder={t('packages.featureAr')} dir="rtl" {...register(`features.${i}.ar` as const)} />
+                <Button variant="ghost" size="icon-sm" aria-label={t('actions.remove')} onClick={() => features.remove(i)} className="mt-1 shrink-0 hover:text-danger">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="secondary" size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => features.append({ en: '', ar: '' })}>
+              {t('packages.addFeature')}
+            </Button>
+          </div>
+        </div>
+
+        <div className={section}>
+          <h3 className={heading}>{t('packages.comparison')}</h3>
+          <p className="-mt-2 text-xs text-muted">{t('packages.comparisonHint')}</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label={t('packages.cmp.subjectsCount')} htmlFor="pk-c-subj">
+              <Input id="pk-c-subj" type="number" min={0} {...register('comparison.subjectsCount', { valueAsNumber: true })} />
+            </Field>
+            <Field label={t('packages.cmp.aiQuota')} error={errors.comparison?.aiQuota?.message} htmlFor="pk-c-ai">
+              <Input id="pk-c-ai" type="number" min={0} {...register('comparison.aiQuota', { valueAsNumber: true })} />
+            </Field>
+            <Field label={t('packages.cmp.devices')} htmlFor="pk-c-dev">
+              <Input id="pk-c-dev" type="number" min={1} {...register('comparison.devices', { valueAsNumber: true })} />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t('packages.cmp.questionBank')} htmlFor="pk-c-qb">
+              <Select id="pk-c-qb" options={(['subject', 'full', 'unlimited'] as const).map((v) => ({ value: v, label: t(`packages.cmp.questionBanks.${v}`) }))} {...register('comparison.questionBank')} />
+            </Field>
+            <Field label={t('packages.cmp.examSimulator')} htmlFor="pk-c-ex">
+              <Select id="pk-c-ex" options={(['false', 'true', 'unlimited'] as const).map((v) => ({ value: v, label: t(`packages.cmp.examSimulators.${v}`) }))} {...register('comparison.examSimulator')} />
+            </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(['lessons', 'quizzes', 'mistakes', 'pdfResources', 'analytics', 'prioritySupport'] as const).map((k) => (
+              <Controller
+                key={k}
+                control={control}
+                name={`comparison.${k}` as const}
+                render={({ field }) => <Switch size="sm" checked={!!field.value} onChange={field.onChange} label={t(`packages.cmp.${k}`)} disabled={disabled} />}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className={section}>
           <h3 className={heading}>{t('packages.visibility')}</h3>
+          <Field label={t('packages.order')} hint={t('packages.orderHint')} error={errors.order?.message} htmlFor="pk-order">
+            <Input id="pk-order" type="number" min={0} invalid={!!errors.order} {...register('order', { valueAsNumber: true })} />
+          </Field>
           <Field label={t('common.status')} hint={t('packages.statusHint')} htmlFor="pk-status">
             <Select id="pk-status" options={(['active', 'draft', 'archived'] as const).map((v) => ({ value: v, label: t(`status.${v}`) }))} {...register('status')} />
           </Field>

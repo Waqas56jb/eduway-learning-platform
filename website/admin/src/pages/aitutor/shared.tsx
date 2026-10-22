@@ -1,10 +1,14 @@
 import { useTranslation } from 'react-i18next';
-import type { AiFlaggedConversation } from '@/types';
+import type { AiFlagReason, AiSeverity } from '@/api/aiTutor';
 import { Badge, type Tone } from '@/components/ui/Badge';
 
-export const SEVERITY_TONE: Record<AiFlaggedConversation['severity'], Tone> = { low: 'neutral', medium: 'warning', high: 'danger' };
+export const SEVERITY_TONE: Record<AiSeverity, Tone> = {
+  low: 'neutral',
+  medium: 'warning',
+  high: 'danger',
+};
 
-export const REASON_TONE: Record<AiFlaggedConversation['reason'], Tone> = {
+export const REASON_TONE: Record<AiFlagReason, Tone> = {
   off_topic: 'slate',
   abuse: 'warning',
   cheating: 'danger',
@@ -12,7 +16,7 @@ export const REASON_TONE: Record<AiFlaggedConversation['reason'], Tone> = {
   self_harm: 'danger',
 };
 
-export function SeverityBadge({ severity }: { severity: AiFlaggedConversation['severity'] }) {
+export function SeverityBadge({ severity }: { severity: AiSeverity }) {
   const { t } = useTranslation();
   return (
     <Badge tone={SEVERITY_TONE[severity]} dot>
@@ -21,16 +25,7 @@ export function SeverityBadge({ severity }: { severity: AiFlaggedConversation['s
   );
 }
 
-export function ReasonBadge({ reason }: { reason: AiFlaggedConversation['reason'] }) {
+export function ReasonBadge({ reason }: { reason: AiFlagReason }) {
   const { t } = useTranslation();
   return <Badge tone={REASON_TONE[reason]}>{t(`aitutor.reasons.${reason}`)}</Badge>;
 }
-
-/** Subject id → subject key (for `subjects.*` labels and colours). */
-export const SUBJECT_KEY: Record<string, 'math' | 'physics' | 'chemistry' | 'biology' | 'english'> = {
-  sub_math: 'math',
-  sub_phys: 'physics',
-  sub_chem: 'chemistry',
-  sub_bio: 'biology',
-  sub_eng: 'english',
-};

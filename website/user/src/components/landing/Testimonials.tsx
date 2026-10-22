@@ -2,8 +2,9 @@ import { animate, motion, useMotionValue, useReducedMotion, type PanInfo } from 
 import { ChevronLeft, ChevronRight, MapPin, Quote } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Avatar, SectionHeading, Skeleton, Stars, useMockLoading } from '@/components/ui';
-import { testimonials } from '@/data';
+import { useTestimonials } from '@/api/public';
+import type { Testimonial } from '@/api/types';
+import { Avatar, ErrorState, SectionHeading, Skeleton, Stars } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +29,7 @@ function usePerView() {
 
 export function Testimonials() {
   const { t } = useTranslation();
-  const ready = useMockLoading(450);
+  const { data: testimonials = [], isLoading, isError, refetch } = useTestimonials('landing');
 
   return (
     <section className="section relative overflow-hidden bg-white">
@@ -39,8 +40,10 @@ export function Testimonials() {
           title={t('landing.testimonials.title')}
           subtitle={t('landing.testimonials.subtitle')}
         />
-        {ready ? (
-          <Carousel />
+        {isError ? (
+          <ErrorState className="mt-14" onRetry={() => void refetch()} />
+        ) : !isLoading ? (
+          <Carousel testimonials={testimonials} />
         ) : (
           <div className="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-3" aria-hidden>
             {[0, 1, 2].map((i) => (
@@ -53,7 +56,7 @@ export function Testimonials() {
   );
 }
 
-function Carousel() {
+function Carousel({ testimonials }: { testimonials: Testimonial[] }) {
   const { t } = useTranslation();
   const { l, isRtl, fmtNumber } = useLang();
   const reduce = useReducedMotion();

@@ -10,6 +10,8 @@ const p = (factory: () => Promise<{ default: ComponentType }>) => lazy(factory);
 const Login = p(() => import('@/pages/auth/Login'));
 const Verify2FA = p(() => import('@/pages/auth/Verify2FA'));
 const ForgotPassword = p(() => import('@/pages/auth/ForgotPassword'));
+const ResetPassword = p(() => import('@/pages/auth/ResetPassword'));
+const AcceptInvite = p(() => import('@/pages/auth/AcceptInvite'));
 // Core
 const Dashboard = p(() => import('@/pages/dashboard/Dashboard'));
 const UsersList = p(() => import('@/pages/users/UsersList'));
@@ -34,6 +36,7 @@ const Attempts = p(() => import('@/pages/assessments/Attempts'));
 // Packages
 const Packages = p(() => import('@/pages/packages/Packages'));
 const Promotions = p(() => import('@/pages/packages/Promotions'));
+const Subscriptions = p(() => import('@/pages/packages/Subscriptions'));
 // Payments
 const Transactions = p(() => import('@/pages/payments/Transactions'));
 const TransactionDetail = p(() => import('@/pages/payments/TransactionDetail'));
@@ -69,6 +72,11 @@ const FeatureFlags = p(() => import('@/pages/settings/FeatureFlags'));
 const LegalDocuments = p(() => import('@/pages/settings/LegalDocuments'));
 const SupportContacts = p(() => import('@/pages/settings/SupportContacts'));
 const AppSettings = p(() => import('@/pages/settings/AppSettings'));
+const PaymentSettings = p(() => import('@/pages/settings/Payments'));
+const LearningSettings = p(() => import('@/pages/settings/Learning'));
+const MarketingSettings = p(() => import('@/pages/settings/Marketing'));
+const SecuritySettings = p(() => import('@/pages/settings/SecuritySettings'));
+const Cms = p(() => import('@/pages/settings/Cms'));
 // Security
 const Roles = p(() => import('@/pages/security/Roles'));
 const RoleEditor = p(() => import('@/pages/security/RoleEditor'));
@@ -98,6 +106,8 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/verify-2fa', element: <Suspense fallback={null}><Verify2FA /></Suspense> },
+  { path: '/reset-password', element: <Suspense fallback={null}><ResetPassword /></Suspense> },
+  { path: '/accept-invite', element: <Suspense fallback={null}><AcceptInvite /></Suspense> },
   {
     element: <ProtectedRoute />,
     children: [
@@ -133,6 +143,7 @@ export const router = createBrowserRouter([
 
           page('/packages', 'packages', Packages),
           page('/packages/promotions', 'packages', Promotions),
+          page('/packages/subscriptions', 'packages', Subscriptions),
 
           { path: '/payments', element: <Navigate to="/payments/transactions" replace /> },
           page('/payments/transactions', 'payments', Transactions),
@@ -173,6 +184,11 @@ export const router = createBrowserRouter([
           page('/settings/legal', 'settings', LegalDocuments),
           page('/settings/support', 'settings', SupportContacts),
           page('/settings/app', 'settings', AppSettings),
+          page('/settings/payments', 'settings', PaymentSettings),
+          page('/settings/learning', 'settings', LearningSettings),
+          page('/settings/marketing', 'settings', MarketingSettings),
+          page('/settings/security', 'settings', SecuritySettings),
+          page('/settings/cms', 'settings', Cms),
 
           { path: '/security', element: <Navigate to="/security/roles" replace /> },
           page('/security/roles', 'security', Roles),

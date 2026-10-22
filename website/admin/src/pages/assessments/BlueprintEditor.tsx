@@ -5,18 +5,24 @@ import { z } from 'zod';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Plus, Save, Trash2, UploadCloud } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { BlueprintRow, Difficulty, ExamBlueprint } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import type { BlueprintRow, Difficulty } from '@/types';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtNumber } from '@/utils/format';
 import { uid } from '@/utils/id';
-import { daysAhead } from '@/utils/random';
-import { useBlueprints } from '@/store/assessments';
-import { useQuestions } from '@/store/questions';
-import { useSubjects, useTopics, useUnits } from '@/store/core';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
+import { useDebounce } from '@/hooks/useMisc';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Badge, Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, Field, Input, Segmented, Select, StatusBadge, Switch, useConfirm } from '@/components/ui';
+import { Badge, Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, Field, Input, Segmented, Select, SkeletonCard, StatusBadge, Switch, Textarea, useConfirm } from '@/components/ui';
+import { errorMessage, isApiError } from '@/api/client';
+import { useApiQuery } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { blueprintsApi, toBlueprintWrite, type BlueprintVM } from '@/api/assessments';
+
+type ExamBlueprint = BlueprintVM;
+const daysAhead = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
 
 const DIFFS: Difficulty[] = ['easy', 'medium', 'hard'];
 const DIFF_COLOR: Record<Difficulty, string> = { easy: '#16A34A', medium: '#F59E0B', hard: '#DC2626' };
@@ -43,11 +49,16 @@ function rebalance(row: BlueprintRow, key: Difficulty, value: number): Blueprint
 
 const newRow = (subjectId = ''): BlueprintRow => ({ id: uid('bpr'), subjectId, topicId: null, count: 10, easy: 30, medium: 50, hard: 20 });
 
-const emptyBlueprint = (): ExamBlueprint => ({
-  id: uid('bp'),
+const emptyBlueprint = (subjectId = ''): ExamBlueprint => ({
+  id: '',
   name_en: '',
   name_ar: '',
-  rows: [newRow('sub_math')],
+  description_en: '',
+  description_ar: '',
+  passMark: 50,
+  subjects: [],
+  questionCount: 0,
+  rows: [newRow(subjectId)],
   durationMin: 90,
   randomize: true,
   scoring: 'standard',
@@ -68,51 +79,78 @@ export default function BlueprintEditor() {
   const navigate = useNavigate();
   const can = useCan();
   const confirm = useConfirm();
-  const existing = useBlueprints((s) => (id ? s.items.find((b) => b.id === id) : undefined));
-  const add = useBlueprints((s) => s.add);
-  const update = useBlueprints((s) => s.update);
-  const questions = useQuestions((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
-  const topics = useTopics((s) => s.items);
+  const qc = useQueryClient();
+  const lookups = useLookups();
+  const subjects = lookups.subjects;
+  const units = lookups.units;
+  const topics = lookups.topics;
+  const existingQ = useApiQuery(qk.blueprints.detail(id), () => blueprintsApi.get(id as string), { enabled: !isNew });
+  const existing = existingQ.data;
+  const [saving, setSaving] = useState<string | null>(null);
 
-  const [bp, setBp] = useState<ExamBlueprint>(() => (existing ? structuredClone(existing) : emptyBlueprint()));
+  const [bp, setBp] = useState<ExamBlueprint>(() => emptyBlueprint());
   const [baseline, setBaseline] = useState(() => JSON.stringify(bp));
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const next = existing ? structuredClone(existing) : emptyBlueprint();
+    const next = existing ? structuredClone(existing) : emptyBlueprint(subjects[0]?.id ?? '');
     setBp(next);
     setBaseline(JSON.stringify(next));
     setErrors({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, existing?.updatedAt]);
 
-  const usable = useMemo(() => questions.filter((q) => q.status === 'published' || q.status === 'approved'), [questions]);
+  // New blueprint: pick the first subject once lookups arrive.
+  useEffect(() => {
+    if (isNew && subjects[0] && bp.rows.length === 1 && !bp.rows[0].subjectId) {
+      setBp((p) => ({ ...p, rows: [{ ...p.rows[0], subjectId: subjects[0].id }] }));
+      setBaseline((b) => b);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjects]);
 
-  /** Available vs required questions per difficulty for each row. */
+  /** Available vs required questions per difficulty for each row (ADM-EBP-10, usable pool = approved + published). */
+  const rowsKey = useDebounce(JSON.stringify(bp.rows.map(({ subjectId, topicId, count, easy, medium, hard }) => ({ subjectId, topicId, count, easy, medium, hard }))), 400);
+  const availQ = useApiQuery(qk.blueprints.sub('availability', rowsKey), () => blueprintsApi.availability(JSON.parse(rowsKey)), {
+    enabled: bp.rows.every((r) => !!r.subjectId),
+    placeholderData: (prev) => prev,
+    meta: { silentError: true },
+  });
   const availability = useMemo(
     () =>
       Object.fromEntries(
-        bp.rows.map((r) => {
-          const pool = usable.filter((q) => q.subjectId === r.subjectId && (!r.topicId || q.topicId === r.topicId));
-          const per = DIFFS.map((d) => {
-            const required = Math.round((r.count * r[d]) / 100);
-            const available = pool.filter((q) => q.difficulty === d).length;
-            return { d, required, available };
-          });
-          return [r.id, { per, ok: per.every((p) => p.available >= p.required), pool: pool.length }];
+        bp.rows.map((r, i) => {
+          const a = availQ.data?.rows.find((x) => x.index === i) ?? availQ.data?.rows[i];
+          const per = DIFFS.map((d) => ({ d, required: a ? a[d].required : Math.round((r.count * r[d]) / 100), available: a ? a[d].available : 0 }));
+          return [r.id, { per, ok: a ? a.ok : true, pool: a?.pool ?? 0 }];
         }),
       ),
-    [bp.rows, usable],
+    [bp.rows, availQ.data],
   );
 
-  if (id && !existing) {
+  if (!isNew && existingQ.isLoading) {
     return (
       <>
-        <PageHeader title={t('assessments.blueprints.notFound')} />
+        <PageHeader title={t('common.loading')} />
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <SkeletonCard lines={8} />
+          <SkeletonCard lines={6} />
+        </div>
+      </>
+    );
+  }
+
+  if (id && !existing) {
+    const notFound = !existingQ.error || (isApiError(existingQ.error) && existingQ.error.status === 404);
+    return (
+      <>
+        <PageHeader title={notFound ? t('assessments.blueprints.notFound') : t('api.loadFailed')} />
         <Card>
-          <EmptyState title={t('assessments.blueprints.notFound')} action={<ButtonLink to="/assessments/blueprints">{t('actions.back')}</ButtonLink>} />
+          <EmptyState
+            title={notFound ? t('assessments.blueprints.notFound') : t('api.loadFailed')}
+            hint={notFound ? undefined : errorMessage(existingQ.error)}
+            action={notFound ? <ButtonLink to="/assessments/blueprints">{t('actions.back')}</ButtonLink> : <Button variant="secondary" onClick={() => existingQ.refetch()}>{t('api.retry')}</Button>}
+          />
         </Card>
       </>
     );
@@ -138,6 +176,7 @@ export default function BlueprintEditor() {
         name_ar: z.string().trim().min(3, t('errors.required')),
         durationMin: z.number().int().min(10, t('errors.min', { min: 10 })).max(300, t('errors.max', { max: 300 })),
         attemptLimit: z.number().int().min(1, t('errors.min', { min: 1 })).max(10, t('errors.max', { max: 10 })),
+        passMark: z.number().min(0, t('errors.min', { min: 0 })).max(100, t('errors.max', { max: 100 })),
         availableFrom: z.string().min(1, t('errors.required')),
         availableTo: z.string().min(1, t('errors.required')),
         rows: z
@@ -173,17 +212,38 @@ export default function BlueprintEditor() {
       const ok = await confirm({ title: t('assessments.editor.shortTitle'), body: t('assessments.editor.shortBody', { count: shortRows.length }), tone: 'warning', confirmText: t('actions.publish') });
       if (!ok) return;
     }
-    const next = { ...bp, status, updatedAt: new Date().toISOString() };
-    if (isNew) {
-      add(next);
-      toast.success(t('toast.created', { entity: t('assessments.blueprints.entity') }));
-      setBaseline(JSON.stringify(next));
-      navigate(`/assessments/blueprints/${next.id}`, { replace: true });
-    } else {
-      update(next.id, next, status !== bp.status ? { action: `exam_blueprint.${status === 'published' ? 'publish' : status}` } : undefined);
-      setBp(next);
-      setBaseline(JSON.stringify(next));
-      toast.success(status === 'published' && bp.status !== 'published' ? t('assessments.editor.publishedToast') : t('toast.saved'));
+    const publishing = status === 'published' && (isNew || existing?.status !== 'published');
+    setSaving(status === 'published' ? 'publish' : 'save');
+    try {
+      // Save content first (keeping the current status), then publish through ADM-EBP-07 (pool check, force when confirmed).
+      const body = toBlueprintWrite({ ...bp, status: publishing ? (isNew ? 'draft' : (existing?.status ?? 'draft')) : status });
+      let saved = isNew ? await blueprintsApi.create(body) : await blueprintsApi.update(bp.id, body);
+      if (publishing) saved = await blueprintsApi.publish(saved.id, shortRows.length > 0);
+      qc.setQueryData(qk.blueprints.detail(saved.id), saved);
+      await qc.invalidateQueries({ queryKey: qk.blueprints.all });
+      setBp(saved);
+      setBaseline(JSON.stringify(saved));
+      if (isNew) {
+        toast.success(publishing ? t('assessments.editor.publishedToast') : t('toast.created', { entity: t('assessments.blueprints.entity') }));
+        navigate(`/assessments/blueprints/${saved.id}`, { replace: true });
+      } else toast.success(publishing ? t('assessments.editor.publishedToast') : t('toast.saved'));
+    } catch (e) {
+      if (isApiError(e) && e.reason === 'POOL_SHORT') {
+        const sr = e.details.shortRows;
+        toast.error(t('assessments.editor.shortBody', { count: Array.isArray(sr) ? sr.length : Number(sr ?? 1) }));
+      }
+      else if (isApiError(e) && Object.keys(e.fields).length) {
+        const out: Record<string, string> = {};
+        for (const [k, msg] of Object.entries(e.fields)) {
+          const m = /^rows\.(\d+)/.exec(k);
+          const key = m ? `row:${bp.rows[Number(m[1])]?.id}` : k === 'name.en' ? 'name_en' : k === 'name.ar' ? 'name_ar' : k;
+          out[key] ??= msg;
+        }
+        setErrors(out);
+        toast.error(t('questions.validation.fixErrors'));
+      } else toast.error(errorMessage(e));
+    } finally {
+      setSaving(null);
     }
   };
 
@@ -210,12 +270,12 @@ export default function BlueprintEditor() {
               {t('actions.back')}
             </ButtonLink>
             {canEdit && (
-              <Button variant="secondary" icon={<Save className="h-4 w-4" />} onClick={() => save()} disabled={!isNew && !dirty}>
+              <Button variant="secondary" icon={<Save className="h-4 w-4" />} onClick={() => save()} loading={saving === 'save'} disabled={(!isNew && !dirty) || !!saving}>
                 {isNew ? t('actions.saveDraft') : t('actions.saveChanges')}
               </Button>
             )}
             {can('assessments', 'approve') && bp.status !== 'published' && (
-              <Button icon={<UploadCloud className="h-4 w-4" />} onClick={() => save('published')}>
+              <Button icon={<UploadCloud className="h-4 w-4" />} loading={saving === 'publish'} disabled={!!saving} onClick={() => save('published')}>
                 {t('actions.publish')}
               </Button>
             )}
@@ -241,6 +301,15 @@ export default function BlueprintEditor() {
               </Field>
               <Field label={t('assessments.blueprints.attemptLimit')} error={errors.attemptLimit}>
                 <Input type="number" min={1} max={10} value={bp.attemptLimit} invalid={!!errors.attemptLimit} onChange={(e) => set('attemptLimit', Number(e.target.value))} />
+              </Field>
+              <Field label={t('assessments.editor.passMark')} error={errors.passMark} hint={t('assessments.editor.passMarkHint')}>
+                <Input type="number" min={0} max={100} suffix="%" value={bp.passMark} invalid={!!errors.passMark} onChange={(e) => set('passMark', Number(e.target.value))} />
+              </Field>
+              <Field label={t('assessments.editor.descriptionEn')} className="md:col-span-2">
+                <Textarea rows={2} value={bp.description_en} onChange={(e) => set('description_en', e.target.value)} />
+              </Field>
+              <Field label={t('assessments.editor.descriptionAr')} className="md:col-span-2">
+                <Textarea rows={2} dir="rtl" value={bp.description_ar} onChange={(e) => set('description_ar', e.target.value)} />
               </Field>
               <Field label={t('assessments.blueprints.scoring')} hint={t(`assessments.scoringHint.${bp.scoring}`)}>
                 <Select value={bp.scoring} onChange={(e) => set('scoring', e.target.value as ExamBlueprint['scoring'])} options={(['standard', 'negative', 'weighted'] as const).map((s) => ({ value: s, label: t(`assessments.scoring.${s}`) }))} />

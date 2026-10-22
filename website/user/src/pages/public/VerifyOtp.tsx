@@ -1,36 +1,49 @@
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
-import { Check, MessageSquareText, PencilLine, RotateCw, ShieldCheck } from 'lucide-react';
+import { Check, LogOut, MessageSquareText, Monitor, PencilLine, RotateCw, ShieldCheck, Smartphone } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthLayout, AuthSteps, DemoHint } from '@/components/auth/AuthLayout';
 import { OtpInput, type OtpInputHandle } from '@/components/auth/OtpInput';
 import { maskMobile } from '@/components/auth/mobile';
-import { Button, Seo, useToast } from '@/components/ui';
-import { DEMO_OTP } from '@/context/AuthContext';
+import { errorMessage, isApiError } from '@/api/client';
+import type { SessionDto } from '@/api/types';
+import { Button, Modal, Seo, useToast } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useLang } from '@/hooks/useLang';
 import { IMAGES } from '@/lib/images';
 import { formatClock } from '@/lib/utils';
 
-const LENGTH = 6;
-const RESEND_SECONDS = 60;
-const empty = () => Array.from({ length: LENGTH }, () => '');
+/** Seeded demo student's dev code (server: settings.otp.devBypassCode, non-production only). */
+const DEV_OTP = '123456';
+const empty = (n: number) => Array.from({ length: n }, () => '');
+const secondsLeft = (sentAt: number, total: number) => Math.max(0, Math.ceil(total - (Date.now() - sentAt) / 1000));
 
 type Status = 'idle' | 'verifying' | 'error' | 'success';
 
 export default function VerifyOtp() {
   const { t } = useTranslation();
-  const { pending, verifyOtp, requestOtp } = useAuth();
+  const { pending, verifyOtp, resendOtp, completeSignIn } = useAuth();
+  const { l, fmtRelative } = useLang();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
 
-  const [digits, setDigits] = useState<string[]>(empty);
+  // Code length + resend cooldown come from the send-otp response (settings-driven).
+  const LENGTH = pending?.codeLength ?? 6;
+  const [digits, setDigits] = useState<string[]>(() => empty(LENGTH));
   const [status, setStatus] = useState<Status>('idle');
-  const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  const [seconds, setSeconds] = useState(() => (pending ? secondsLeft(pending.sentAt, pending.resendInSeconds) : 60));
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
+  // DEVICE_LIMIT_REACHED -> let the student sign out one device, then retry with `revokeSessionId`.
+  const [deviceLimit, setDeviceLimit] = useState<{ code: string; sessions: SessionDto[] } | null>(null);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (digits.length !== LENGTH) setDigits(empty(LENGTH));
+  }, [LENGTH, digits.length]);
   const otpRef = useRef<OtpInputHandle>(null);
   const shake = useAnimationControls();
 
@@ -42,7 +55,15 @@ export default function VerifyOtp() {
 
   if (!pending && status !== 'success') return <Navigate to="/login" replace state={{ from }} />;
 
-  const verify = async (code: string) => {
+  const fail = (message: string) => {
+    setError(message);
+    setStatus('error');
+    setDigits(empty(LENGTH));
+    void shake.start({ x: [0, -10, 10, -8, 8, -4, 4, 0], transition: { duration: 0.5 } });
+    otpRef.current?.focus(0);
+  };
+
+  const verify = async (code: string, revokeSessionId?: string) => {
     if (status === 'verifying' || status === 'success') return;
     if (code.length < LENGTH) {
       setError(t('validation.otp'));
@@ -51,37 +72,57 @@ export default function VerifyOtp() {
       return;
     }
     setStatus('verifying');
-    if (code === DEMO_OTP) {
-      // Celebrate first: once verifyOtp resolves the user is signed in and this guest route unmounts.
+    try {
+      const res = await verifyOtp(code, revokeSessionId);
+      setDeviceLimit(null);
+      // Celebrate first: once the session is committed this guest route unmounts.
       setStatus('success');
       toast.success(t('auth.verify.successToast'), t('auth.verify.successBody'));
       await new Promise((r) => setTimeout(r, 900));
-    }
-    const ok = await verifyOtp(code);
-    if (ok) {
+      completeSignIn(res);
       navigate(from || '/student/dashboard', { replace: true });
-      return;
+    } catch (e) {
+      if (isApiError(e) && e.reason === 'DEVICE_LIMIT_REACHED') {
+        setStatus('idle');
+        setDeviceLimit({ code, sessions: (e.details.sessions as SessionDto[] | undefined) ?? [] });
+        return;
+      }
+      if (isApiError(e) && e.reason === 'ACCOUNT_NOT_FOUND') {
+        toast.error(errorMessage(e));
+        navigate('/register', { replace: true, state: { from } });
+        return;
+      }
+      fail(errorMessage(e));
     }
-    setError(t('validation.otpInvalid'));
-    setStatus('error');
-    setDigits(empty());
-    void shake.start({ x: [0, -10, 10, -8, 8, -4, 4, 0], transition: { duration: 0.5 } });
-    otpRef.current?.focus(0);
+  };
+
+  const signOutDevice = async (sessionId: string) => {
+    if (!deviceLimit) return;
+    setRevoking(sessionId);
+    await verify(deviceLimit.code, sessionId);
+    setRevoking(null);
   };
 
   const resend = async () => {
     if (!pending) return;
     setResending(true);
-    await requestOtp(pending.mobile);
-    setResending(false);
-    setSeconds(RESEND_SECONDS);
-    setDigits(empty());
-    setStatus('idle');
-    otpRef.current?.focus(0);
-    toast.info(t('auth.verify.resentToast'), t('auth.verify.resentBody'));
+    try {
+      const res = await resendOtp();
+      setSeconds(res.resendInSeconds);
+      setDigits(empty(res.codeLength));
+      setStatus('idle');
+      otpRef.current?.focus(0);
+      toast.info(t('auth.verify.resentToast'), t('auth.verify.resentBody'));
+    } catch (e) {
+      if (isApiError(e) && e.retryAfterSeconds) setSeconds(e.retryAfterSeconds);
+      setError(errorMessage(e));
+      setStatus('error');
+    } finally {
+      setResending(false);
+    }
   };
 
-  const mobile = pending ? maskMobile(pending.mobile) : '';
+  const mobile = pending ? pending.maskedPhone || maskMobile(pending.phone) : '';
   const isRegister = pending?.mode === 'register';
   const busy = status === 'verifying' || status === 'success';
 
@@ -195,7 +236,7 @@ export default function VerifyOtp() {
               )}
             </div>
 
-            <DemoHint>{t('auth.demo.otp', { code: DEMO_OTP })}</DemoHint>
+            <DemoHint>{t('auth.demo.otp', { code: DEV_OTP })}</DemoHint>
 
             <p className="mt-6 flex items-center justify-center gap-2 text-xs text-muted">
               <ShieldCheck className="h-3.5 w-3.5 text-accent" aria-hidden />
@@ -204,6 +245,42 @@ export default function VerifyOtp() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Modal
+        open={!!deviceLimit}
+        onClose={() => setDeviceLimit(null)}
+        title={t('system.deviceLimit.title')}
+        description={t('system.deviceLimit.body')}
+      >
+        <ul className="space-y-2">
+          {deviceLimit?.sessions.map((s) => {
+            const Icon = s.platform === 'web' ? Monitor : Smartphone;
+            return (
+              <li key={s.id} className="flex items-center gap-3 rounded-xl border border-primary/10 px-4 py-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/5 text-primary">
+                  <Icon className="h-5 w-5" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-primary">{s.device}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {l(s.location)} · {fmtRelative(s.lastActive, { clampFuture: true })}
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  loading={revoking === s.id}
+                  disabled={!!revoking && revoking !== s.id}
+                  onClick={() => void signOutDevice(s.id)}
+                  leftIcon={<LogOut className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden />}
+                >
+                  {t('system.deviceLimit.revoke')}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      </Modal>
     </AuthLayout>
   );
 }

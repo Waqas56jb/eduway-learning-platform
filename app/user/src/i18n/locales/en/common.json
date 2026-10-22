@@ -87,5 +87,25 @@
     "openMenu": "Open menu",
     "notifications": "Notifications",
     "bookmark": "Bookmark question"
+  },
+  "errors": {
+    "network": "No connection. Check your internet and try again.",
+    "timeout": "The server took too long to respond. Please try again.",
+    "server": "Something went wrong on our side. Please try again shortly.",
+    "generic": "Something went wrong. Please try again.",
+    "sessionExpired": "Your session has ended. Please sign in again.",
+    "locked": "This content isn’t included in your current package.",
+    "rateLimited": "Too many attempts. Please wait a moment and try again.",
+    "notFound": "We couldn’t find what you were looking for.",
+    "validation": "Please check the highlighted fields."
+  },
+  "appStatus": {
+    "maintenanceTitle": "We’ll be right back",
+    "maintenanceBody": "EDUWAY is getting an upgrade. Please check back in a little while.",
+    "updateTitle": "Update required",
+    "updateBody": "A newer version of EDUWAY is available. Update now to keep learning with the latest features and fixes.",
+    "updateCta": "Update now",
+    "checkAgain": "Check again",
+    "offlineBanner": "You’re offline — changes are saved and will sync when you’re back."
   }
 }

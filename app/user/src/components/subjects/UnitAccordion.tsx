@@ -5,7 +5,6 @@ import { Icon } from '@/components/icons';
 import { LessonRow } from '@/components/student';
 import { PressableScale, ProgressRing, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
-import { useProgressStore } from '@/store';
 import { radius, shadows, space, useTheme } from '@/theme';
 import type { Lesson, Unit } from '@/types';
 
@@ -31,7 +30,6 @@ export const UnitAccordion = memo(function UnitAccordion({
 }: UnitAccordionProps) {
   const { colors, isDark } = useTheme();
   const { t, L } = useI18n('subjects');
-  const lessonProgress = useProgressStore((s) => s.lessonProgress);
   const [open, setOpen] = useState(defaultOpen);
   const openSV = useSharedValue(defaultOpen ? 1 : 0);
   const contentH = useSharedValue(0);
@@ -41,14 +39,13 @@ export const UnitAccordion = memo(function UnitAccordion({
     let sum = 0;
     let d = 0;
     for (const l of lessons) {
-      const p = lessonProgress[l.id];
-      if (p?.status === 'completed') {
+      if (l.status === 'completed') {
         sum += 100;
         d += 1;
-      } else sum += p?.progress ?? 0;
+      } else sum += l.progress ?? 0;
     }
     return { pct: Math.round(sum / lessons.length), done: d };
-  }, [lessons, lessonProgress]);
+  }, [lessons]);
 
   const chapters = useMemo(
     () =>
@@ -112,7 +109,7 @@ export const UnitAccordion = memo(function UnitAccordion({
       <Animated.View style={[styles.bodyClip, bodyStyle]} pointerEvents={open ? 'auto' : 'none'}>
         <View style={styles.bodyInner} onLayout={onContentLayout}>
           {chapters.map(({ chapter, n, items }) => (
-            <View key={chapter.id} style={styles.chapter}>
+            <View key={chapter.id} style={[styles.chapter, { borderTopColor: colors.border }]}>
               <View style={styles.chapterHead}>
                 <View style={[styles.chapterDot, { backgroundColor: color }]} />
                 <Text variant="label" color="muted" numberOfLines={1} style={styles.flex}>
@@ -138,11 +135,11 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg },
   headText: { flex: 1, gap: 2 },
-  chevron: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  chevron: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   bodyClip: { overflow: 'hidden' },
-  bodyInner: { position: 'absolute', top: 0, start: 0, end: 0, paddingHorizontal: space.lg, paddingBottom: space.md },
-  chapter: { paddingTop: space.xs },
-  chapterHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.sm },
+  bodyInner: { position: 'absolute', top: 0, start: 0, end: 0, paddingHorizontal: space.md, paddingBottom: space.sm },
+  chapter: { paddingTop: space.xs, borderTopWidth: StyleSheet.hairlineWidth },
+  chapterHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingTop: space.md, paddingBottom: space.xs },
   chapterDot: { width: 6, height: 6, borderRadius: 3 },
-  divider: { height: StyleSheet.hairlineWidth, marginStart: 92 + space.md },
+  divider: { height: StyleSheet.hairlineWidth, marginStart: 72 + space.md },
 });

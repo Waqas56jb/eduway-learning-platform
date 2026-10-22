@@ -1,6 +1,6 @@
 import '@/i18n';
 import { useEffect, useMemo } from 'react';
-import { I18nManager, Platform, StyleSheet } from 'react-native';
+import { I18nManager, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -20,7 +20,13 @@ import {
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { PlayfairDisplay_700Bold, PlayfairDisplay_800ExtraBold } from '@expo-google-fonts/playfair-display';
 import { Tajawal_400Regular, Tajawal_500Medium, Tajawal_700Bold, Tajawal_800ExtraBold } from '@expo-google-fonts/tajawal';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { useAppStatus } from '@/api/appStatus';
+import { useApiBoot } from '@/api/boot';
+import { queryClient } from '@/api/queryClient';
+import { SystemStatusScreen } from '@/components/system/SystemStatusScreen';
 import { ToastHost } from '@/components/ui';
+import { directionStyle, useIsRTL } from '@/utils/rtl';
 import { useAuthStore, useLangStore, usePrefsStore } from '@/store';
 import { fonts, useTheme } from '@/theme';
 
@@ -89,6 +95,7 @@ export default function RootLayout() {
     [fonts.arHeavy]: Tajawal_800ExtraBold,
   });
   const langReady = useLangStore((s) => s.ready);
+  const rtl = useIsRTL();
   const prefsHydrated = usePrefsStore((s) => s.hydrated);
   const authHydrated = useAuthStore((s) => s.hydrated);
   const { colors, isDark } = useTheme();
@@ -97,6 +104,10 @@ export default function RootLayout() {
   const ready = (fontsLoaded || !!fontError) && langReady && prefsHydrated && authHydrated;
 
   useAuthGuard(ready);
+  const signedIn = useAuthStore((s) => s.isAuthenticated);
+  const recheck = useApiBoot(ready, signedIn);
+  const maintenance = useAppStatus((s) => s.maintenance);
+  const update = useAppStatus((s) => s.update);
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync().catch(() => {});
@@ -122,7 +133,9 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.background }]}>
+    // Yoga `direction` on the root flips the whole app for Arabic without a native reload.
+    <GestureHandlerRootView style={[styles.root, directionStyle(rtl), { backgroundColor: colors.background }]}>
+      <QueryClientProvider client={queryClient}>
       <SafeAreaProvider style={{ backgroundColor: colors.background }}>
         <ThemeProvider value={navTheme}>
           <StatusBar style={isDark ? 'light' : 'dark'} animated />
@@ -145,9 +158,20 @@ export default function RootLayout() {
             <Stack.Screen name="exams/room/[id]" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
             <Stack.Screen name="subscription/success" options={{ gestureEnabled: false, animation: 'fade' }} />
           </Stack>
+          {update.required || maintenance.enabled ? (
+            <View style={StyleSheet.absoluteFill}>
+              <SystemStatusScreen
+                kind={update.required ? 'update' : 'maintenance'}
+                message={maintenance.message}
+                storeUrl={update.storeUrl}
+                onRetry={recheck}
+              />
+            </View>
+          ) : null}
           <ToastHost />
         </ThemeProvider>
       </SafeAreaProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

@@ -15,7 +15,8 @@
     "paid": "Paid students",
     "milestones": "Milestones hit",
     "pendingReward": "Pending reward",
-    "joined": "Joined"
+    "joined": "Joined",
+    "code": "Referral code"
   },
   "mobileFormat": "Use an Iraqi mobile number, e.g. +964 770 123 4567",
   "deleteBody": "The marketer will be removed and their schools become unassigned. Paid settlements are kept.",
@@ -50,7 +51,8 @@
     "settlements": "Settlements",
     "notFound": "Marketer not found",
     "back": "Back to marketers",
-    "students": "students"
+    "students": "students",
+    "noMilestoneSet": "No active milestone set yet."
   },
   "milestones": {
     "title": "Milestone Rewards",
@@ -76,6 +78,12 @@
     "version": "Version {{version}}",
     "effective": "Effective {{date}}",
     "invalid": "Thresholds must be unique and every reward greater than 0",
-    "milestonesCount": "{{count}} milestones"
-  }
+    "milestonesCount": "{{count}} milestones",
+    "draftExists": "A draft milestone set already exists",
+    "saved": "Draft saved",
+    "noHistory": "No published versions yet."
+  },
+  "codeFormat": "Use 4–20 letters, digits or dashes",
+  "codeTaken": "This referral code is already in use",
+  "codeHint": "Optional marketer referral code"
 }

@@ -7,10 +7,9 @@ export { TrustRow } from './TrustRow';
 export { PaymentMethodCard, MethodMark } from './PaymentMethodCard';
 export { GatewaySheet } from './GatewaySheet';
 export {
-  PAYMENT_METHODS,
-  PROMO_CODES,
-  generateReceiptNumber,
-  getPaymentMethod,
+  methodFromId,
+  methodLabel,
+  toPaymentMethod,
   yearlySavingPercent,
   type PaymentMethod,
   type PaymentMethodId,

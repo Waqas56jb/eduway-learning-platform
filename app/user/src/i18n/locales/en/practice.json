@@ -47,7 +47,8 @@
     "mistakesCount": "{{count}} to review",
     "mistakesClear": "All caught up",
     "exams": "Exam Simulator",
-    "examsSub": "Timed ministerial-style mocks"
+    "examsSub": "Timed ministerial-style mocks",
+    "subtitle": "Bookmarks, mistakes and mock exams"
   },
   "recent": {
     "title": "Recent practice",
@@ -162,5 +163,16 @@
     "conditionals": "Conditionals",
     "relative": "Relative clauses",
     "gerunds": "Gerunds"
+  },
+  "hero": {
+    "overline": "Smart practice",
+    "title": "Your next session",
+    "matches": "Matching questions",
+    "perSession": "Per session",
+    "allSubjects": "All subjects",
+    "anyLevel": "Any difficulty",
+    "tags": "Tags: {{count}}",
+    "search": "“{{q}}”",
+    "editFilters": "Edit filters"
   }
 }

@@ -202,6 +202,7 @@
     "importedLabel": "Imported",
     "skippedLabel": "Skipped (errors)",
     "viewBank": "View question bank",
-    "another": "Import another file"
+    "another": "Import another file",
+    "errorReport": "Download error report"
   }
 }

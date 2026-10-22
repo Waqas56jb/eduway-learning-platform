@@ -19,7 +19,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LessonList } from '@/components/student/LessonList';
 import { LessonQuiz } from '@/components/student/LessonQuiz';
 import { VideoPlayer } from '@/components/student/VideoPlayer';
-import { teacherAvatar, useSubjectAccess } from '@/components/student/lesson/access';
+import { teacherAvatar } from '@/components/student/lesson/access';
 import { NotesPanel, ResourcesPanel } from '@/components/student/lesson/LessonPanels';
 import {
   Avatar,
@@ -27,6 +27,7 @@ import {
   Button,
   Card,
   EmptyState,
+  ErrorState,
   Modal,
   ProgressBar,
   Seo,
@@ -34,12 +35,13 @@ import {
   SkeletonList,
   SmartImage,
   Tabs,
-  useMockLoading,
   useToast,
 } from '@/components/ui';
-import { getLesson, getSubject, lessonsBySubject } from '@/data';
+import { useSubject } from '@/api/catalog';
+import { errorMessage, isApiError } from '@/api/client';
+import { useLesson } from '@/api/lessons';
+import { useCompleteLesson } from '@/api/progress';
 import { useLang } from '@/hooks/useLang';
-import { useStudent } from '@/hooks/useProgress';
 import { toMinutes } from '@/lib/utils';
 
 type Tab = 'overview' | 'resources' | 'notes';
@@ -64,19 +66,35 @@ export default function Lesson() {
   const { l } = useLang();
   const navigate = useNavigate();
   const toast = useToast();
-  const ready = useMockLoading();
-  const { getLessonProgress, markLessonComplete, quizScores } = useStudent();
-  const { isUnlocked } = useSubjectAccess();
+  const completeLesson = useCompleteLesson();
 
   const [tab, setTab] = useState<Tab>('overview');
   const [finishedOpen, setFinishedOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
 
-  const lesson = getLesson(lessonId);
-  const subject = getSubject(lesson?.subjectId);
+  // CAT-05 lesson detail (+ caller progress, prev/next, unit progress, best quiz score, resources);
+  // CAT-02 for the subject's units/lessons in the "Up next" list.
+  const lessonQ = useLesson(lessonId);
+  const lesson = lessonQ.data;
+  const subjectQ = useSubject(lesson?.subjectSlug);
+  const subject = subjectQ.data;
+  const ready = !lessonQ.isLoading && !subjectQ.isLoading;
 
   const closeQuiz = useCallback(() => setQuizOpen(false), []);
   const closeFinished = useCallback(() => setFinishedOpen(false), []);
+
+  if (!ready) {
+    return (
+      <>
+        <Seo title={t('common.loading')} />
+        <LessonSkeleton />
+      </>
+    );
+  }
+
+  if (lessonQ.isError && !(isApiError(lessonQ.error) && lessonQ.error.status === 404)) {
+    return <ErrorState className="mt-10" onRetry={() => void lessonQ.refetch()} />;
+  }
 
   if (!lesson || !subject) {
     return (
@@ -97,18 +115,21 @@ export default function Lesson() {
     );
   }
 
-  const locked = !isUnlocked(subject.id);
-  const unit = subject.units.find((u) => u.id === lesson.unitId);
-  const unitIndex = subject.units.findIndex((u) => u.id === lesson.unitId);
-  const all = lessonsBySubject(subject.id);
-  const pos = all.findIndex((x) => x.id === lesson.id);
-  const prev = pos > 0 ? all[pos - 1] : undefined;
-  const next = pos >= 0 && pos < all.length - 1 ? all[pos + 1] : undefined;
-  const unitLessons = all.filter((x) => x.unitId === lesson.unitId);
-  const unitDone = unitLessons.filter((x) => getLessonProgress(x.id).status === 'completed').length;
-  const progress = getLessonProgress(lesson.id);
+  const locked = lesson.locked;
+  // Entitlement locks go to the paywall; sequential / prerequisite locks point back to the lesson to finish.
+  const accessLock = locked && (lesson.lockReason === 'PREREQUISITE' || lesson.lockReason === 'SEQUENTIAL');
+  const unit = { title: lesson.unitTitle };
+  // 1-based unit number; derived from the subject's ordered units (contract leaves unitIndex's base unspecified).
+  const unitPos = subject.units.findIndex((u) => u.id === lesson.unitId);
+  const unitIndex = unitPos >= 0 ? unitPos + 1 : lesson.unitIndex;
+  const prev = lesson.prevLessonId ? { id: lesson.prevLessonId } : undefined;
+  const next = lesson.nextLessonId ? { id: lesson.nextLessonId } : undefined;
+  const unitLessons = subject.lessons.filter((x) => x.unitId === lesson.unitId);
+  const unitDone = lesson.unitProgress.done;
+  const unitTotal = lesson.unitProgress.total || unitLessons.length;
+  const progress = { status: lesson.status, progress: lesson.progress };
   const isDone = progress.status === 'completed';
-  const best = quizScores[lesson.id];
+  const best = lesson.bestQuizScore;
 
   const goNext = () => {
     setQuizOpen(false);
@@ -116,8 +137,10 @@ export default function Lesson() {
   };
 
   const markDone = () => {
-    markLessonComplete(lesson.id);
-    toast.success(t('learn.lesson.markedToast'), l(lesson.title));
+    completeLesson.mutate(lesson.id, {
+      onSuccess: () => toast.success(t('learn.lesson.markedToast'), l(lesson.title)),
+      onError: (e) => toast.error(errorMessage(e)),
+    });
   };
 
   const statusBadge = isDone ? (
@@ -150,7 +173,7 @@ export default function Lesson() {
                 <ChevronRight className="h-4 w-4 rtl:-scale-x-100" />
               </li>
               <li>
-                <Link to={`/student/subjects/${subject.id}`} className="font-medium transition hover:text-primary">
+                <Link to={`/student/subjects/${subject.slug}`} className="font-medium transition hover:text-primary">
                   {l(subject.name)}
                 </Link>
               </li>
@@ -179,24 +202,46 @@ export default function Lesson() {
                     <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/25">
                       <Lock className="h-6 w-6 text-accent-light" aria-hidden />
                     </span>
-                    <p className="text-lg font-bold">{t('learn.subject.lockedTitle')}</p>
-                    <p className="max-w-md text-sm text-white/70">{t('learn.subject.lockedBody')}</p>
-                    <Button to="/student/subscription" variant="gold" size="sm" leftIcon={<Crown className="h-4 w-4" />}>
-                      {t('learn.subject.upgrade')}
-                    </Button>
+                    {accessLock ? (
+                      <>
+                        <p className="text-lg font-bold">{t('common.locked')}</p>
+                        <p className="max-w-md text-sm text-white/70">
+                          {t(`errors.reasons.${lesson.lockReason === 'PREREQUISITE' ? 'PREREQUISITE_NOT_MET' : 'SEQUENTIAL_LOCK'}`)}
+                        </p>
+                        {(lesson.prerequisiteId || prev) && (
+                          <Button
+                            to={`/student/lesson/${lesson.lockReason === 'PREREQUISITE' && lesson.prerequisiteId ? lesson.prerequisiteId : prev?.id}`}
+                            variant="gold"
+                            size="sm"
+                            leftIcon={<ArrowLeft className="h-4 w-4 rtl:-scale-x-100" />}
+                          >
+                            {t('learn.lesson.prev')}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-lg font-bold">{t('learn.subject.lockedTitle')}</p>
+                        <p className="max-w-md text-sm text-white/70">{t('learn.subject.lockedBody')}</p>
+                        <Button to="/student/subscription" variant="gold" size="sm" leftIcon={<Crown className="h-4 w-4" />}>
+                          {t('learn.subject.upgrade')}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
                 <VideoPlayer
                   key={lesson.id}
                   lessonId={lesson.id}
-                  src={lesson.videoUrl}
                   poster={lesson.thumbnail}
                   title={l(lesson.title)}
                   durationHint={lesson.duration}
+                  resumePositionSec={lesson.status === 'completed' ? 0 : lesson.positionSec}
                   onEnded={() => {
-                    markLessonComplete(lesson.id);
-                    setFinishedOpen(true);
+                    if (!isDone) completeLesson.mutate(lesson.id);
+                    // Never stack the "finished" prompt on top of a quiz that is already running.
+                    if (!quizOpen) setFinishedOpen(true);
                   }}
                 />
               )}
@@ -205,7 +250,7 @@ export default function Lesson() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge color={subject.color}>{l(subject.name)}</Badge>
                   {statusBadge}
-                  {typeof best === 'number' && (
+                  {typeof best === 'number' && best !== null && (
                     <Badge tone="navy">
                       <ListChecks className="h-3.5 w-3.5" aria-hidden />
                       {t('learn.lesson.bestScore', { pct: best })}
@@ -215,7 +260,7 @@ export default function Lesson() {
                 <h1 className="mt-3 text-2xl font-bold leading-snug text-primary sm:text-3xl">{l(lesson.title)}</h1>
                 <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted">
                   <span className="flex items-center gap-2">
-                    <Avatar src={teacherAvatar(subject.id)} alt="" size={28} />
+                    <Avatar src={teacherAvatar(subject.slug, lesson.teacherRef)} alt="" size={28} />
                     <span className="font-medium text-ink">{l(lesson.teacher)}</span>
                   </span>
                   <span className="flex items-center gap-1.5 num">
@@ -224,7 +269,7 @@ export default function Lesson() {
                   </span>
                   {unit && (
                     <span>
-                      {t('learn.list.unit', { n: unitIndex + 1 })} · {l(unit.title)}
+                      {t('learn.list.unit', { n: unitIndex })} · {l(unit.title)}
                     </span>
                   )}
                 </div>
@@ -240,6 +285,7 @@ export default function Lesson() {
                       <Button
                         variant="primary"
                         onClick={markDone}
+                        loading={completeLesson.isPending}
                         disabled={locked}
                         className="px-3 sm:px-5"
                         leftIcon={<CheckCircle2 className="h-4 w-4" />}
@@ -250,7 +296,7 @@ export default function Lesson() {
                     <Button
                       variant="gold"
                       onClick={() => setQuizOpen(true)}
-                      disabled={locked}
+                      disabled={locked || !lesson.quiz.available}
                       className="px-3 sm:px-5"
                       leftIcon={<ListChecks className="h-4 w-4" />}
                     >
@@ -290,14 +336,14 @@ export default function Lesson() {
                   </h2>
                   {unit && <p className="mt-0.5 truncate text-xs text-muted">{l(unit.title)}</p>}
                   <div className="mt-3 flex items-center gap-3">
-                    <ProgressBar value={(unitDone / Math.max(1, unitLessons.length)) * 100} color={subject.color} size="xs" label={l(unit?.title)} />
+                    <ProgressBar value={(unitDone / Math.max(1, unitTotal)) * 100} color={subject.color} size="xs" label={l(unit?.title)} />
                     <span className="shrink-0 text-xs font-semibold text-muted num">
-                      {t('learn.list.unitDone', { done: unitDone, total: unitLessons.length })}
+                      {t('learn.list.unitDone', { done: unitDone, total: unitTotal })}
                     </span>
                   </div>
                 </div>
                 <div className="max-h-[32rem] overflow-y-auto pe-1">
-                  <LessonList subject={subject} lessons={unitLessons} locked={locked} currentLessonId={lesson.id} compact />
+                  <LessonList subject={subject} lessons={unitLessons} locked={!!subject.locked} currentLessonId={lesson.id} compact />
                 </div>
               </Card>
             </aside>

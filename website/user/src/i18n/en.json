@@ -103,7 +103,8 @@
     "minLength": "Must be at least {{count}} characters",
     "terms": "You must accept the Terms and Privacy Policy",
     "otp": "Enter the 6-digit code",
-    "otpInvalid": "Incorrect code. Try 123456 for the demo."
+    "otpInvalid": "Incorrect code. Try 123456 for the demo.",
+    "maxLength": "Must be at most {{count}} characters"
   },
   "footer": {
     "about": "EDUWAY is Iraq's premium e-learning platform for 6th Scientific Grade students — expert teachers, ministerial-aligned content and smart tools in one place.",
@@ -164,13 +165,16 @@
       "collapse": "Collapse sidebar",
       "expand": "Expand sidebar",
       "searchEmpty": "No lessons found for “{{q}}”",
-      "searchResults": "Lessons"
+      "searchResults": "Lessons",
+      "noUnread": "No unread notifications"
     },
     "plan": {
       "active": "Active",
       "daysLeft_one": "{{count}} day left",
       "daysLeft_other": "{{count}} days left",
-      "upgrade": "Upgrade"
+      "upgrade": "Upgrade",
+      "none": "No active plan",
+      "expired": "Plan expired"
     }
   },
   "toast": {

@@ -4,9 +4,12 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { cn } from '@/utils/cn';
 import { fmtRelative } from '@/utils/format';
-import { useAuth, useCurrentAdmin, useCurrentRole } from '@/store/auth';
-import { useRoles } from '@/store/core';
-import { useAppNotifications } from '@/store/notifications';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth, useCurrentAdmin, useCurrentRole, roleFromDto } from '@/store/auth';
+import { adminMeApi } from '@/api/auth';
+import { api } from '@/api/client';
+import { qk } from '@/api/keys';
+import type { AdminInboxNotification, RoleDto } from '@/api/types';
 import { useUi } from '@/store/ui';
 import { useLocalize } from '@/hooks/useLocale';
 import { Avatar } from '@/components/ui/Avatar';
@@ -19,10 +22,28 @@ function NotificationsBell() {
   const { t } = useTranslation();
   const L = useLocalize();
   const navigate = useNavigate();
-  const items = useAppNotifications((s) => s.items);
-  const markRead = useAppNotifications((s) => s.markRead);
-  const markAll = useAppNotifications((s) => s.markAllRead);
-  const unread = items.filter((n) => !n.read).length;
+  const qc = useQueryClient();
+  const inbox = useQuery({
+    queryKey: qk.inbox,
+    queryFn: () => adminMeApi.inbox({ limit: 20 }),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    meta: { silentError: true },
+  });
+  const items = (inbox.data?.items ?? []).map((n: AdminInboxNotification) => ({
+    ...n,
+    title_en: n.title.en,
+    title_ar: n.title.ar,
+    body_en: n.body.en,
+    body_ar: n.body.ar,
+  }));
+  const unread = inbox.data?.unreadCount ?? 0;
+  const setUnread = (id: string | null, unreadCount: number) =>
+    qc.setQueryData(qk.inbox, (old: typeof inbox.data) =>
+      old ? { unreadCount, items: old.items.map((n) => (id === null || n.id === id ? { ...n, read: true } : n)) } : old,
+    );
+  const markRead = (id: string) => adminMeApi.markRead(id).then((r) => setUnread(id, r.unreadCount)).catch(() => undefined);
+  const markAll = () => adminMeApi.markAllRead().then(() => setUnread(null, 0)).catch(() => undefined);
 
   return (
     <Popover
@@ -50,7 +71,7 @@ function NotificationsBell() {
               <li key={n.id}>
                 <button
                   onClick={() => {
-                    markRead(n.id);
+                    if (!n.read) markRead(n.id);
                     navigate(n.href);
                     close();
                   }}
@@ -76,9 +97,19 @@ function UserMenu() {
   const { t } = useTranslation();
   const L = useLocalize();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const admin = useCurrentAdmin();
   const role = useCurrentRole();
-  const roles = useRoles((s) => s.items);
+  const realCanSecurity = useAuth((s) => !!s.me && (s.me.role?.key === 'super_admin' || !!s.me.permissions?.includes('security.view')));
+  const rolesQ = useQuery({
+    queryKey: qk.roles.list({ menu: true }),
+    queryFn: () => api.list<RoleDto>('/admin/roles', { pageSize: 100 }),
+    enabled: realCanSecurity,
+    staleTime: 5 * 60_000,
+    meta: { silentError: true },
+  });
+  const roleDtos = rolesQ.data?.items ?? [];
+  const roles = roleDtos.map(roleFromDto);
   const previewRoleId = useAuth((s) => s.previewRoleId);
   const setPreview = useAuth((s) => s.setPreviewRole);
   const logout = useAuth((s) => s.logout);
@@ -111,6 +142,8 @@ function UserMenu() {
           <MenuItem icon={<UserRound />} onClick={() => { navigate('/profile'); close(); }}>
             {t('topbar.profile')}
           </MenuItem>
+          {roles.length > 0 && (
+          <>
           <MenuDivider />
           <MenuLabel>
             <span className="inline-flex items-center gap-1.5">
@@ -125,7 +158,7 @@ function UserMenu() {
                 active={active}
                 icon={active ? <Check className="!text-accent" /> : <span className="block h-4 w-4" />}
                 onClick={() => {
-                  setPreview(r.id === admin.roleId ? null : r.id);
+                  setPreview(r.id === admin.roleId ? null : (roleDtos.find((d) => d.id === r.id) ?? null));
                   toast.success(t('topbar.roleSwitched', { role: L(r, 'name') }));
                   close();
                 }}
@@ -134,12 +167,15 @@ function UserMenu() {
               </MenuItem>
             );
           })}
+          </>
+          )}
           <MenuDivider />
           <MenuItem
             danger
             icon={<LogOut />}
             onClick={() => {
               logout();
+              qc.clear();
               toast(t('auth.loggedOut'));
               navigate('/login');
             }}

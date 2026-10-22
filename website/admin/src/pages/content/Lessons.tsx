@@ -4,16 +4,17 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Archive, Plus, Send, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import type { Lesson } from '@/types';
-import { teachers } from '@/data/curriculum';
 import { fmtDate, fmtDuration, fmtNumber } from '@/utils/format';
-import { useLessons, useSubjects, useTopics, useUnits } from '@/store/core';
-import { useCan, useCurrentAdmin } from '@/store/auth';
+import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar, Button, ButtonLink, DataTable, FilterSelect, Img, StatusBadge, useConfirm } from '@/components/ui';
-import { CONTENT_STATUSES, nextVersion } from './shared';
+import { exportRequest, useApiMutation, useExport, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { useLookups } from '@/api/lookups';
+import { lessonsApi, useTeachersQuery, type LessonVM } from '@/api/content';
+import type { BulkResult } from '@/api/types';
+import { CONTENT_STATUSES } from './shared';
 
 export default function Lessons() {
   const { t } = useTranslation();
@@ -22,12 +23,11 @@ export default function Lessons() {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const location = useLocation();
-  const admin = useCurrentAdmin();
-  const loading = useMockLoading();
-  const lessons = useLessons((s) => s.items);
-  const subjects = useSubjects((s) => s.items);
-  const units = useUnits((s) => s.items);
-  const topics = useTopics((s) => s.items);
+  const lookups = useLookups();
+  const subjects = lookups.subjects;
+  const units = lookups.units;
+  const teachersQ = useTeachersQuery();
+  const teachers = useMemo(() => teachersQ.data ?? [], [teachersQ.data]);
 
   const [subject, setSubject] = useState((location.state as { subjectId?: string } | null)?.subjectId ?? '');
   const [unit, setUnit] = useState('');
@@ -37,22 +37,19 @@ export default function Lessons() {
   const byId = useMemo(
     () => ({
       subject: new Map(subjects.map((s) => [s.id, s])),
-      unit: new Map(units.map((u) => [u.id, u])),
-      topic: new Map(topics.map((x) => [x.id, x])),
       teacher: new Map(teachers.map((x) => [x.id, x])),
     }),
-    [subjects, units, topics],
+    [subjects, teachers],
   );
 
-  const data = useMemo(
-    () =>
-      lessons
-        .filter((l) => (!subject || l.subjectId === subject) && (!unit || l.unitId === unit) && (!status || l.status === status) && (!teacher || l.teacherId === teacher))
-        .sort((a, b) => (a.subjectId === b.subjectId ? a.order - b.order : (byId.subject.get(a.subjectId)?.order ?? 0) - (byId.subject.get(b.subjectId)?.order ?? 0))),
-    [lessons, subject, unit, status, teacher, byId],
-  );
+  const list = usePagedList<LessonVM>({
+    key: qk.lessons.list,
+    fetcher: lessonsApi.list,
+    filters: { subjectId: subject, unitId: unit, status, teacherId: teacher },
+  });
+  const data = list.items;
 
-  const columns = useMemo<ColumnDef<Lesson>[]>(
+  const columns = useMemo<ColumnDef<LessonVM>[]>(
     () => [
       {
         id: 'title',
@@ -61,7 +58,7 @@ export default function Lessons() {
         accessorFn: (l) => L(l, 'title'),
         cell: ({ row }) => {
           const l = row.original;
-          const s = byId.subject.get(l.subjectId);
+          const s = l.subject ?? byId.subject.get(l.subjectId);
           return (
             <div className="flex min-w-[260px] items-center gap-3">
               <div className="relative h-11 w-[4.5rem] shrink-0 overflow-hidden rounded-md">
@@ -71,7 +68,7 @@ export default function Lessons() {
               </div>
               <div className="min-w-0">
                 <div className="truncate font-medium text-ink">{L(l, 'title')}</div>
-                <div className="truncate text-xs text-muted">{L(byId.topic.get(l.topicId), 'name')}</div>
+                <div className="truncate text-xs text-muted">{l.topic ? L({ name_en: l.topic.name.en, name_ar: l.topic.name.ar }, 'name') : '—'}</div>
               </div>
             </div>
           );
@@ -83,7 +80,7 @@ export default function Lessons() {
         meta: { label: t('common.subject') },
         accessorFn: (l) => L(byId.subject.get(l.subjectId), 'name'),
         cell: ({ row }) => {
-          const s = byId.subject.get(row.original.subjectId);
+          const s = byId.subject.get(row.original.subjectId) ?? (row.original.subject ? { ...row.original.subject, name_en: row.original.subject.name.en, name_ar: row.original.subject.name.ar } : undefined);
           return (
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium">
               <span className="h-2 w-2 rounded-full" style={{ background: s?.color }} />
@@ -96,23 +93,27 @@ export default function Lessons() {
         id: 'unit',
         header: t('common.unit'),
         meta: { label: t('common.unit') },
-        accessorFn: (l) => L(byId.unit.get(l.unitId), 'name'),
+        enableSorting: false,
+        accessorFn: (l) => (l.unit ? L({ name_en: l.unit.name.en, name_ar: l.unit.name.ar }, 'name') : '—'),
         cell: ({ getValue }) => <span className="whitespace-nowrap text-xs text-ink/80">{String(getValue())}</span>,
       },
       {
         id: 'topic',
         header: t('common.topic'),
         meta: { label: t('common.topic') },
-        accessorFn: (l) => L(byId.topic.get(l.topicId), 'name'),
+        enableSorting: false,
+        accessorFn: (l) => (l.topic ? L({ name_en: l.topic.name.en, name_ar: l.topic.name.ar }, 'name') : '—'),
         cell: ({ getValue }) => <span className="whitespace-nowrap text-xs text-ink/80">{String(getValue())}</span>,
       },
       {
         id: 'teacher',
         header: t('common.teacher'),
         meta: { label: t('common.teacher') },
+        enableSorting: false,
         accessorFn: (l) => L(byId.teacher.get(l.teacherId), 'name'),
         cell: ({ row }) => {
-          const tc = byId.teacher.get(row.original.teacherId);
+          const tr = row.original.teacher;
+          const tc = byId.teacher.get(row.original.teacherId) ?? (tr ? { id: tr.id, name_en: tr.name.en, name_ar: tr.name.ar, avatar: tr.avatarUrl ?? '', subjectId: '' } : undefined);
           return tc ? (
             <span className="inline-flex items-center gap-2 whitespace-nowrap text-xs">
               <Avatar name={tc.name_en} src={tc.avatar} size="xs" />
@@ -124,7 +125,7 @@ export default function Lessons() {
         },
       },
       {
-        id: 'duration',
+        id: 'durationSec',
         header: t('content.lessons.duration'),
         meta: { label: t('content.lessons.duration'), align: 'end', exportValue: (l) => fmtDuration(l.durationSec) },
         accessorKey: 'durationSec',
@@ -155,15 +156,26 @@ export default function Lessons() {
     [t, L, byId],
   );
 
-  const bulkStatus = (rows: Lesson[], to: 'in_review' | 'archived', clear: () => void) => {
-    const author = admin?.name ?? 'System';
-    const ids = rows.map((r) => r.id);
-    useLessons.getState().updateMany(
-      ids,
-      (l) => ({ status: to, updatedAt: new Date().toISOString(), versions: nextVersion(l, to, t(`content.editor.versionNote.${to}`, { lng: 'en' }), author) }),
-      { action: to === 'archived' ? 'lesson.bulk_archive' : 'lesson.bulk_submit', summary: `${to === 'archived' ? 'Archived' : 'Submitted for review'} ${ids.length} lessons` },
-    );
-    toast.success(t(to === 'archived' ? 'content.lessons.bulkArchived' : 'content.lessons.bulkSubmitted', { count: ids.length }));
+  const partial = (r: BulkResult) => {
+    if (r.failed.length) toast.error(t('api.bulkPartial', { count: r.failed.length }));
+  };
+  const bulkMut = useApiMutation((v: { ids: string[]; to: 'in_review' | 'archived' }) => lessonsApi.bulkTransition(v.ids, v.to), {
+    invalidate: [qk.lessons.all, qk.dashboard.all],
+    onSuccess: (r, v) => {
+      toast.success(t(v.to === 'archived' ? 'content.lessons.bulkArchived' : 'content.lessons.bulkSubmitted', { count: r.succeeded.length }));
+      partial(r);
+    },
+  });
+  const deleteMut = useApiMutation((ids: string[]) => lessonsApi.bulkDelete(ids), {
+    invalidate: [qk.lessons.all, qk.subjects.all, qk.units.all, qk.lookups],
+    onSuccess: (r) => {
+      toast.success(t('content.lessons.bulkDeleted', { count: r.succeeded.length }));
+      partial(r);
+    },
+  });
+  const exp = useExport('/admin/lessons/export', 'lessons');
+  const bulkStatus = async (rows: LessonVM[], to: 'in_review' | 'archived', clear: () => void) => {
+    await bulkMut.mutateAsync({ ids: rows.map((r) => r.id), to }).catch(() => undefined);
     clear();
   };
 
@@ -185,10 +197,13 @@ export default function Lessons() {
       <DataTable
         data={data}
         columns={columns}
-        loading={loading}
-        exportName={can('content', 'export') ? 'lessons' : undefined}
+        loading={list.isLoading}
+        error={list.error}
+        onRetry={() => list.refetch()}
+        server={list.server}
+        onExport={can('content', 'export') ? (ids) => exp.mutate(exportRequest('csv', list.exportFilters, ids)) : undefined}
+        exporting={exp.isPending}
         onRowClick={(l) => navigate(`/content/lessons/${l.id}`)}
-        searchText={(l) => `${l.title_en} ${l.title_ar} ${l.id}`}
         initialHidden={['topic', 'views']}
         toolbar={
           <>
@@ -206,6 +221,7 @@ export default function Lessons() {
               value={unit}
               onChange={setUnit}
               options={units.filter((u) => !subject || u.subjectId === subject).map((u) => ({ value: u.id, label: L(u, 'name') }))}
+              className="max-w-[14rem]"
             />
             <FilterSelect label={t('common.status')} value={status} onChange={setStatus} options={CONTENT_STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) }))} />
             <FilterSelect label={t('common.teacher')} value={teacher} onChange={setTeacher} options={teachers.map((x) => ({ value: x.id, label: L(x, 'name') }))} />
@@ -241,8 +257,7 @@ export default function Lessons() {
                       onClick={async () => {
                         const ok = await confirm({ title: t('content.lessons.deleteManyTitle', { count: rows.length }), body: t('confirm.deleteBody'), confirmText: t('actions.delete') });
                         if (!ok) return;
-                        useLessons.getState().removeMany(rows.map((r) => r.id), { action: 'lesson.bulk_delete', summary: `Deleted ${rows.length} lessons` });
-                        toast.success(t('content.lessons.bulkDeleted', { count: rows.length }));
+                        await deleteMut.mutateAsync(rows.map((r) => r.id)).catch(() => undefined);
                         clear();
                       }}
                     >

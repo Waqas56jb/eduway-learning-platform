@@ -1,43 +1,50 @@
-import { useState } from 'react';
 import { Building2, Globe2, Headset, ImageIcon, Mail, MessageCircle, Phone } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useGeneralSettings, useSupportContacts } from '@/store/settings';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { useSaveSettings, useSettingsSection, type GeneralSettings, type SupportContacts } from '@/api/settings';
+import { useUpload } from '@/api/storage';
 import { useLocalize } from '@/hooks/useLocale';
 import { fmtDate } from '@/utils/format';
-import { MOCK_NOW } from '@/utils/random';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ButtonLink, Field, FileUpload, Input, Select, SkeletonCard } from '@/components/ui';
+import { QueryError } from '@/components/ui/QueryError';
 import { LogoMark } from '@/components/layout/Logo';
-import type { GeneralSettings } from '@/data/settings';
-import { mockSave, ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
+import { ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
 
 const TIMEZONES = ['Asia/Baghdad', 'Asia/Dubai', 'Asia/Riyadh', 'Europe/Istanbul', 'UTC'];
 const DATE_FORMATS: GeneralSettings['dateFormat'][] = ['d MMM yyyy', 'dd/MM/yyyy', 'yyyy-MM-dd'];
+const EMPTY: GeneralSettings = { platformName: '', platformName_ar: '', logo: null, defaultLanguage: 'ar', currency: 'IQD', timezone: 'Asia/Baghdad', dateFormat: 'd MMM yyyy', academicYear: '' };
+const EMPTY_SUPPORT: Pick<SupportContacts, 'phone' | 'whatsapp' | 'email' | 'hours_en' | 'hours_ar'> = { phone: '', whatsapp: '', email: '', hours_en: '', hours_ar: '' };
 
 export default function General() {
   const { t } = useTranslation();
   const L = useLocalize();
-  const loading = useMockLoading();
-  const value = useGeneralSettings((s) => s.value);
-  const save = useGeneralSettings((s) => s.save);
-  const support = useSupportContacts((s) => s.value);
-  const { draft, set, dirty, reset } = useDraft(value);
+  const q = useSettingsSection('general');
+  const supportQ = useSettingsSection('support');
+  const save = useSaveSettings('general');
+  const upload = useUpload('logo');
+  const value = q.data ?? EMPTY;
+  const support = supportQ.data ?? EMPTY_SUPPORT;
+  const { draft, set, setDraft, dirty, reset } = useDraft(value);
   const editable = useCanEditSettings();
-  const [saving, setSaving] = useState(false);
+  const loading = q.isLoading;
 
-  const onSave = async () => {
+  const onSave = () => {
     if (!draft.platformName.trim() || !draft.platformName_ar.trim()) return;
-    setSaving(true);
-    await mockSave(() => save(draft), t);
-    setSaving(false);
+    save.mutate(draft);
+  };
+
+  const onLogo = async (file: File, url: string | null) => {
+    const r = await upload.start(file);
+    if (r) setDraft((d) => ({ ...d, logo: url ?? d.logo, logoFileKey: r.fileKey }));
   };
 
   return (
     <div>
       <PageHeader title={t('settings.general.title')} subtitle={t('settings.general.subtitle')} />
       {!editable && <ReadOnlyNotice />}
-      {loading ? (
+      {q.error && !q.data ? (
+        <QueryError error={q.error} onRetry={() => q.refetch()} />
+      ) : loading ? (
         <div className="grid gap-6 xl:grid-cols-3">
           <SkeletonCard lines={6} className="xl:col-span-2" />
           <SkeletonCard lines={4} />
@@ -61,9 +68,10 @@ export default function General() {
                     maxSizeMb={2}
                     compact
                     preview={draft.logo}
-                    onFile={(_f, url) => url && set('logo', url)}
-                    onClear={() => set('logo', null)}
-                    disabled={!editable}
+                    onFile={onLogo}
+                    onClear={() => setDraft((d) => ({ ...d, logo: null, logoFileKey: null }))}
+                    disabled={!editable || upload.uploading}
+                    progress={upload.progress}
                   />
                 </Field>
                 <div>
@@ -101,7 +109,7 @@ export default function General() {
                 <Field label={t('settings.general.timezone')}>
                   <Select value={draft.timezone} onChange={(e) => set('timezone', e.target.value)} options={TIMEZONES.map((z) => ({ value: z, label: z }))} />
                 </Field>
-                <Field label={t('settings.general.dateFormat')} hint={`${t('common.preview')}: ${fmtDate(MOCK_NOW, draft.dateFormat)}`}>
+                <Field label={t('settings.general.dateFormat')} hint={`${t('common.preview')}: ${fmtDate(new Date(), draft.dateFormat)}`}>
                   <Select value={draft.dateFormat} onChange={(e) => set('dateFormat', e.target.value as GeneralSettings['dateFormat'])} options={DATE_FORMATS.map((f) => ({ value: f, label: f }))} />
                 </Field>
                 <Field label={t('settings.general.academicYear')}>
@@ -147,7 +155,7 @@ export default function General() {
           </div>
         </fieldset>
       )}
-      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={saving} />}
+      {editable && <SaveBar dirty={dirty} onSave={onSave} onReset={reset} saving={save.isPending} />}
     </div>
   );
 }

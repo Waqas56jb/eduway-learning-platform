@@ -11,6 +11,7 @@ import {
   CircleDot,
   Copy,
   CreditCard,
+  Download,
   FileX2,
   Package as PackageIcon,
   Printer,
@@ -22,15 +23,14 @@ import {
   Webhook,
   XCircle,
 } from 'lucide-react';
-import type { Transaction, TxnEvent } from '@/types';
 import { cn } from '@/utils/cn';
-import { uid } from '@/utils/id';
 import { fmtDate, fmtDateTime, fmtMoney } from '@/utils/format';
-import { governorateById } from '@/data/geo';
-import { usePackages, useRefunds, useSchools, useStudents, useTransactions } from '@/store/core';
-import { useCan, useCurrentAdmin } from '@/store/auth';
+import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
-import { useMockLoading } from '@/hooks/useMockLoading';
+import { errorMessage, toastError, uuid } from '@/api/client';
+import { flatRef } from '@/api/adapters';
+import { paymentsApi, useReceipt, useRequestRefund, useTransaction, type ReceiptDto, type TransactionDetailVM, type TxnEventDto } from '@/api/payments';
+import { QueryError } from '@/components/ui/QueryError';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
   Avatar,
@@ -51,9 +51,9 @@ import {
   Textarea,
   useConfirm,
 } from '@/components/ui';
-import { GatewayChip, addTimelineEvent, refundable, settleRefund } from './shared';
+import { GatewayChip } from './shared';
 
-const EVENT_STYLE: Record<TxnEvent['status'], { icon: typeof CircleDot; cls: string }> = {
+const EVENT_STYLE: Record<TxnEventDto['status'], { icon: typeof CircleDot; cls: string }> = {
   initiated: { icon: CircleDot, cls: 'bg-ink/10 text-muted' },
   pending: { icon: CreditCard, cls: 'bg-warning/15 text-warning' },
   webhook: { icon: Webhook, cls: 'bg-info/15 text-info' },
@@ -70,12 +70,10 @@ export default function TransactionDetail() {
   const { t } = useTranslation();
   const L = useLocalize();
   const can = useCan();
-  const loading = useMockLoading(350);
-  const txn = useTransactions((s) => s.items.find((x) => x.id === id));
-  const student = useStudents((s) => s.items.find((x) => x.id === txn?.studentId));
-  const pkg = usePackages((s) => s.items.find((x) => x.id === txn?.packageId));
-  const school = useSchools((s) => s.items.find((x) => x.id === txn?.schoolId));
-  const pendingRefund = useRefunds((s) => s.items.find((r) => r.transactionId === id && r.status === 'pending'));
+  const query = useTransaction(id);
+  const txn = query.data;
+  const loading = query.isLoading;
+  const pendingRefund = txn?.pendingRefund ?? null;
   const [openPayload, setOpenPayload] = useState<string | null>(null);
   const [receipt, setReceipt] = useState(false);
   const [refund, setRefund] = useState(false);
@@ -84,11 +82,35 @@ export default function TransactionDetail() {
     const seen = new Set<string>();
     const dups = new Set<string>();
     for (const w of txn?.webhooks ?? []) {
-      if (seen.has(w.idempotencyKey)) dups.add(w.id);
+      if (w.duplicate || seen.has(w.idempotencyKey)) dups.add(w.id);
       seen.add(w.idempotencyKey);
     }
     return dups;
   }, [txn]);
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title={t('payments.transactions')} />
+        <div className="grid gap-5 lg:grid-cols-3">
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={8} className="lg:col-span-2" />
+          <SkeletonCard lines={8} />
+        </div>
+      </div>
+    );
+  }
+
+  if (query.error && query.error.code !== 'NOT_FOUND') {
+    return (
+      <div>
+        <PageHeader title={t('payments.transactions')} />
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
+      </div>
+    );
+  }
 
   if (!txn) {
     return (
@@ -109,8 +131,8 @@ export default function TransactionDetail() {
     );
   }
 
-  const remaining = refundable(txn);
-  const canRefund = can('payments', 'edit') && remaining > 0 && !pendingRefund;
+  const remaining = txn.refundable;
+  const canRefund = can('payments', 'edit') && txn.canRefund && remaining > 0 && !pendingRefund;
 
   const copy = async (v: string) => {
     try {
@@ -143,7 +165,7 @@ export default function TransactionDetail() {
             <ButtonLink to="/payments/transactions" variant="secondary" icon={<ArrowLeft className="h-4 w-4 flip-rtl" />}>
               {t('actions.back')}
             </ButtonLink>
-            {txn.status !== 'initiated' && txn.status !== 'pending' && txn.status !== 'failed' && txn.status !== 'cancelled' && (
+            {txn.canViewReceipt && (
               <Button variant="secondary" icon={<Receipt className="h-4 w-4" />} onClick={() => setReceipt(true)}>
                 {t('payments.detail.viewReceipt')}
               </Button>
@@ -163,30 +185,22 @@ export default function TransactionDetail() {
         }
       />
 
-      {loading ? (
-        <div className="grid gap-5 lg:grid-cols-3">
-          <SkeletonCard lines={5} />
-          <SkeletonCard lines={5} />
-          <SkeletonCard lines={5} />
-          <SkeletonCard lines={8} className="lg:col-span-2" />
-          <SkeletonCard lines={8} />
-        </div>
-      ) : (
+      {
         <div className="grid gap-5 lg:grid-cols-3">
           {/* Student */}
           <Card>
             <CardHeader title={t('payments.detail.student')} icon={<User className="h-4 w-4" />} />
             <CardBody>
-              {student ? (
+              {txn.studentId ? (
                 <div className="flex items-start gap-3">
-                  <Avatar name={student.name_en} src={student.avatar} size="md" />
+                  <Avatar name={txn.studentName_en} src={txn.studentAvatar} size="md" />
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-ink">{L(student, 'name')}</div>
+                    <div className="font-semibold text-ink">{L(txn, 'studentName')}</div>
                     <div className="text-xs text-muted num" dir="ltr">
-                      {student.mobile}
+                      {txn.studentMobile}
                     </div>
-                    <div className="mt-1 text-xs text-muted">{L(governorateById(student.governorateId), 'name')}</div>
-                    <Link to={`/users/${student.id}`} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">
+                    <div className="mt-1 text-xs text-muted">{L(txn, 'governorateName')}</div>
+                    <Link to={`/users/${txn.studentId}`} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">
                       {t('payments.detail.openProfile')} <ArrowRight className="h-3 w-3 flip-rtl" />
                     </Link>
                   </div>
@@ -201,15 +215,17 @@ export default function TransactionDetail() {
           <Card>
             <CardHeader title={t('payments.detail.package')} icon={<PackageIcon className="h-4 w-4" />} />
             <CardBody>
-              {pkg ? (
+              {txn.packageId ? (
                 <div>
-                  <div className="font-semibold text-ink">{L(pkg, 'name')}</div>
-                  <div className="mt-1 text-xs text-muted">{fmtMoney(pkg.price, pkg.currency)}</div>
+                  <div className="font-semibold text-ink">{L(txn, 'packageName')}</div>
+                  <div className="mt-1 text-xs text-muted">
+                    {fmtMoney(txn.packageListPrice, txn.currency)} · {t(`payments.cycles.${txn.cycle}`)}
+                  </div>
                   <div className="mt-3 text-xs text-muted">{t('payments.detail.attribution')}</div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    {school ? (
+                    {txn.schoolId ? (
                       <Badge tone="info">
-                        {school.code} · {L(school, 'name')}
+                        {txn.schoolCode} · {L(txn, 'schoolName')}
                       </Badge>
                     ) : txn.promoCode ? (
                       <Badge tone="accent">{txn.promoCode}</Badge>
@@ -232,7 +248,7 @@ export default function TransactionDetail() {
             <CardHeader title={t('payments.detail.summary')} icon={<CreditCard className="h-4 w-4" />} />
             <CardBody>
               <dl className="space-y-2.5 text-sm">
-                <Row label={t('payments.detail.listPrice')} value={fmtMoney(txn.amount + txn.discount, txn.currency)} />
+                <Row label={t('payments.detail.listPrice')} value={fmtMoney(txn.listPrice, txn.currency)} />
                 {txn.discount > 0 && <Row label={t('payments.discount')} value={`−${fmtMoney(txn.discount, txn.currency)}`} className="text-success" />}
                 <Row label={t('payments.detail.charged')} value={fmtMoney(txn.amount, txn.currency)} strong />
                 {txn.refundedAmount > 0 && <Row label={t('payments.detail.refundedAmount')} value={`−${fmtMoney(txn.refundedAmount, txn.currency)}`} className="text-danger" />}
@@ -337,6 +353,7 @@ export default function TransactionDetail() {
                       <div className="min-w-0 pt-0.5">
                         <div className="text-sm font-semibold text-ink">{t(`payments.detail.events.${e.status}`)}</div>
                         <div className="text-xs text-muted">{e.note}</div>
+                        {e.actor && <div className="text-[11px] text-muted">{L(flatRef(e.actor), 'name')}</div>}
                         <div className="mt-0.5 text-[11px] text-muted/80 num">{fmtDateTime(e.at)}</div>
                       </div>
                     </li>
@@ -346,10 +363,10 @@ export default function TransactionDetail() {
             </CardBody>
           </Card>
         </div>
-      )}
+      }
 
       <ReceiptModal open={receipt} onClose={() => setReceipt(false)} txn={txn} />
-      {refund && <RefundModal txn={txn} remaining={remaining} studentName={student ? L(student, 'name') : '—'} onClose={() => setRefund(false)} />}
+      {refund && <RefundModal txn={txn} remaining={remaining} studentName={L(txn, 'studentName')} onClose={() => setRefund(false)} />}
     </div>
   );
 }
@@ -365,11 +382,9 @@ function Row({ label, value, strong, className }: { label: string; value: string
 
 /* ─── Receipt ────────────────────────────────────────────────────────────── */
 
-function ReceiptDoc({ txn }: { txn: Transaction }) {
+function ReceiptDoc({ receipt }: { receipt: ReceiptDto }) {
   const { t } = useTranslation();
-  const student = useStudents((s) => s.items.find((x) => x.id === txn.studentId));
-  const pkg = usePackages((s) => s.items.find((x) => x.id === txn.packageId));
-  const num = `R-${txn.ref.replace(/^EDW-/, '')}`;
+  const money = (n: number) => `${n.toLocaleString('en-US')} ${receipt.currency}`;
   return (
     <div className="mx-auto max-w-[640px] rounded-xl border border-[#E5E1D8] bg-white p-8 font-[Inter,Tajawal,sans-serif] text-[#111827]" dir="ltr">
       <div className="flex items-start justify-between border-b-2 border-[#C9A24A] pb-5">
@@ -380,8 +395,9 @@ function ReceiptDoc({ txn }: { txn: Transaction }) {
             <path d="M18 34v8c0 3.3 6.3 6 14 6s14-2.7 14-6v-8l-14 6.4L18 34Z" fill="#E6C77A" />
           </svg>
           <div>
-            <div className="font-[Playfair_Display,serif] text-2xl font-bold tracking-wide text-[#0B1F3A]">EDUWAY</div>
-            <div className="text-[11px] text-[#6B7280]">{t('payments.receipt.company')}</div>
+            <div className="font-[Playfair_Display,serif] text-2xl font-bold tracking-wide text-[#0B1F3A]">{receipt.company?.name?.en || 'EDUWAY'}</div>
+            <div className="text-[11px] text-[#6B7280]">{receipt.company?.address?.en || t('payments.receipt.company')}</div>
+            {receipt.company?.email && <div className="text-[11px] text-[#6B7280]">{receipt.company.email}</div>}
           </div>
         </div>
         <div className="text-end">
@@ -395,26 +411,26 @@ function ReceiptDoc({ txn }: { txn: Transaction }) {
       <div className="mt-5 grid grid-cols-2 gap-4 text-xs">
         <div>
           <div className="font-semibold uppercase text-[#6B7280]">{t('payments.receipt.billedTo')}</div>
-          <div className="mt-1 text-sm font-semibold">{student?.name_en}</div>
+          <div className="mt-1 text-sm font-semibold">{receipt.billedTo?.name?.en}</div>
           <div className="font-[Tajawal,sans-serif] text-sm" dir="rtl">
-            {student?.name_ar}
+            {receipt.billedTo?.name?.ar}
           </div>
-          <div className="text-[#6B7280]">{student?.mobile}</div>
+          <div className="text-[#6B7280]">{receipt.billedTo?.mobile}</div>
         </div>
         <div className="text-end">
           <div>
             <span className="text-[#6B7280]">{t('payments.receipt.number')}: </span>
-            <span className="font-mono font-semibold">{num}</span>
+            <span className="font-mono font-semibold">{receipt.receiptNumber}</span>
           </div>
           <div className="mt-1">
             <span className="text-[#6B7280]">{t('payments.receipt.date')}: </span>
-            {fmtDate(txn.createdAt, 'yyyy-MM-dd HH:mm')}
+            {fmtDate(receipt.paidAt ?? receipt.issuedAt, 'yyyy-MM-dd HH:mm')}
           </div>
           <div className="mt-1">
             <span className="text-[#6B7280]">{t('payments.receipt.paidVia')}: </span>
-            {t(`payments.gateways.${txn.gateway}`)}
+            {receipt.gatewayName?.en || t(`payments.gateways.${receipt.gateway}`, { defaultValue: receipt.gateway })}
           </div>
-          <div className="mt-1 font-mono text-[11px] text-[#6B7280]">{txn.ref}</div>
+          <div className="mt-1 font-mono text-[11px] text-[#6B7280]">{receipt.ref}</div>
         </div>
       </div>
 
@@ -426,53 +442,72 @@ function ReceiptDoc({ txn }: { txn: Transaction }) {
           </tr>
         </thead>
         <tbody>
-          <tr className="border-b border-[#E5E1D8]">
-            <td className="px-3 py-3">
-              <div className="font-semibold">{pkg?.name_en}</div>
-              <div className="font-[Tajawal,sans-serif] text-xs text-[#6B7280]" dir="rtl">
-                {pkg?.name_ar}
-              </div>
-            </td>
-            <td className="px-3 py-3 text-end tabular-nums">{(txn.amount + txn.discount).toLocaleString('en-US')} IQD</td>
-          </tr>
+          {receipt.lines.map((line, i) => (
+            <tr key={i} className="border-b border-[#E5E1D8]">
+              <td className="px-3 py-3">
+                <div className="font-semibold">{line.description.en}</div>
+                <div className="font-[Tajawal,sans-serif] text-xs text-[#6B7280]" dir="rtl">
+                  {line.description.ar}
+                </div>
+              </td>
+              <td className="px-3 py-3 text-end tabular-nums">{money(line.amount)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
       <div className="ms-auto mt-4 w-64 space-y-1.5 text-sm tabular-nums">
         <div className="flex justify-between">
           <span className="text-[#6B7280]">{t('payments.receipt.subtotal')}</span>
-          <span>{(txn.amount + txn.discount).toLocaleString('en-US')} IQD</span>
+          <span>{money(receipt.subtotal)}</span>
         </div>
-        {txn.discount > 0 && (
+        {receipt.discount > 0 && (
           <div className="flex justify-between text-[#16A34A]">
             <span>
-              {t('payments.receipt.discount')} {txn.promoCode && `(${txn.promoCode})`}
+              {t('payments.receipt.discount')} {receipt.promoCode && `(${receipt.promoCode})`}
             </span>
-            <span>−{txn.discount.toLocaleString('en-US')} IQD</span>
+            <span>−{money(receipt.discount)}</span>
           </div>
         )}
         <div className="flex justify-between border-t-2 border-[#0B1F3A] pt-2 text-base font-bold text-[#0B1F3A]">
           <span>{t('payments.receipt.total')}</span>
-          <span>{txn.amount.toLocaleString('en-US')} IQD</span>
+          <span>{money(receipt.total)}</span>
         </div>
-        {txn.refundedAmount > 0 && (
+        {receipt.refunded > 0 && (
           <div className="flex justify-between text-xs text-[#DC2626]">
             <span>{t('payments.detail.refundedAmount')}</span>
-            <span>−{txn.refundedAmount.toLocaleString('en-US')} IQD</span>
+            <span>−{money(receipt.refunded)}</span>
           </div>
         )}
       </div>
 
       <div className="mt-8 border-t border-dashed border-[#E5E1D8] pt-4 text-center text-xs text-[#6B7280]">
-        <p className="mx-auto">{t('payments.receipt.taxNote')}</p>
+        <p className="mx-auto">{receipt.taxNote?.en || t('payments.receipt.taxNote')}</p>
+        {receipt.taxNote?.ar && (
+          <p className="mx-auto font-[Tajawal,sans-serif]" dir="rtl">
+            {receipt.taxNote.ar}
+          </p>
+        )}
         <p className="mx-auto mt-1 font-semibold text-[#A9832F]">{t('payments.receipt.thanks')}</p>
       </div>
     </div>
   );
 }
 
-function ReceiptModal({ open, onClose, txn }: { open: boolean; onClose: () => void; txn: Transaction }) {
+function ReceiptModal({ open, onClose, txn }: { open: boolean; onClose: () => void; txn: TransactionDetailVM }) {
   const { t } = useTranslation();
+  const q = useReceipt(txn.id, open);
+  const [downloading, setDownloading] = useState(false);
+  const pdf = async () => {
+    setDownloading(true);
+    try {
+      await paymentsApi.receiptPdf(txn.id, txn.ref);
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setDownloading(false);
+    }
+  };
   return (
     <>
       <Modal
@@ -480,28 +515,32 @@ function ReceiptModal({ open, onClose, txn }: { open: boolean; onClose: () => vo
         onClose={onClose}
         size="lg"
         title={t('payments.detail.receipt')}
-        description={txn.ref}
+        description={txn.receiptNumber ?? txn.ref}
         footer={
           <>
             <Button variant="secondary" onClick={onClose}>
               {t('actions.close')}
             </Button>
-            <Button icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
+            <Button variant="secondary" icon={<Download className="h-4 w-4" />} loading={downloading} onClick={pdf}>
+              {t('payments.detail.downloadPdf')}
+            </Button>
+            <Button icon={<Printer className="h-4 w-4" />} disabled={!q.data} onClick={() => window.print()}>
               {t('actions.print')}
             </Button>
           </>
         }
       >
         <div className="rounded-xl bg-[#F5F3EE] p-3 sm:p-6">
-          <ReceiptDoc txn={txn} />
+          {q.isLoading ? <SkeletonCard lines={8} /> : q.error ? <QueryError error={q.error} onRetry={() => q.refetch()} /> : q.data ? <ReceiptDoc receipt={q.data} /> : null}
         </div>
       </Modal>
       {open &&
+        q.data &&
         createPortal(
           <>
             <style>{`@media print { body > *:not(.eduway-receipt-print) { display: none !important; } .eduway-receipt-print { display: block !important; } @page { margin: 12mm; } }`}</style>
             <div className="eduway-receipt-print hidden">
-              <ReceiptDoc txn={txn} />
+              <ReceiptDoc receipt={q.data} />
             </div>
           </>,
           document.body,
@@ -512,18 +551,26 @@ function ReceiptModal({ open, onClose, txn }: { open: boolean; onClose: () => vo
 
 /* ─── Refund ─────────────────────────────────────────────────────────────── */
 
-function RefundModal({ txn, remaining, studentName, onClose }: { txn: Transaction; remaining: number; studentName: string; onClose: () => void }) {
+const REFUND_REASON_KEYS: Record<string, string> = {
+  REFUND_EXCEEDS_REMAINING: 'payments.refundForm.errExceeds',
+  REFUND_PENDING_EXISTS: 'payments.refundForm.errPendingExists',
+  NOT_REFUNDABLE: 'payments.refundForm.errNotRefundable',
+};
+
+function RefundModal({ txn, remaining, studentName, onClose }: { txn: TransactionDetailVM; remaining: number; studentName: string; onClose: () => void }) {
   const { t } = useTranslation();
   const can = useCan();
   const confirm = useConfirm();
-  const admin = useCurrentAdmin();
-  const addRefund = useRefunds((s) => s.add);
   const canApprove = can('payments', 'approve');
+  const mutation = useRequestRefund(txn.id);
+  // One idempotency key per modal session: a retry of the same request replays instead of double-refunding.
+  const [idemKey] = useState(() => uuid());
   const [kind, setKind] = useState<'full' | 'partial'>('full');
   const [amount, setAmount] = useState(String(Math.round(remaining / 2 / 1000) * 1000 || remaining));
   const [reason, setReason] = useState('');
   const [now, setNow] = useState(false);
   const [touched, setTouched] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const value = kind === 'full' ? remaining : Number(amount);
   const amountErr = kind === 'partial' && (!Number.isFinite(value) || value < 1000 || value > remaining) ? t('payments.refundForm.errAmount', { max: fmtMoney(remaining, txn.currency) }) : undefined;
@@ -531,6 +578,7 @@ function RefundModal({ txn, remaining, studentName, onClose }: { txn: Transactio
 
   const submit = async () => {
     setTouched(true);
+    setServerError(null);
     if (amountErr || reasonErr) return;
     const process = canApprove && now;
     const ok = await confirm({
@@ -540,34 +588,19 @@ function RefundModal({ txn, remaining, studentName, onClose }: { txn: Transactio
       confirmText: process ? t('payments.detail.refund') : t('actions.send'),
     });
     if (!ok) return;
-    const by = admin?.name ?? 'System';
-    const nowIso = new Date().toISOString();
-    const refundKind = value >= remaining && txn.refundedAmount === 0 ? 'full' : 'partial';
-    addRefund(
+    mutation.mutate(
+      { kind, amount: kind === 'partial' ? value : undefined, reason: reason.trim(), processNow: process, key: idemKey },
       {
-        id: uid('rfd'),
-        transactionId: txn.id,
-        studentId: txn.studentId,
-        amount: value,
-        currency: txn.currency,
-        kind: refundKind,
-        reason: reason.trim(),
-        status: process ? 'approved' : 'pending',
-        requestedBy: by,
-        requestedAt: nowIso,
-        decidedBy: process ? by : null,
-        decidedAt: process ? nowIso : null,
+        onSuccess: () => {
+          toast.success(process ? t('payments.refundForm.processed') : t('payments.refundForm.queued'));
+          onClose();
+        },
+        onError: (err) => {
+          const key = err.reason ? REFUND_REASON_KEYS[err.reason] : undefined;
+          setServerError(key ? t(key) : errorMessage(err));
+        },
       },
-      { action: process ? 'refund.process' : 'refund.request', summary: `${process ? 'Processed' : 'Requested'} ${refundKind} refund of ${value.toLocaleString('en-US')} IQD on ${txn.ref}` },
     );
-    addTimelineEvent(txn.id, 'refund_requested', `Refund of ${value.toLocaleString('en-US')} IQD requested by ${by} — ${reason.trim()}`);
-    if (process) {
-      settleRefund(txn.id, value, `Refund processed by ${by}`);
-      toast.success(t('payments.refundForm.processed'));
-    } else {
-      toast.success(t('payments.refundForm.queued'));
-    }
-    onClose();
   };
 
   return (
@@ -581,13 +614,14 @@ function RefundModal({ txn, remaining, studentName, onClose }: { txn: Transactio
           <Button variant="secondary" onClick={onClose}>
             {t('actions.cancel')}
           </Button>
-          <Button variant="danger" onClick={submit}>
+          <Button variant="danger" onClick={submit} loading={mutation.isPending}>
             {t('payments.refundForm.submit')}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
+        {serverError && <div className="rounded-lg border border-danger/30 bg-danger/[0.06] px-3 py-2 text-sm text-danger">{serverError}</div>}
         <Field label={t('payments.refundForm.kind')}>
           <Segmented
             aria-label={t('payments.refundForm.kind')}

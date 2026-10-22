@@ -6,7 +6,7 @@ import { Icon } from '@/components/icons';
 import { PressableScale, ProgressRing, Text } from '@/components/ui';
 import { BLURHASH } from '@/constants/images';
 import { useI18n } from '@/hooks/useI18n';
-import { useProgressStore } from '@/store';
+import { openSubscription } from '@/api/locked';
 import { radius, space, subjectColors, useTheme } from '@/theme';
 import type { Lesson } from '@/types';
 import { formatDuration, formatMinutes } from '@/utils/format';
@@ -18,24 +18,30 @@ export interface LessonRowProps {
   showTeacher?: boolean;
 }
 
-const THUMB_W = 92;
-const THUMB_H = 60;
-const STATUS_SIZE = 34;
+export const LESSON_THUMB_W = 72;
+const THUMB_W = LESSON_THUMB_W;
+const THUMB_H = 52;
+const STATUS_SIZE = 32;
 
 /** A single lesson line: thumbnail with duration, title, meta and a live status indicator. */
-export const LessonRow = memo(function LessonRow({ lesson, locked = false, onPress, showTeacher = true }: LessonRowProps) {
+export const LessonRow = memo(function LessonRow({ lesson, locked: lockedProp = false, onPress, showTeacher = true }: LessonRowProps) {
   const { colors, isDark } = useTheme();
   const { t, L, lang } = useI18n(['subjects', 'common']);
-  const lp = useProgressStore((s) => s.lessonProgress[lesson.id]);
-  const status = lp?.status ?? 'not-started';
-  const progress = lp?.progress ?? 0;
-  const accent = subjectColors[lesson.subjectId];
+  // Entitlement lock (subject not in package) → subscription. Sequential/prerequisite locks still open the
+  // lesson so the server can explain which lesson comes first.
+  const entitlementLock =
+    lockedProp ||
+    (!!lesson.locked && lesson.lockReason !== 'PREREQUISITE' && lesson.lockReason !== 'SEQUENTIAL');
+  const locked = lockedProp || !!lesson.locked;
+  const status = lesson.status ?? 'not-started';
+  const progress = lesson.progress ?? 0;
+  const accent = subjectColors[lesson.subjectId] ?? colors.accent;
 
   const handlePress = useCallback(() => {
     if (onPress) return onPress();
-    if (locked) router.push('/subscription');
+    if (entitlementLock) openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug: lesson.subjectId });
     else router.push({ pathname: '/lesson/[id]', params: { id: lesson.id } });
-  }, [onPress, locked, lesson.id]);
+  }, [onPress, entitlementLock, lesson.id, lesson.subjectId]);
 
   const statusLabel = locked
     ? t('common:status.locked')
@@ -124,28 +130,28 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: space.sm,
+    paddingVertical: space.md,
     gap: space.md,
-    minHeight: 72,
+    minHeight: 76,
   },
   thumbWrap: {
     width: THUMB_W,
     height: THUMB_H,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   dim: { opacity: 0.55 },
   lockShade: { backgroundColor: 'rgba(7,20,38,0.35)' },
   durationBadge: {
     position: 'absolute',
-    bottom: 4,
-    end: 4,
-    paddingHorizontal: 5,
+    bottom: 3,
+    end: 3,
+    paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: radius.xs,
     backgroundColor: 'rgba(7,20,38,0.78)',
   },
-  durationText: { fontSize: 10, lineHeight: 14, writingDirection: 'ltr' },
+  durationText: { fontSize: 10, lineHeight: 13, writingDirection: 'ltr' },
   thumbTrack: {
     position: 'absolute',
     start: 0,
@@ -156,10 +162,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   thumbFill: { height: 3 },
-  body: { flex: 1, gap: space.xs },
+  body: { flex: 1, gap: space.xs, justifyContent: 'center' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   metaText: { flexShrink: 1 },
-  status: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  status: { width: STATUS_SIZE, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
   statusCircle: {
     width: STATUS_SIZE,
     height: STATUS_SIZE,

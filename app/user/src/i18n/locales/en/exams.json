@@ -26,7 +26,10 @@
     "resume": "Resume exam",
     "inProgress": "In progress · {{time}} left",
     "expired": "Time is up — open to submit",
-    "a11y": "{{title}}, {{questions}} questions, {{minutes}} minutes"
+    "a11y": "{{title}}, {{questions}} questions, {{minutes}} minutes",
+    "factQuestions": "Questions",
+    "factMinutes": "Minutes",
+    "factPass": "Pass mark"
   },
   "previous": "Previous attempts",
   "previousSub": "Tap an attempt to see the full report",
