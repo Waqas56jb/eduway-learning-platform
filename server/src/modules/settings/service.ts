@@ -11,6 +11,7 @@ import type { Localized } from '../../common/i18n/index.js';
 import { settingsStore, type SettingsKey, type SettingsValue } from '../../common/services/settings-store.js';
 import { storage } from '../../common/services/storage.js';
 import { invalidateLookups } from '../admins/lookups.js';
+import { likeContains } from '../../common/utils/like.js';
 
 export const SECTIONS = ['general', 'otp', 'app', 'support', 'payments', 'learning', 'marketing', 'security'] as const;
 export type SettingsSection = (typeof SECTIONS)[number];
@@ -170,7 +171,7 @@ export const flagsService = {
       w.push(`f.environment = $${p.length}`);
     }
     if (f.q) {
-      p.push(`%${f.q.toLowerCase()}%`);
+      p.push(likeContains(f.q.toLowerCase()));
       w.push(`(lower(f.key) LIKE $${p.length} OR lower(f.name_en) LIKE $${p.length} OR f.name_ar LIKE $${p.length})`);
     }
     const rows = await db.many<Record<string, unknown>>(`${FLAG_SELECT}${w.length ? ` WHERE ${w.join(' AND ')}` : ''} ORDER BY f.name_en`, p);

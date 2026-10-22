@@ -125,6 +125,7 @@ without new codes. Every `message` is localized by `Accept-Language` (`en` | `ar
 | `SEND_AT_IN_PAST` | ADM-CMP-04: `sendAt` must be in the future |
 | `TEMPLATE_INACTIVE` / `TEMPLATE_CHANNEL_MISMATCH` | ADM-CMP-04 template must be active and of the campaign channel (push ⇄ in_app interchangeable) |
 | `SIGNATURE_INVALID` | (401) webhook signature check failed (WHK-03) |
+| `ALREADY_EXISTS` | (409 `CONFLICT`) unique violation. `details.constraint` (the database constraint name) is sent outside production only (SEC-31) |
 | `PROMO_INVALID` / `PROMO_EXPIRED` / `PROMO_EXHAUSTED` / `PROMO_NOT_APPLICABLE` / `PROMO_NOT_ELIGIBLE` | promotions |
 | `PACKAGE_UNAVAILABLE` | inactive/draft/archived package or cycle not offered |
 | `PAYMENT_GATEWAY_DISABLED` | gateway disabled in payment settings |
@@ -557,7 +558,10 @@ interface LegalDocumentDto {
 ```ts
 interface ExportRequest {
   format: ExportFormat;
-  filters?: Record<string, unknown>;   // exactly the list endpoint's query params (q, sort, filters, from/to)
+  filters?: Record<string, unknown>;   // exactly the list endpoint's query params (q, sort, filters, from/to).
+                                       // Values: string | number | boolean | null | (string | number)[]; no nested
+                                       // objects (400 VALIDATION_ERROR), max 50 keys. `q`, `search`, `sort`, `report`,
+                                       // `from`, `to`, `partnerType`, `period` are coerced to one string (SEC-30).
   ids?: ID[];                          // export only these rows (bulk "export selected")
   columns?: string[];                  // ordered column keys; default all documented
 }
@@ -593,7 +597,8 @@ Auth public. → data `{ status: 'ok'; uptimeSec: number; version: string; time:
 #### HLT-02 · `GET /health/ready`
 Auth public. → data `{ status: 'ready' | 'degraded'; checks: { db: Check; storage: Check; queue: Check; sms: Check; ai: Check; payments: Check } }`
 with `Check = { status: 'up' | 'down' | 'degraded'; latencyMs: number | null; message?: string }`. HTTP 503 with the
-error envelope (`INTERNAL`, `details.checks`) when `db` is down. Used by: AD system-health panel (via ADM-DSH-02).
+error envelope (`INTERNAL`, `details.checks`) when `db` is down. In production `message` is never included on this public
+endpoint (SEC-31); the admin panel (ADM-DSH-02) keeps them. Used by: AD system-health panel (via ADM-DSH-02).
 
 ---
 
@@ -765,6 +770,8 @@ current published one. Used by: U/A re-acceptance prompt (new UI where `pendingL
 
 #### AUTH-10 · `POST /auth/admin/login`
 Auth public · rl:auth (5/min/IP + per-email lockout). Body `{ email: string; password: string; totp?: string; remember?: boolean }`.
+`totp` = the current 6-digit TOTP code **or** a single-use recovery code `XXXXX-XXXXX` (dash optional, case-insensitive).
+A TOTP code is accepted once: the same (or an older) 30-s step is refused after a successful use (SEC-26).
 → data, one of:
 * `{ mfaRequired: true; mfaToken: string /*5 min*/; mfaEnrollmentRequired: false }` — admin has MFA and no `totp` sent;
 * `{ mfaRequired: false; tokens: AuthTokens; me: MeAdminDto }` — MFA disabled, or valid `totp` supplied;
@@ -775,8 +782,9 @@ Auth public · rl:auth (5/min/IP + per-email lockout). Body `{ email: string; pa
 Used by: AD Login.
 
 #### AUTH-11 · `POST /auth/admin/mfa/verify`
-Auth public · rl:auth. Body `{ mfaToken: string; code: string /*6 digits*/; remember?: boolean }`. → data `{ tokens: AuthTokens; me: MeAdminDto }`.
-Errors 401 `MFA_INVALID`, 401 expired token. `audit:auth.login` ("Signed in with 2FA"). Used by: AD Verify2FA.
+Auth public · rl:auth. Body `{ mfaToken: string; code: string /*6-digit TOTP, or recovery code XXXXX-XXXXX*/; remember?: boolean }`. → data `{ tokens: AuthTokens; me: MeAdminDto }`.
+A recovery code works once (it is removed from the stored hashed list); a TOTP code cannot be replayed within its window (SEC-26).
+Errors 401 `MFA_INVALID`, 401 expired token. `audit:auth.login` ("Signed in with 2FA" / "Signed in with a 2FA recovery code"). Used by: AD Verify2FA.
 
 #### AUTH-12 · `POST /auth/admin/mfa/setup`
 Auth admin (or `mfaToken` bearer during forced enrolment). → data `{ secret: string /*base32, 16+*/; otpauthUrl: string; qrDataUrl: string /*PNG data URL*/ }`.
@@ -1098,7 +1106,8 @@ interface PracticeResultDto {
 Used by: U PracticeSession results, A practice-session finish.
 
 #### PRA-04 · `GET /practice/:sessionId/result`
-Auth student. → data `PracticeResultDto`. Used by: A question-bank/result (`attemptId` param = sessionId).
+Auth student. → data `PracticeResultDto`. 409 `ATTEMPT_IN_PROGRESS` while the session is still in progress (the result
+reveals every answer; PRA-03 finish returns it) (SEC-33). Used by: A question-bank/result (`attemptId` param = sessionId).
 
 #### PRA-05 · `GET /practice/sessions`
 Auth student. Query `limit?: number (default 5)`, `page`. → data `{ id: ID; subjectId: ID | null; subjectSlug: SubjectSlug | null; attemptNo: number; correct: number; total: number; score: number; date: ISODate }[]`.
@@ -1443,8 +1452,10 @@ Used by: U PaymentModal promo "Apply", A checkout promo.
 #### PAY-06 · `POST /payments/initiate`
 Auth student · idem · rl. Body `{ packageId: ID; cycle: BillingCycle; gateway: Gateway; promoCode?: string; walletPhone?: string; returnUrl?: string /*web*/; returnScheme?: string /*app deep link e.g. eduway://subscription/success*/ }`.
 `gateway` accepts the aliases listed in §14. `returnUrl` / `returnScheme` may contain the placeholder `__ID__`; the server substitutes
-the payment id. A quote with `total = 0` (promo / proration credit) is confirmed immediately. In non-production, gateways without
-merchant credentials are confirmed through the MockGateway (`mock.confirmUrl` set).
+the payment id. A quote with `total = 0` (promo / proration credit) is confirmed immediately. With `DEV_MOCK_PAYMENTS` (never in
+production; default on only for an explicit `NODE_ENV=development`/`test`), gateways without merchant credentials are confirmed
+through the MockGateway (`mock.confirmUrl` set). ZainCash, FastPay and Qi Card settle IQD only: another currency → 422
+`PAYMENT_GATEWAY_DISABLED` (`details.currency`).
 Creates `payments` row (`initiated` → `pending`), timeline event, quote frozen. → data:
 ```ts
 { paymentId: ID; ref: string; status: 'pending'; quote: PriceQuote;
@@ -1458,7 +1469,9 @@ Card numbers, CVV, wallet PINs are **never** sent to our API. Errors 422 `PACKAG
 Used by: U PaymentModal "Pay", A checkout GatewaySheet.
 
 #### PAY-07 · `POST /payments/mock/:paymentId/confirm`
-Auth student (non-production only; 404 in production). Body `{ outcome: 'success' | 'failure' | 'cancel' }`. Server emits a signed
+Auth student (`DEV_MOCK_PAYMENTS` only; 404 otherwise and always in production). Only for payments made through the MockGateway
+or through a gateway without credentials (dev stub); 404 for a checkout that went to a configured gateway (SEC-28).
+Body `{ outcome: 'success' | 'failure' | 'cancel' }`. Server emits a signed
 mock webhook into the normal webhook pipeline (WHK-01) → entitlement. → data `StudentPaymentDto`. Used by: U PaymentModal processing step, A GatewaySheet (dev).
 
 #### PAY-08 · `GET /payments/:paymentId`
@@ -1487,17 +1500,22 @@ Auth public (signature) · rl:webhook. Path `provider: Gateway`. Raw body + prov
 verified by the `PaymentProvider` implementation (`MockGateway` HMAC with `MOCK_GATEWAY_SECRET`). Idempotent on the provider event id
 (stored in `payment_events` with `idempotencyKey`; duplicates recorded with `duplicate=true` and **never** re-grant access).
 Header `X-Signature: sha256=<hex HMAC-SHA256 of the raw body>`; body `{ id /*event id*/; type: 'payment.succeeded' | 'payment.failed' | 'payment.cancelled';
-data: { paymentId | providerRef; amount } }`. An amount different from the payment total never grants access (payment → failed). On `payment.succeeded`: payment `paid`, receipt issued, subscription + entitlements created/extended (`entitlement_logs`), promotion
+data: { paymentId | providerRef; amount; currency? }; created?: number | ISODate }`. SEC-24: a success **must** carry `amount`; without
+it the event is recorded as rejected, the payment stays pending and the event id is not consumed (a later delivery with the amount can
+still settle it). An amount different from the payment total, or a `currency` different from the payment currency (IQD), never grants
+access (payment → failed). `created` (unix seconds/ms or ISO; covered by the HMAC) must be within ±5 min of server time — required for
+the hosted AsiaHawala / Visa adapters, checked when present for the MockGateway; a stale event → 401 `SIGNATURE_INVALID`. On `payment.succeeded`: payment `paid`, receipt issued, subscription + entitlements created/extended (`entitlement_logs`), promotion
 `used+1`, attribution snapshot (school/marketer) stored, AI allowance reset (billing cycle), student notification + push.
 → `200 { success: true, data: { received: true, duplicate: boolean } }`; 401 on bad signature. Used by: gateways / MockGateway.
 Real gateways (docs/PROVIDERS.md): **FastPay** IPN and **Qi Card** notifications are unsigned / optionally RSA-signed, so the server
 re-reads the payment from the gateway API (FastPay `validate`, Qi `status`) and applies only the gateway-confirmed result (event id
-`<gateway>:<txId>:<status>`); a notification the gateway does not confirm → 401.
+`<gateway>:<txId>:<status>`, with the gateway-reported amount and currency); a notification the gateway does not confirm → 401.
 
 #### WHK-04 · `GET|POST /payments/callback/:provider`
 Auth public · rl:webhook. Browser return from a hosted payment page: ZainCash (`?token=<JWT signed with the merchant secret>`), Qi Card
 finish URL (`?ref=<payment ref>`), FastPay return (`?order_id=`). The result is verified with the gateway (JWT signature + status API),
-applied through the same idempotent pipeline as WHK-01, then → `302` to the payment's `returnScheme` / `returnUrl` (only app schemes or
+applied through the same idempotent pipeline as WHK-01 (a ZainCash token whose `iat` is more than 1 h away from server time → 401),
+then → `302` to the payment's `returnScheme` / `returnUrl` (only app schemes or
 our own web origins) with `paymentId` + `status` query params, else `USER_APP_URL/subscription`. 401 when verification fails; 404 when the
 gateway is not configured. Used by: ZainCash / Qi / FastPay hosted pages.
 
@@ -1506,7 +1524,7 @@ Auth public (signature). Transcoding callbacks → `video_assets.streamStatus/cd
 → `{ received: true }`. Used by: video pipeline.
 
 #### WHK-03 · `POST /webhooks/notifications/:provider`
-(Body: one event, an array, or `{ events: [] }`; event = `{ providerMessageId? | messageId? | deliveryId?; status: 'sent' | 'delivered' | 'failed'; error? }`. Signature: header `X-Signature` = hex HMAC-SHA256(raw body, `NOTIFICATION_WEBHOOK_SECRET`); unsigned receipts are accepted only outside production when no secret is set. → `{ received: true, updated: number }`. Expo push receipts are pulled by the `eduway.expo-push-receipts` job instead.)
+(Body: one event, an array, or `{ events: [] }`; event = `{ providerMessageId? | messageId? | deliveryId?; status: 'sent' | 'delivered' | 'failed'; error? }`. Signature: header `X-Signature` = hex HMAC-SHA256(raw body, `NOTIFICATION_WEBHOOK_SECRET`), required in every environment; without a secret every receipt → 401, unless `DEV_UNSIGNED_NOTIFICATION_WEBHOOKS=true` (dev only, never in production). Only deliveries sent through `:provider` are updated (`twilio` also matches `twilio-whatsapp`) (SEC-25). → `{ received: true, updated: number }`. Expo push receipts are pulled by the `eduway.expo-push-receipts` job instead.)
 Auth public (signature). Delivery receipts (SMS/WhatsApp/email/Expo receipts job) → `notification_deliveries.status/error`. → `{ received: true }`.
 
 ---

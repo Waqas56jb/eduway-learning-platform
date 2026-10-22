@@ -10,7 +10,7 @@ import { entitlements, evaluateSubjectAccess } from '../../common/entitlements.j
 import { NotFoundError } from '../../common/errors/index.js';
 import type { Localized } from '../../common/i18n/index.js';
 import { settingsStore } from '../../common/services/settings-store.js';
-import { aiAllowance, mySubscription } from '../../common/services/student-summary.js';
+import { aiAllowance, currentSubscriptionRow, mySubscription } from '../../common/services/student-summary.js';
 import { decodeCursor, encodeCursor } from '../../common/utils/pagination.js';
 import { BUSINESS_TZ, dayjs } from '../../common/utils/dates.js';
 import {
@@ -103,6 +103,17 @@ async function quizAverage(userId: string, sinceDays?: number): Promise<number |
   return v === null || v === undefined ? null : Math.round(Number(v));
 }
 
+/** Overall and last-7-days quiz averages in one round trip (dashboard). */
+async function quizAverages(userId: string): Promise<{ all: number | null; week: number | null }> {
+  const r = await db.maybeOne<{ all_avg: number | null; week_avg: number | null }>(
+    `SELECT avg(score) AS all_avg, avg(score) FILTER (WHERE submitted_at >= now() - make_interval(days => 7)) AS week_avg
+       FROM ${T.quiz_attempts} WHERE user_id = $1 AND status IN ('passed','failed')`,
+    [userId],
+  );
+  const n = (v: number | null | undefined) => (v === null || v === undefined ? null : Math.round(Number(v)));
+  return { all: n(r?.all_avg), week: n(r?.week_avg) };
+}
+
 async function dailyRows(userId: string, from: string, to: string) {
   return db.many<{ d: string; minutes: number; questions: number }>(
     `SELECT activity_date::text AS d, minutes, questions_answered AS questions FROM ${T.daily_activity} WHERE user_id = $1 AND activity_date BETWEEN $2::date AND $3::date`,
@@ -189,23 +200,26 @@ export const progressService = {
   },
 
   async subjects(userId: string, lessons?: LessonSummary[]): Promise<SubjectProgressDto[]> {
-    const all = lessons ?? (await lessonSummariesFor(userId));
-    const subjects = await db.many<{ id: string; slug: string; name_en: string; name_ar: string; color: string }>(`SELECT id, slug, name_en, name_ar, color FROM ${T.subjects} WHERE deleted_at IS NULL AND status = 'active' ORDER BY sort_order`);
-    const quiz = await db.many<{ subject_id: string; avg: number }>(
-      `SELECT l.subject_id, avg(a.score) AS avg FROM ${T.quiz_attempts} a JOIN ${T.lessons} l ON l.id = a.lesson_id WHERE a.user_id = $1 AND a.status IN ('passed','failed') GROUP BY l.subject_id`,
-      [userId],
-    );
-    const mastery = await db.many<{ subject_id: string; answered: number; correct: number }>(
-      `SELECT q.subject_id, count(*)::int AS answered, count(*) FILTER (WHERE pa.is_correct)::int AS correct
-         FROM ${T.practice_answers} pa JOIN ${T.practice_sessions} ps ON ps.id = pa.session_id JOIN ${T.questions} q ON q.id = pa.question_id
-        WHERE ps.user_id = $1 GROUP BY q.subject_id`,
-      [userId],
-    );
-    const minutes = await db.many<{ subject_id: string; sec: number }>(
-      `SELECT l.subject_id, sum(w.watched_sec)::int AS sec FROM ${T.watch_progress} w JOIN ${T.lessons} l ON l.id = w.lesson_id WHERE w.user_id = $1 GROUP BY l.subject_id`,
-      [userId],
-    );
-    const records = await entitlements.list(userId);
+    // independent reads in parallel (were 6 sequential round trips)
+    const [all, subjects, quiz, mastery, minutes, records] = await Promise.all([
+      lessons ?? lessonSummariesFor(userId),
+      db.many<{ id: string; slug: string; name_en: string; name_ar: string; color: string }>(`SELECT id, slug, name_en, name_ar, color FROM ${T.subjects} WHERE deleted_at IS NULL AND status = 'active' ORDER BY sort_order`),
+      db.many<{ subject_id: string; avg: number }>(
+        `SELECT l.subject_id, avg(a.score) AS avg FROM ${T.quiz_attempts} a JOIN ${T.lessons} l ON l.id = a.lesson_id WHERE a.user_id = $1 AND a.status IN ('passed','failed') GROUP BY l.subject_id`,
+        [userId],
+      ),
+      db.many<{ subject_id: string; answered: number; correct: number }>(
+        `SELECT q.subject_id, count(*)::int AS answered, count(*) FILTER (WHERE pa.is_correct)::int AS correct
+           FROM ${T.practice_answers} pa JOIN ${T.practice_sessions} ps ON ps.id = pa.session_id JOIN ${T.questions} q ON q.id = pa.question_id
+          WHERE ps.user_id = $1 GROUP BY q.subject_id`,
+        [userId],
+      ),
+      db.many<{ subject_id: string; sec: number }>(
+        `SELECT l.subject_id, sum(w.watched_sec)::int AS sec FROM ${T.watch_progress} w JOIN ${T.lessons} l ON l.id = w.lesson_id WHERE w.user_id = $1 GROUP BY l.subject_id`,
+        [userId],
+      ),
+      entitlements.list(userId),
+    ]);
     return subjects.map((s) => {
       const ls = all.filter((l) => l.subjectId === s.id);
       const completed = ls.filter((l) => l.status === 'completed').length;
@@ -253,24 +267,42 @@ export const progressService = {
 
   async dashboard(userId: string, tzOffsetMinutes?: number) {
     const today = todayStr(tzOffsetMinutes);
-    const [who, sub, streak, lessons, ai, unresolved, profile] = await Promise.all([
-      studentName(userId),
-      mySubscription(userId),
-      getStreak(userId),
-      lessonSummariesFor(userId),
-      aiAllowance(userId),
-      db.scalar<number>(`SELECT count(*)::int FROM ${T.mistake_records} WHERE user_id = $1 AND status = 'unresolved'`, [userId]),
-      db.maybeOne<{ daily_goal_minutes: number; last_lesson_id: string | null }>(`SELECT daily_goal_minutes, last_lesson_id FROM ${T.student_profiles} WHERE user_id = $1`, [userId]),
-    ]);
-    const learning = await settingsStore.get('learning');
     const last7From = addDaysStr(today, -6);
-    const recent = await dailyRows(userId, last7From, today);
+    // Every section is independent: issue them together instead of ~15 sequential awaits (docs/PERFORMANCE.md).
+    // One subscription row is shared by the subscription card and the AI allowance.
+    const subRow = currentSubscriptionRow(userId);
+    const aiP = subRow.then((row) => aiAllowance(userId, row));
+    const lessonsP = lessonSummariesFor(userId);
+    const [who, sub, streak, lessons, ai, unresolved, profile, learning, recent, quizAvg, subjects, weeklyStudy, upcomingExams, activity] = await Promise.all([
+      studentName(userId),
+      subRow.then((row) => mySubscription(userId, { sub: row, ai: aiP })),
+      getStreak(userId),
+      lessonsP,
+      aiP,
+      db.scalar<number>(`SELECT count(*)::int FROM ${T.mistake_records} WHERE user_id = $1 AND status = 'unresolved'`, [userId]),
+      db.maybeOne<{ daily_goal_minutes: number | null; last_lesson_id: string | null; last_watched: string | null }>(
+        `SELECT sp.daily_goal_minutes, sp.last_lesson_id,
+                (SELECT w.lesson_id FROM ${T.watch_progress} w WHERE w.user_id = $1 ORDER BY w.updated_at DESC LIMIT 1) AS last_watched
+           FROM (SELECT 1) one LEFT JOIN ${T.student_profiles} sp ON sp.user_id = $1`,
+        [userId],
+      ),
+      settingsStore.get('learning'),
+      dailyRows(userId, last7From, today),
+      quizAverages(userId),
+      lessonsP.then((ls) => this.subjects(userId, ls)),
+      this.weeklyStudy(userId, tzOffsetMinutes),
+      examsService.upcoming(userId, 3),
+      this.activity(userId, 5),
+    ]);
     const activeSet = new Set(recent.filter((r) => r.minutes > 0 || r.questions > 0).map((r) => r.d));
-    const lastWatched = profile?.last_lesson_id ?? (await db.scalar<string>(`SELECT lesson_id FROM ${T.watch_progress} WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, [userId]));
+    const lastWatched = profile?.last_lesson_id ?? profile?.last_watched ?? null;
     const cont = lessons.find((l) => l.id === lastWatched && l.status !== 'completed') ?? lessons.find((l) => l.status === 'in-progress') ?? lessons.find((l) => l.status === 'not-started' && !l.locked) ?? null;
     let continueLesson = null;
     if (cont) {
-      const s = await db.one<{ id: string; slug: string; name_en: string; name_ar: string; color: string }>(`SELECT id, slug, name_en, name_ar, color FROM ${T.subjects} WHERE id = $1`, [cont.subjectId]);
+      const known = subjects.find((x) => x.subjectId === cont.subjectId);
+      const s = known
+        ? { id: known.subjectId, slug: known.slug, name_en: known.name.en, name_ar: known.name.ar, color: known.color }
+        : await db.one<{ id: string; slug: string; name_en: string; name_ar: string; color: string }>(`SELECT id, slug, name_en, name_ar, color FROM ${T.subjects} WHERE id = $1`, [cont.subjectId]);
       continueLesson = { ...cont, subject: { id: s.id, slug: s.slug, name: { en: s.name_en, ar: s.name_ar }, color: s.color } };
     }
     const completed = lessons.filter((l) => l.status === 'completed').length;
@@ -286,26 +318,33 @@ export const progressService = {
       streak: { current: displayStreak(streak, today), longest: streak.longest, last7: Array.from({ length: 7 }, (_, i) => addDaysStr(last7From, i)).map((d) => ({ date: d, active: activeSet.has(d) })) },
       continueLesson,
       lessons: { completed, total: lessons.length, pct: lessons.length ? Math.round((completed / lessons.length) * 100) : 0 },
-      quizAverage: await quizAverage(userId),
-      latestWeekQuizAverage: await quizAverage(userId, 7),
+      quizAverage: quizAvg.all,
+      latestWeekQuizAverage: quizAvg.week,
       unresolvedMistakes: unresolved ?? 0,
       aiAllowance: ai,
-      subjects: await this.subjects(userId, lessons),
-      weeklyStudy: await this.weeklyStudy(userId, tzOffsetMinutes),
+      subjects,
+      weeklyStudy,
       todayMinutes: recent.find((r) => r.d === today)?.minutes ?? 0,
       dailyGoalMinutes: profile?.daily_goal_minutes ?? learning.dailyGoalMinutes,
-      upcomingExams: await examsService.upcoming(userId, 3),
-      recentActivity: (await this.activity(userId, 5)).items,
+      upcomingExams,
+      recentActivity: activity.items,
     };
   },
 
   async summary(userId: string) {
     const today = todayStr();
-    const [lessons, streak] = await Promise.all([lessonSummariesFor(userId), getStreak(userId)]);
-    const cal = await this.calendarStats(userId, 16);
-    const totalMin = (await db.scalar<number>(`SELECT COALESCE(sum(minutes), 0)::int FROM ${T.daily_activity} WHERE user_id = $1`, [userId])) ?? 0;
     const weekStart = weekStartOf(today);
-    const doneThisWeek = (await db.scalar<number>(`SELECT count(*)::int FROM ${T.lesson_completions} WHERE user_id = $1 AND (completed_at AT TIME ZONE 'Asia/Baghdad')::date >= $2::date`, [userId, weekStart])) ?? 0;
+    // independent reads in parallel (were 6 sequential round trips)
+    const [lessons, streak, cal, totalMinRaw, doneThisWeekRaw, quizAvg] = await Promise.all([
+      lessonSummariesFor(userId),
+      getStreak(userId),
+      this.calendarStats(userId, 16),
+      db.scalar<number>(`SELECT COALESCE(sum(minutes), 0)::int FROM ${T.daily_activity} WHERE user_id = $1`, [userId]),
+      db.scalar<number>(`SELECT count(*)::int FROM ${T.lesson_completions} WHERE user_id = $1 AND (completed_at AT TIME ZONE 'Asia/Baghdad')::date >= $2::date`, [userId, weekStart]),
+      quizAverage(userId),
+    ]);
+    const totalMin = totalMinRaw ?? 0;
+    const doneThisWeek = doneThisWeekRaw ?? 0;
     const completed = lessons.filter((l) => l.status === 'completed').length;
     return {
       overallPct: lessons.length ? Math.round((completed / lessons.length) * 100) : 0,
@@ -318,7 +357,7 @@ export const progressService = {
       activeDays: cal.activeDays,
       activeDaysLast30: cal.activeDaysLast30,
       busiestWeekday: cal.busiestWeekday,
-      quizAverage: await quizAverage(userId),
+      quizAverage: quizAvg,
       lessonsDoneThisWeek: doneThisWeek,
     };
   },

@@ -13,6 +13,7 @@ import { providerNameFor } from './channels.js';
 import { dispatchQueued, refreshCampaign } from './dispatch.js';
 import { notificationsRepo as repo, type InboxRow, type Row, type TemplateRow } from './repository.js';
 import { categoryForType, extractVariables, inboxTypeFor, linkForType, NOTIF_CHANNELS, NOTIF_TYPES, renderTemplate, smsInfo, type NotifChannel } from './templates.js';
+import { likeContains } from '../../common/utils/like.js';
 
 type L = { en: string; ar: string };
 
@@ -110,7 +111,7 @@ function templateWhere(q: Partial<TemplateListQuery>) {
     cond.push(`t.active = $${params.length}`);
   }
   if (q.q) {
-    params.push(`%${q.q}%`);
+    params.push(likeContains(q.q));
     const n = params.length;
     cond.push(`(t.name ILIKE $${n} OR t.body_en ILIKE $${n} OR t.body_ar ILIKE $${n} OR t.type ILIKE $${n} OR t.channel ILIKE $${n})`);
   }
@@ -275,7 +276,7 @@ function campaignWhere(q: Partial<CampaignListQuery>) {
     cond.push(`c.channel = ANY($${params.length}::text[])`);
   }
   if (q.q) {
-    params.push(`%${q.q}%`);
+    params.push(likeContains(q.q));
     cond.push(`c.name ILIKE $${params.length}`);
   }
   return { where: cond.join(' AND '), params };
@@ -458,7 +459,7 @@ export function deliveryWhere(q: Partial<DeliveryQuery>, opts: { ignoreStatus?: 
   if (q.studentId) add((n) => `d.user_id = ${n}::uuid`, q.studentId);
   if (q.from) add((n) => `d.created_at >= ${n}::timestamptz`, q.from);
   if (q.to) add((n) => `d.created_at <= ${n}::timestamptz`, q.to);
-  if (q.q) add((n) => `(d.id::text ILIKE ${n} OR u.name_en ILIKE ${n} OR u.name_ar ILIKE ${n} OR u.phone ILIKE ${n} OR d.provider ILIKE ${n} OR d.error ILIKE ${n})`, `%${q.q}%`);
+  if (q.q) add((n) => `(d.id::text ILIKE ${n} OR u.name_en ILIKE ${n} OR u.name_ar ILIKE ${n} OR u.phone ILIKE ${n} OR d.provider ILIKE ${n} OR d.error ILIKE ${n})`, likeContains(q.q));
   return { where: cond.join(' AND '), params };
 }
 

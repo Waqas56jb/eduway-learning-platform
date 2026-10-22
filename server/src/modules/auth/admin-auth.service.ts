@@ -5,6 +5,8 @@
 import bcrypt from 'bcryptjs';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
+import { T } from '../../config/constants.js';
+import { db } from '../../config/db.js';
 import { env } from '../../config/env.js';
 import { invalidatePrincipal } from '../../common/auth/principal.js';
 import { signMfaChallengeToken, verifyMfaChallengeToken } from '../../common/auth/tokens.js';
@@ -63,13 +65,61 @@ async function auditLogin(row: AdminRow, meta: ClientMeta, summary: string): Pro
   });
 }
 
-function verifyTotp(secret: string | null, code: string): boolean {
-  if (!secret) return false;
+const TOTP_STEP_SEC = 30;
+
+/** The 30-s time step a valid TOTP code belongs to (window ±1), or null when the code is wrong. */
+export function totpStep(secret: string | null, code: string, nowMs = Date.now()): number | null {
+  if (!secret) return null;
   try {
-    return authenticator.verify({ token: code.replace(/\s/g, ''), secret });
+    const checker = authenticator.clone(); // same window/step/digits, own clock
+    checker.options = { epoch: nowMs };
+    const delta = checker.checkDelta(code.replace(/\s/g, ''), secret);
+    return delta === null ? null : Math.floor(nowMs / 1000 / TOTP_STEP_SEC) + delta;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** SEC-26: a step is accepted only when it is newer than the last accepted one (no replay inside the window). */
+export function totpStepAcceptable(lastUsedStep: number | string | null | undefined, step: number | null): boolean {
+  if (step === null) return false;
+  return lastUsedStep === null || lastUsedStep === undefined || step > Number(lastUsedStep);
+}
+
+/** Valid TOTP code AND its step was not used before — recorded atomically (two parallel logins cannot share it). */
+async function consumeTotp(userId: string, secret: string | null, code: string): Promise<boolean> {
+  const step = totpStep(secret, code);
+  if (step === null) return false;
+  const n = await db.exec(
+    `UPDATE ${T.admin_users} SET mfa_last_used_step = $2 WHERE user_id = $1 AND (mfa_last_used_step IS NULL OR mfa_last_used_step < $2)`,
+    [userId, step],
+  );
+  return n > 0;
+}
+
+/** Recovery codes are issued as `XXXXX-XXXXX` (no ambiguous characters); input is case/dash-insensitive. */
+export function normalizeRecoveryCode(code: string): string | null {
+  const c = code.replace(/[\s-]/g, '').toUpperCase();
+  return /^[A-HJ-NP-Z2-9]{10}$/.test(c) ? `${c.slice(0, 5)}-${c.slice(5)}` : null;
+}
+export const recoveryCodeHash = (normalized: string): string => hashToken(normalized, 'mfa-recovery');
+
+/** SEC-26: single-use recovery code — removed from the stored (hashed) list in the same statement that checks it. */
+async function consumeRecoveryCode(userId: string, code: string): Promise<{ remaining: number } | null> {
+  const norm = normalizeRecoveryCode(code);
+  if (!norm) return null;
+  const row = await db.maybeOne<{ remaining: number }>(
+    `UPDATE ${T.admin_users} SET mfa_recovery_codes = array_remove(mfa_recovery_codes, $2)
+      WHERE user_id = $1 AND $2 = ANY(mfa_recovery_codes) RETURNING cardinality(mfa_recovery_codes) AS remaining`,
+    [userId, recoveryCodeHash(norm)],
+  );
+  return row ? { remaining: Number(row.remaining) } : null;
+}
+
+/** Second factor at login: a fresh TOTP code, or an unused recovery code. */
+async function consumeSecondFactor(row: AdminRow, code: string): Promise<'totp' | 'recovery' | null> {
+  if (/^\d{6}$/.test(code.replace(/\s/g, ''))) return (await consumeTotp(row.id, row.mfa_secret, code)) ? 'totp' : null;
+  return (await consumeRecoveryCode(row.id, code)) ? 'recovery' : null;
 }
 
 async function failLogin(email: string, meta: ClientMeta, row: AdminRow | null): Promise<never> {
@@ -103,11 +153,12 @@ export async function adminLogin(input: { email: string; password: string; totp?
   const security = await settingsStore.get('security');
   if (row.mfa_enabled) {
     if (!input.totp) return { mfaRequired: true, mfaToken: signMfaChallengeToken(row.id, 'login'), mfaEnrollmentRequired: false };
-    if (!verifyTotp(row.mfa_secret, input.totp)) {
+    const method = await consumeSecondFactor(row, input.totp);
+    if (!method) {
       await failLogin(email, meta, row);
     }
     const res = await issueAdminSession(row, meta, input.remember ?? true);
-    await auditLogin(row, meta, 'Signed in with 2FA');
+    await auditLogin(row, meta, method === 'recovery' ? 'Signed in with a 2FA recovery code' : 'Signed in with 2FA');
     return { mfaRequired: false, ...res };
   }
   if (security.adminMfaMandatory) return { mfaRequired: true, mfaToken: signMfaChallengeToken(row.id, 'enroll'), mfaEnrollmentRequired: true };
@@ -125,7 +176,8 @@ export async function adminMfaVerify(input: { mfaToken: string; code: string; re
   // SEC-02: the TOTP step-up has its own lockout (it was counted but never enforced → unlimited guessing
   // across IPs by anyone holding the password).
   await assertMfaNotLocked(mfaKey);
-  if (!verifyTotp(row.mfa_secret, input.code)) {
+  const method = await consumeSecondFactor(row, input.code);
+  if (!method) {
     const pol = await settingsStore.get('auth');
     const lock = await authRepo.registerFailure('admin_mfa', mfaKey, MFA_LOCKOUT_ATTEMPTS, pol.adminLockoutMinutes);
     if (lock.locked_until) {
@@ -135,7 +187,7 @@ export async function adminMfaVerify(input: { mfaToken: string; code: string; re
   }
   await authRepo.clearLockout('admin_mfa', mfaKey);
   const res = await issueAdminSession(row, meta, input.remember ?? true);
-  await auditLogin(row, meta, 'Signed in with 2FA');
+  await auditLogin(row, meta, method === 'recovery' ? 'Signed in with a 2FA recovery code' : 'Signed in with 2FA');
   return res;
 }
 
@@ -166,7 +218,7 @@ export async function mfaEnable(userId: string, code: string, meta?: ClientMeta,
   if (viaChallenge && (row.mfa_enabled || row.status !== 'active')) throw new UnauthorizedError('MFA_INVALID');
   if (!row.mfa_pending_secret) throw new BusinessRuleError('MFA_NOT_PENDING');
   await assertMfaNotLocked(row.email.toLowerCase());
-  if (!verifyTotp(row.mfa_pending_secret, code)) {
+  if (totpStep(row.mfa_pending_secret, code) === null) {
     await authRepo.registerFailure('admin_mfa', row.email.toLowerCase(), MFA_LOCKOUT_ATTEMPTS, (await settingsStore.get('auth')).adminLockoutMinutes);
     throw new UnauthorizedError('MFA_INVALID');
   }
@@ -176,7 +228,8 @@ export async function mfaEnable(userId: string, code: string, meta?: ClientMeta,
     mfa_secret: row.mfa_pending_secret,
     mfa_pending_secret: null,
     mfa_enrolled_at: new Date(),
-    mfa_recovery_codes: recoveryCodes.map((c) => hashToken(c, 'mfa-recovery')),
+    mfa_last_used_step: null, // fresh factor; the finish-sign-in step may use the code currently shown
+    mfa_recovery_codes: recoveryCodes.map((c) => recoveryCodeHash(c)),
   });
   const result: { mfaEnabled: true; recoveryCodes: string[]; tokens?: AuthTokens; me?: MeAdminDto } = { mfaEnabled: true, recoveryCodes };
   if (viaChallenge && meta) {
@@ -190,10 +243,10 @@ export async function mfaDisable(userId: string, input: { code?: string; passwor
   const security = await settingsStore.get('security');
   if (security.adminMfaMandatory) throw new BusinessRuleError('MFA_REQUIRED');
   const row = await adminsService.getRow(userId);
-  const okCode = input.code ? verifyTotp(row.mfa_secret, input.code) : false;
+  const okCode = input.code ? await consumeTotp(row.id, row.mfa_secret, input.code) : false;
   const okPw = input.password && row.password_hash ? await bcrypt.compare(input.password, row.password_hash) : false;
   if (!okCode && !okPw) throw new UnauthorizedError(input.code ? 'MFA_INVALID' : 'PASSWORD_INCORRECT');
-  await adminsRepo.updateAdminUser(userId, { mfa_enabled: false, mfa_secret: null, mfa_pending_secret: null, mfa_recovery_codes: [] });
+  await adminsRepo.updateAdminUser(userId, { mfa_enabled: false, mfa_secret: null, mfa_pending_secret: null, mfa_recovery_codes: [], mfa_last_used_step: null });
   return { mfaEnabled: false as const };
 }
 

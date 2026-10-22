@@ -25,6 +25,11 @@ const PARAM_IDS: Record<string, string> = {
   '/content/teachers/:id': 'teacherId',
   '/support/:id': 'ticketId',
   '/support/tickets/:id': 'ticketId',
+  '/schools/incentive-rules/:id': 'schoolRuleId',
+  '/schools/settlements/:id': 'schoolSettlementId',
+  '/marketers/incentive-rules/:id': 'marketerRuleId',
+  '/marketers/settlements/:id': 'marketerSettlementId',
+  '/notifications/campaigns/:id': 'campaignId',
 };
 
 function parseRoutes(): { path: string; redirect?: string; guest?: boolean }[] {
@@ -59,6 +64,8 @@ function toCase(r: { path: string; redirect?: string; guest?: boolean }): RouteC
     name: slug(r.path),
     path: url,
     expectPath: r.redirect ? new RegExp(`^${r.redirect}$`) : undefined,
+    // GET /admin/dashboard aggregates ~15 queries: 5–20 s against the remote dev DB (see docs/E2E.md).
+    renderTimeout: r.path === '/' ? 30_000 : undefined,
   };
 }
 

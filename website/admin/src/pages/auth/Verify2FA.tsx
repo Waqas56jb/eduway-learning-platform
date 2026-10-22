@@ -34,6 +34,9 @@ export default function Verify2FA() {
   const [loading, setLoading] = useState(false);
   const [setup, setSetup] = useState<MfaSetupDto | null>(null);
   const [recovery, setRecovery] = useState<string[] | null>(null);
+  // Sign in with a single-use recovery code instead of the authenticator app (login only, not enrolment).
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [recoveryInput, setRecoveryInput] = useState('');
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const enrolling = stage === 'enroll';
 
@@ -50,6 +53,8 @@ export default function Verify2FA() {
   if ((stage !== '2fa' && stage !== 'enroll') || !mfaToken) return <Navigate to="/login" replace />;
 
   const code = digits.join('');
+  const recoveryValue = recoveryInput.replace(/[\s-]/g, '').toUpperCase();
+  const recoveryReady = /^[A-Z0-9]{10}$/.test(recoveryValue);
 
   const finish = async (value: string) => {
     const res = await authApi.verifyMfa({ mfaToken, code: value, remember });
@@ -64,10 +69,30 @@ export default function Verify2FA() {
   };
 
   const fail = (e: unknown) => {
-    setError(isApiError(e) && (e.reason === 'MFA_INVALID' || e.status === 401) && !e.message ? t('auth.invalidCode') : errorMessage(e));
+    setError(
+      isApiError(e) && (e.reason === 'MFA_INVALID' || e.status === 401) && !e.message
+        ? t('auth.invalidCode')
+        : errorMessage(e),
+    );
     setLoading(false);
     setDigits(Array(6).fill(''));
     refs.current[0]?.focus();
+  };
+
+  const submitRecovery = async () => {
+    if (!recoveryReady || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await finish(`${recoveryValue.slice(0, 5)}-${recoveryValue.slice(5)}`);
+    } catch (e) {
+      setError(
+        isApiError(e) && (e.reason === 'MFA_INVALID' || e.status === 401) && !e.message
+          ? t('auth.invalidCode')
+          : errorMessage(e),
+      );
+      setLoading(false);
+    }
   };
 
   const submit = async (value = code) => {
@@ -111,8 +136,12 @@ export default function Verify2FA() {
       <span className="grid h-12 w-12 place-items-center rounded-xl bg-accent/10 text-accent">
         {enrolling ? <QrCode className="h-6 w-6" /> : <Smartphone className="h-6 w-6" />}
       </span>
-      <h1 className="mt-4 font-display text-2xl font-bold text-primary">{enrolling ? t('auth.enrollTitle') : t('auth.twoFaTitle')}</h1>
-      <p className="mt-1 text-sm text-muted">{enrolling ? t('auth.enrollSub') : t('auth.twoFaSub', { email })}</p>
+      <h1 className="mt-4 font-display text-2xl font-bold text-primary">
+        {enrolling ? t('auth.enrollTitle') : t('auth.twoFaTitle')}
+      </h1>
+      <p className="mt-1 text-sm text-muted">
+        {enrolling ? t('auth.enrollSub') : t('auth.twoFaSub', { email })}
+      </p>
 
       {enrolling && (
         <div className="mt-5 flex flex-col items-center gap-3 rounded-xl border border-line bg-surface-2 p-4">
@@ -152,51 +181,119 @@ export default function Verify2FA() {
         </div>
       )}
 
-      <form
-        className="mt-6"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <div className="flex justify-between gap-2" dir="ltr" role="group" aria-label="6-digit code">
-          {digits.map((d, i) => (
-            <input
-              key={i}
-              ref={(el) => (refs.current[i] = el)}
-              value={d}
-              inputMode="numeric"
-              autoComplete={i === 0 ? 'one-time-code' : 'off'}
-              maxLength={6}
-              autoFocus={i === 0}
-              aria-label={`Digit ${i + 1}`}
-              onChange={(e) => setAt(i, e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus();
-              }}
-              className={cn(
-                'h-14 w-full min-w-0 rounded-xl border bg-surface text-center text-xl font-bold text-primary num transition focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15',
-                error ? 'border-danger' : 'border-line',
-              )}
-            />
-          ))}
-        </div>
-        {error && (
-          <p role="alert" className="mt-3 flex items-center gap-1.5 text-sm text-danger">
-            <AlertCircle className="h-4 w-4" /> {error}
-          </p>
-        )}
-        <Button type="submit" size="lg" className="mt-6 w-full" loading={loading} disabled={code.length !== 6}>
-          {loading ? t('auth.verifying') : enrolling ? t('auth.enrollEnable') : t('auth.verify')}
-        </Button>
-      </form>
+      {useRecoveryCode && !enrolling ? (
+        <form
+          className="mt-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitRecovery();
+          }}
+        >
+          <label className="text-sm font-medium text-ink" htmlFor="recovery-code">
+            {t('auth.recoveryLabel')}
+          </label>
+          <input
+            id="recovery-code"
+            value={recoveryInput}
+            onChange={(e) => setRecoveryInput(e.target.value.slice(0, 16))}
+            autoFocus
+            autoComplete="off"
+            spellCheck={false}
+            dir="ltr"
+            placeholder="XXXXX-XXXXX"
+            className={cn(
+              'mt-2 h-12 w-full rounded-xl border bg-surface px-4 text-center font-mono text-lg uppercase tracking-widest text-primary transition focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15',
+              error ? 'border-danger' : 'border-line',
+            )}
+          />
+          <p className="mt-2 text-xs text-muted">{t('auth.recoveryHint')}</p>
+          {error && (
+            <p role="alert" className="mt-3 flex items-center gap-1.5 text-sm text-danger">
+              <AlertCircle className="h-4 w-4" /> {error}
+            </p>
+          )}
+          <Button
+            type="submit"
+            size="lg"
+            className="mt-6 w-full"
+            loading={loading}
+            disabled={!recoveryReady}
+          >
+            {loading ? t('auth.verifying') : t('auth.verify')}
+          </Button>
+        </form>
+      ) : (
+        <form
+          className="mt-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <div
+            className="flex justify-between gap-2"
+            dir="ltr"
+            role="group"
+            aria-label="6-digit code"
+          >
+            {digits.map((d, i) => (
+              <input
+                key={i}
+                ref={(el) => (refs.current[i] = el)}
+                value={d}
+                inputMode="numeric"
+                autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                maxLength={6}
+                autoFocus={i === 0}
+                aria-label={`Digit ${i + 1}`}
+                onChange={(e) => setAt(i, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus();
+                }}
+                className={cn(
+                  'num h-14 w-full min-w-0 rounded-xl border bg-surface text-center text-xl font-bold text-primary transition focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15',
+                  error ? 'border-danger' : 'border-line',
+                )}
+              />
+            ))}
+          </div>
+          {error && (
+            <p role="alert" className="mt-3 flex items-center gap-1.5 text-sm text-danger">
+              <AlertCircle className="h-4 w-4" /> {error}
+            </p>
+          )}
+          <Button
+            type="submit"
+            size="lg"
+            className="mt-6 w-full"
+            loading={loading}
+            disabled={code.length !== 6}
+          >
+            {loading ? t('auth.verifying') : enrolling ? t('auth.enrollEnable') : t('auth.verify')}
+          </Button>
+        </form>
+      )}
+
+      {!enrolling && (
+        <button
+          type="button"
+          onClick={() => {
+            setUseRecoveryCode((v) => !v);
+            setError(null);
+            setRecoveryInput('');
+          }}
+          className="mt-4 text-sm font-medium text-accent hover:underline"
+        >
+          {useRecoveryCode ? t('auth.useAuthenticator') : t('auth.useRecovery')}
+        </button>
+      )}
 
       <Link
         to="/login"
         onClick={() => logout({ silent: true })}
         className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-accent"
       >
-        <ArrowLeft className="h-4 w-4 flip-rtl" /> {t('auth.backToLogin')}
+        <ArrowLeft className="flip-rtl h-4 w-4" /> {t('auth.backToLogin')}
       </Link>
     </AuthShell>
   );

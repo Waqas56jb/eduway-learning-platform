@@ -65,13 +65,15 @@ export const sendOtpDto = z.object({
 });
 
 // ── admin ──
+/** 6-digit TOTP code, or a single-use recovery code `XXXXX-XXXXX` (dash optional, case-insensitive) — SEC-26. */
+const secondFactor = z.string().trim().regex(/^(\d{6}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5})$/);
 export const adminLoginBody = z.object({
   email: z.string().email().max(200),
   password: z.string().min(1).max(200),
-  totp: z.string().regex(/^\d{6}$/).optional(),
+  totp: secondFactor.optional(),
   remember: z.boolean().optional(),
 });
-export const mfaVerifyBody = z.object({ mfaToken: z.string().min(20), code: z.string().regex(/^\d{6}$/), remember: z.boolean().optional() });
+export const mfaVerifyBody = z.object({ mfaToken: z.string().min(20), code: secondFactor, remember: z.boolean().optional() });
 export const mfaCodeBody = z.object({ code: z.string().regex(/^\d{6}$/) });
 export const mfaDisableBody = z.object({ code: z.string().regex(/^\d{6}$/).optional(), password: z.string().max(200).optional() }).refine((b) => b.code || b.password, { message: 'code or password required' });
 export const forgotBody = z.object({ email: z.string().email().max(200) });

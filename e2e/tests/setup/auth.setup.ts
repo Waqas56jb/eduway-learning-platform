@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { expect, test as setup, type APIRequestContext } from '@playwright/test';
 import { attachGuard, expectClean } from '../support/guards';
 import { studentOtpLogin } from '../support/student';
-import { ADMIN_URL, API_URL, AUTH_DIR, LANG_KEYS, STATE, USER_URL, adminCredentials } from '../support/env';
+import { ADMIN_URL, API_URL, AUTH_DIR, LANG_KEYS, STATE, USER_URL, adminCredentials, waitForApi } from '../support/env';
 
 /**
  * Logs both personas in through the real UI (OTP for the student, e-mail + password for the super admin),
@@ -22,6 +22,7 @@ const firstId = (rows: unknown): string | null => {
 
 setup('student logs in with OTP via the UI', async ({ browser, request }) => {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
+  await waitForApi();
   // The OTP resend policy allows only a few codes per 30 min, so a still-valid saved session is reused
   // (the full OTP UI flow — incl. the device-limit dialog — is exercised in user-flows.spec.ts anyway).
   let page = await browser.newPage({ baseURL: USER_URL, storageState: fs.existsSync(STATE.student) ? STATE.student : undefined });
@@ -65,6 +66,7 @@ setup('student logs in with OTP via the UI', async ({ browser, request }) => {
 
 setup('super admin logs in via the UI', async ({ page, request }) => {
   const { email, password } = adminCredentials();
+  await waitForApi();
   const guard = attachGuard(page);
   await page.addInitScript(([k]) => localStorage.setItem(k, 'en'), [LANG_KEYS.admin]);
   await page.goto(`${ADMIN_URL}/login`);
@@ -94,6 +96,13 @@ setup('super admin logs in via the UI', async ({ page, request }) => {
       marketerId: firstId(await get('/admin/marketers?pageSize=1')),
       templateId: firstId(await get('/admin/notification-templates?pageSize=1')),
       roleId: firstId(await get('/admin/roles')),
+      teacherId: firstId(await get('/admin/teachers')),
+      ticketId: firstId(await get('/admin/support-tickets?pageSize=1')),
+      schoolRuleId: firstId(await get('/admin/incentive-rules?partnerType=school')),
+      marketerRuleId: firstId(await get('/admin/incentive-rules?partnerType=marketer')),
+      schoolSettlementId: firstId(await get('/admin/settlements?partnerType=school&pageSize=1')),
+      marketerSettlementId: firstId(await get('/admin/settlements?partnerType=marketer&pageSize=1')),
+      campaignId: firstId(await get('/admin/campaigns?pageSize=1')),
     },
   };
   fs.writeFileSync(STATE.ids, JSON.stringify({ ...(fs.existsSync(STATE.ids) ? JSON.parse(fs.readFileSync(STATE.ids, 'utf8')) : {}), ...ids }, null, 2));

@@ -64,7 +64,7 @@ export default function General() {
               <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
                 <Field label={t('settings.general.logo')} hint={t('settings.general.logoHint')}>
                   <FileUpload
-                    accept="image/png,image/svg+xml,image/jpeg"
+                    accept="image/png,image/jpeg,image/webp"
                     maxSizeMb={2}
                     compact
                     preview={draft.logo}

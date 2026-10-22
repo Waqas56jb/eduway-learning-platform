@@ -48,6 +48,7 @@ export const TABLES = [
   // platform
   'settings', 'feature_flags', 'app_settings', 'audit_logs', 'suspicious_events', 'exports_log',
   'analytics_daily_rollups', 'cms_testimonials', 'cms_faq', 'uploads', 'support_tickets', 'support_ticket_messages',
+  'rate_limits',
   // infrastructure (migration ledger)
   'schema_migrations',
 ] as const;

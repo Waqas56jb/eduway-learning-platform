@@ -30,8 +30,16 @@ Suggested domains (replace everywhere if yours differ): `api.eduway.iq` (API), `
 - [ ] Store secrets only in the hosting provider's secret/env settings. Never in git, never in `VITE_*` /
       `EXPO_PUBLIC_*` variables (those are bundled into public client code).
 - [ ] Real providers configured: SMS (`SMS_PROVIDER` + credentials), SMTP, payment gateways, Expo push token,
-      AI provider key. With `NODE_ENV=production` the mock gateway, the dev OTP bypass and demo data are disabled,
-      and a gateway without credentials is rejected (`PAYMENT_GATEWAY_DISABLED`).
+      AI provider key. With `NODE_ENV=production` the mock gateway, the dev OTP bypass, LAN CORS, public API docs and
+      demo data are disabled, and a gateway without credentials is rejected (`PAYMENT_GATEWAY_DISABLED`).
+- [ ] `NODE_ENV=production` on every environment that holds real data (staging included). The server then **refuses to
+      start** unless `PUBLIC_API_URL`, `ADMIN_APP_URL`, `USER_APP_URL` are public `https://` URLs, `CORS_ORIGINS` holds only
+      `https://` non-localhost origins, `TRUST_PROXY` is set, `DB_SSL=true`, the three JWT secrets differ, and no dev-only
+      flag (`API_DOCS_PUBLIC`, `DEV_*`) is `true` (docs/SECURITY.md SEC-21).
+- [ ] `TRUST_PROXY` = number of reverse proxies in front of the API: `1` on Render / Fly / Railway (one edge proxy),
+      `2` if you add e.g. Cloudflare in front, `false` if clients connect directly. Too high a value lets clients spoof
+      `X-Forwarded-For` and dodge per-IP rate limits and lockouts (SEC-22).
+- [ ] More than one API instance? Set `RATE_LIMIT_STORE=postgres` so rate limits are shared (SEC-23).
 
 ### B. Database (Supabase): capacity first
 - [ ] **Upgrade the Supabase compute tier and pooler before launch.** The development project uses the shared
@@ -58,7 +66,8 @@ Suggested domains (replace everywhere if yours differ): `api.eduway.iq` (API), `
    change the password and **enable MFA (TOTP)**.
 4. Check `GET https://api.eduway.iq/api/v1/health` (liveness) and `/api/v1/health/ready` (db, storage, queue,
    providers: 503 when the DB is down).
-5. `/api/docs` is disabled in production unless `API_DOCS_PUBLIC=true`. Keep it off publicly.
+5. `/api/docs` is never served in production (`API_DOCS_PUBLIC=true` there stops the server from starting). Use a
+   non-production instance or `npm run docs` (writes `server/docs/openapi.json`) to read the API reference.
 
 ### D. Websites
 - [ ] Vercel: create two projects from the repo with **Root Directory** `website/user` and `website/admin`. The
@@ -103,7 +112,9 @@ See §5. Production builds use `EXPO_PUBLIC_API_URL=https://api.eduway.iq/api/v1
 ### API (`server/`): set in the host's env settings
 | Variable | Production value / note |
 |---|---|
-| `NODE_ENV` | `production` (disables dev OTP bypass, mock gateway, demo data, public API docs) |
+| `NODE_ENV` | `production` (disables dev OTP bypass, LAN CORS, mock gateway, demo data, public API docs; enforces the production checks) |
+| `TRUST_PROXY` | **required**: `1` behind one proxy (Render/Fly/Railway); see §1 |
+| `RATE_LIMIT_STORE` | `memory` (one instance) or `postgres` (several instances) |
 | `PORT` | `4100` (image default; Render/Fly route to it) |
 | `API_PREFIX` | `/api/v1` |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`) | rotated values |
@@ -113,7 +124,7 @@ See §5. Production builds use `EXPO_PUBLIC_API_URL=https://api.eduway.iq/api/v1
 | `CORS_ORIGINS`, `USER_APP_URL`, `ADMIN_APP_URL`, `PUBLIC_API_URL` | §1.E |
 | `SMS_PROVIDER`, `SMS_HTTP_URL`, `SMS_HTTP_TOKEN` | real SMS provider (not `mock`) |
 | `SMTP_URL`, `MAIL_FROM` | transactional mail |
-| `PUSH_PROVIDER`, `EXPO_ACCESS_TOKEN`, `NOTIFICATION_WEBHOOK_SECRET` | push notifications |
+| `PUSH_PROVIDER`, `EXPO_ACCESS_TOKEN`, `NOTIFICATION_WEBHOOK_SECRET` | push notifications; delivery receipts are rejected without the secret |
 | `ZAINCASH_*`, `FASTPAY_*`, `QICARD_*`, `ASIAHAWALA_*`, `VISA_*` | only for gateways you enable |
 | `OPENAI_*` / `ANTHROPIC_*` / `AZURE_OPENAI_*`, `AI_EMBEDDING_MODEL` | AI tutor (mock model without a key) |
 | `JOBS_ENABLED` | `true` on exactly the instances that should run pg-boss workers |

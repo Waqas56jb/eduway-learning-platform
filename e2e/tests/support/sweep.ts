@@ -13,6 +13,8 @@ export interface RouteCase {
   expectPath?: RegExp;
   /** API failures that are expected on this page (`METHOD /api/v1/...` regex). */
   allow?: RegExp[];
+  /** Render budget (default 10 s) — only raised for documented slow endpoints. */
+  renderTimeout?: number;
   /** Extra page-specific assertion. */
   check?: (page: Page) => Promise<void>;
 }
@@ -30,7 +32,7 @@ export async function sweepRoute(browser: Browser, testInfo: TestInfo, app: AppN
   try {
     for (const re of rc.allow ?? []) guard.allow(re);
     await page.goto(rc.path);
-    await expectRendered(page);
+    await expectRendered(page, rc.renderTimeout);
     const expected = rc.expectPath ?? new RegExp(`^${rc.path.split('?')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`);
     if (!expected.test(new URL(page.url()).pathname)) {
       throw new Error(`expected ${rc.path} to stay on ${expected}, landed on ${new URL(page.url()).pathname}`);

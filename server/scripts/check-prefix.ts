@@ -32,7 +32,7 @@ const createdTables = new Set<string>();
 for (const file of sqlFiles) {
   const sql = stripSqlComments(readFileSync(file, 'utf8'));
   for (const v of [...checkSqlDefinitions(sql), ...checkSqlReferences(sql)]) problems.push(`${rel(file)}:${v.line}  ${v.message}`);
-  for (const m of sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?(?:public\.)?eduway_platform_([a-z_]+)/g)) createdTables.add(m[1] as string);
+  for (const m of sql.matchAll(/CREATE (?:UNLOGGED )?TABLE (?:IF NOT EXISTS )?(?:public\.)?eduway_platform_([a-z_]+)/g)) createdTables.add(m[1] as string);
 }
 
 // ── TypeScript sources: extract string + template literals and check them ──

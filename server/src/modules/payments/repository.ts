@@ -1,6 +1,7 @@
 import { T } from '../../config/constants.js';
 import { db, type Executor } from '../../config/db.js';
 import type { Row } from '../commerce/lib.js';
+import { likeContains } from '../../common/utils/like.js';
 
 /** Base SELECT for TransactionRow (columns compatible with students' toTransactionRow). */
 export const TX_SELECT = `
@@ -56,7 +57,7 @@ export function paymentWhere(f: PaymentFilter): { sql: string; params: unknown[]
   if (f.ids?.length) add((n) => `pay.id = ANY(${n}::uuid[])`, f.ids);
   if (f.q) {
     for (const word of f.q.trim().toLowerCase().split(/\s+/).slice(0, 5)) {
-      add((n) => `(lower(pay.ref) LIKE ${n} OR lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(coalesce(pay.promo_code, '')) LIKE ${n})`, `%${word.replace(/^0/, '')}%`);
+      add((n) => `(lower(pay.ref) LIKE ${n} OR lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(coalesce(pay.promo_code, '')) LIKE ${n})`, likeContains(word.replace(/^0/, '')));
     }
   }
   return { sql: w.length ? ` AND ${w.join(' AND ')}` : '', params: p };

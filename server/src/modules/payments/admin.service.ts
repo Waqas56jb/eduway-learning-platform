@@ -10,6 +10,7 @@ import { toTransactionRow, type TransactionRow } from '../students/index.js';
 import { subscriptionEngine } from '../subscriptions/engine.js';
 import { getProvider } from './providers.js';
 import { paymentWhere, paymentsRepo, TX_SELECT, type PaymentFilter } from './repository.js';
+import { likeContains } from '../../common/utils/like.js';
 
 export interface RefundDto {
   id: string;
@@ -86,7 +87,7 @@ function refundWhere(f: RefundFilter) {
   if (f.ids?.length) add((n) => `rf.id = ANY(${n}::uuid[])`, f.ids);
   if (f.q) {
     for (const word of f.q.trim().toLowerCase().split(/\s+/).slice(0, 5)) {
-      add((n) => `(lower(pay.ref) LIKE ${n} OR lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(rf.reason) LIKE ${n} OR lower(coalesce(rq.name_en, '')) LIKE ${n})`, `%${word}%`);
+      add((n) => `(lower(pay.ref) LIKE ${n} OR lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(rf.reason) LIKE ${n} OR lower(coalesce(rq.name_en, '')) LIKE ${n})`, likeContains(word));
     }
   }
   return { sql: w.length ? ` AND ${w.join(' AND ')}` : '', params: p };

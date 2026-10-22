@@ -1,17 +1,95 @@
 /**
- * Rate-limit presets (in-memory store; use a shared store if the API is scaled horizontally).
+ * Rate-limit presets.
  *   route({ ..., rateLimit: rateLimits.otpSend })
  * Exceeding a limit → 429 RATE_LIMITED (localized) with Retry-After.
  * Disabled when NODE_ENV=test unless RATE_LIMIT_IN_TESTS=1.
+ *
+ * Counter store (SEC-23), RATE_LIMIT_STORE:
+ *   memory   (default) per-process counters — fine for one API instance / local dev.
+ *   postgres shared counters in `eduway_platform_rate_limits` (migration 403) — use when more than one API
+ *            instance serves traffic, so a client cannot multiply its budget by hitting different instances.
+ *            Costs one small upsert per limited request. A store failure lets the request through (logged):
+ *            the DB being down already fails every authenticated path.
  */
 import { createHash } from 'node:crypto';
 import type { Request, RequestHandler } from 'express';
-import { rateLimit, type Options } from 'express-rate-limit';
+import { rateLimit, type IncrementResponse, type Options, type Store } from 'express-rate-limit';
+import { T } from '../../config/constants.js';
+import { env } from '../../config/env.js';
+import { logger } from '../../config/logger.js';
 import { RateLimitError } from '../errors/index.js';
 
 const skipInTests = () => process.env.NODE_ENV === 'test' && process.env.RATE_LIMIT_IN_TESTS !== '1';
 
-export function createRateLimit(opts: { windowMs: number; limit: number; key?: (req: Request) => string; name: string }): RequestHandler {
+/** Minimal query surface (the pg pool, or a fake in unit tests). */
+export interface RateLimitDb {
+  query<R extends Record<string, unknown>>(text: string, values?: unknown[]): Promise<{ rows: R[] }>;
+}
+
+/** Postgres-backed fixed-window store (one row per key; the window restarts once `reset_at` has passed). */
+export class PostgresRateLimitStore implements Store {
+  windowMs = 60_000;
+  /** Counters are shared between processes. */
+  localKeys = false;
+  private static lastSweep = 0;
+
+  constructor(
+    private readonly getDb: () => RateLimitDb | Promise<RateLimitDb>,
+    readonly prefix = 'rl:',
+  ) {}
+
+  init(options: Options): void {
+    this.windowMs = options.windowMs;
+  }
+
+  private key(k: string): string {
+    return `${this.prefix}${k}`.slice(0, 500);
+  }
+
+  async increment(key: string): Promise<IncrementResponse> {
+    const db = await this.getDb();
+    const { rows } = await db.query<{ hits: number; reset_at: Date }>(
+      `INSERT INTO ${T.rate_limits} AS r (key, hits, reset_at) VALUES ($1, 1, now() + make_interval(secs => $2::double precision / 1000))
+       ON CONFLICT (key) DO UPDATE SET
+         hits = CASE WHEN r.reset_at <= now() THEN 1 ELSE r.hits + 1 END,
+         reset_at = CASE WHEN r.reset_at <= now() THEN now() + make_interval(secs => $2::double precision / 1000) ELSE r.reset_at END
+       RETURNING hits, reset_at`,
+      [this.key(key), this.windowMs],
+    );
+    this.maybeSweep(db);
+    const row = rows[0];
+    return { totalHits: Number(row?.hits ?? 1), resetTime: row?.reset_at ? new Date(row.reset_at) : new Date(Date.now() + this.windowMs) };
+  }
+
+  async decrement(key: string): Promise<void> {
+    const db = await this.getDb();
+    await db.query(`UPDATE ${T.rate_limits} SET hits = GREATEST(hits - 1, 0) WHERE key = $1 AND reset_at > now()`, [this.key(key)]);
+  }
+
+  async resetKey(key: string): Promise<void> {
+    const db = await this.getDb();
+    await db.query(`DELETE FROM ${T.rate_limits} WHERE key = $1`, [this.key(key)]);
+  }
+
+  /** Expired windows are deleted at most once a minute per process (fire-and-forget). */
+  private maybeSweep(db: RateLimitDb): void {
+    const now = Date.now();
+    if (now - PostgresRateLimitStore.lastSweep < 60_000) return;
+    PostgresRateLimitStore.lastSweep = now;
+    db.query(`DELETE FROM ${T.rate_limits} WHERE reset_at < now() - interval '1 minute'`).catch((err: Error) => logger.warn({ err: err.message }, 'rate-limit sweep failed'));
+  }
+}
+
+/** Lazy pool import so the memory store never loads the DB module. */
+const poolDb = async (): Promise<RateLimitDb> => (await import('../../config/db.js')).pool as unknown as RateLimitDb;
+
+/** Store for one limiter (keys already start with the limiter name). undefined → built-in MemoryStore. */
+export function rateLimitStore(kind: 'memory' | 'postgres' = env.RATE_LIMIT_STORE): Store | undefined {
+  return kind === 'postgres' ? new PostgresRateLimitStore(poolDb) : undefined;
+}
+
+export function createRateLimit(opts: { windowMs: number; limit: number; key?: (req: Request) => string; name: string; store?: Store }): RequestHandler {
+  const store = opts.store ?? rateLimitStore(env.RATE_LIMIT_STORE);
   const options: Partial<Options> = {
     windowMs: opts.windowMs,
     limit: opts.limit,
@@ -22,6 +100,7 @@ export function createRateLimit(opts: { windowMs: number; limit: number; key?: (
     handler: (_req, _res, next, o) => {
       next(new RateLimitError(Math.ceil(o.windowMs / 1000)));
     },
+    ...(store ? { store, passOnStoreError: true } : {}),
   };
   return rateLimit(options);
 }

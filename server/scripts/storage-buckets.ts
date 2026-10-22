@@ -7,9 +7,10 @@ import { supabaseService } from '../src/config/supabase.js';
 
 const MB = 1024 * 1024;
 const CONFIG: Record<BucketName, { fileSizeLimit: number; allowedMimeTypes: string[] }> = {
-  [BUCKETS.thumbnails]: { fileSizeLimit: 5 * MB, allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'] },
+  // No image/svg+xml anywhere (SEC-32).
+  [BUCKETS.thumbnails]: { fileSizeLimit: 5 * MB, allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'] },
   [BUCKETS.resources]: { fileSizeLimit: 50 * MB, allowedMimeTypes: ['application/pdf', 'text/vtt', 'application/x-subrip', 'text/plain', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream', 'image/png', 'image/jpeg', 'image/webp'] },
-  [BUCKETS.questionImages]: { fileSizeLimit: 5 * MB, allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'] },
+  [BUCKETS.questionImages]: { fileSizeLimit: 5 * MB, allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] },
   [BUCKETS.videos]: { fileSizeLimit: 5 * 1024 * MB, allowedMimeTypes: ['video/mp4', 'video/quicktime', 'video/webm', 'application/vnd.apple.mpegurl', 'video/mp2t'] },
 };
 
@@ -19,6 +20,17 @@ async function main() {
     if (!name.startsWith(BUCKET_PREFIX)) throw new Error(`refusing to touch unprefixed bucket ${name}`);
     const existing = await supabaseService.storage.getBucket(name);
     if (!existing.error && existing.data) {
+      const cfg = CONFIG[name];
+      const current = [...(existing.data.allowed_mime_types ?? [])].sort().join(',');
+      if (current && current !== [...cfg.allowedMimeTypes].sort().join(',')) {
+        // Keep our own buckets' MIME allowlists in sync (e.g. SEC-32 removed image/svg+xml). Stays private.
+        const { error } = await supabaseService.storage.updateBucket(name, { public: false, allowedMimeTypes: cfg.allowedMimeTypes, fileSizeLimit: existing.data.file_size_limit ?? undefined });
+        if (error) {
+          failures++;
+          console.error(`✗ ${name}: ${error.message}`);
+        } else console.log(`~ ${name} MIME allowlist updated`);
+        continue;
+      }
       console.log(`= ${name} exists (public: ${existing.data.public})`);
       continue;
     }

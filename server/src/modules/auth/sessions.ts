@@ -132,6 +132,9 @@ function refreshTtlMs(input: CreateSessionInput): number {
   return days * 86_400_000;
 }
 
+/** Rotated refresh-token hashes kept per session for reuse detection (SEC-27). */
+export const REFRESH_HASH_HISTORY = 5;
+
 export const sessions = {
   async create(input: CreateSessionInput, ex?: Executor): Promise<{ session: SessionRow; tokens: AuthTokens }> {
     const refreshToken = randomToken();
@@ -151,7 +154,11 @@ export const sessions = {
     const h = hashToken(token, 'refresh');
     const row = await db.maybeOne<SessionRow>(`SELECT * FROM ${T.sessions} WHERE refresh_token_hash = $1`, [h]);
     if (row) return { row, reused: false };
-    const old = await db.maybeOne<SessionRow>(`SELECT * FROM ${T.sessions} WHERE previous_token_hash = $1`, [h]);
+    // SEC-27: reuse detection covers the last REFRESH_HASH_HISTORY rotations, not only the previous one.
+    const old = await db.maybeOne<SessionRow>(
+      `SELECT * FROM ${T.sessions} WHERE previous_token_hash = $1 OR previous_token_hashes @> ARRAY[$1]::text[] ORDER BY rotated_at DESC NULLS LAST LIMIT 1`,
+      [h],
+    );
     return old ? { row: old, reused: true } : null;
   },
 
@@ -163,7 +170,9 @@ export const sessions = {
     // Compare-and-swap on the presented token hash: two concurrent refreshes with the same token cannot both
     // succeed (SEC-05) — the loser gets null and the caller answers 401.
     const n = await db.exec(
-      `UPDATE ${T.sessions} SET previous_token_hash = refresh_token_hash, refresh_token_hash = $2, rotated_at = now(),
+      `UPDATE ${T.sessions} SET previous_token_hash = refresh_token_hash,
+              previous_token_hashes = (ARRAY[refresh_token_hash] || previous_token_hashes)[1:${REFRESH_HASH_HISTORY}],
+              refresh_token_hash = $2, rotated_at = now(),
               last_seen_at = now(), expires_at = $3, ip = COALESCE($4, ip), user_agent = COALESCE($5, user_agent)
         WHERE id = $1 AND revoked_at IS NULL AND ($6::text IS NULL OR refresh_token_hash = $6::text)`,
       [row.id, hashToken(refreshToken, 'refresh'), expiresAt, meta.ip ?? null, meta.userAgent ?? null, row.refresh_token_hash ?? null],

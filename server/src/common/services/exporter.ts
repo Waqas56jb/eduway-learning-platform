@@ -15,9 +15,37 @@ import { db } from '../../config/db.js';
 import { z } from '../validation/zod.js';
 import { auditService } from './audit.js';
 
+/** Filter keys every list service treats as a single string (search text, sort key, date bounds…). */
+const TEXT_FILTER_KEYS = new Set(['q', 'search', 'sort', 'report', 'from', 'to', 'partnerType', 'period']);
+const filterScalar = z.union([z.string().max(1000), z.number().finite(), z.boolean()]);
+const filterValue = z.union([filterScalar, z.null(), z.array(z.union([z.string().max(200), z.number().finite()])).max(500)]);
+
+/**
+ * SEC-30: export `filters` are the list endpoint's query params sent as JSON. They are validated to the shapes a
+ * query string can produce — flat scalars or arrays of scalars, never nested objects — and the single-string keys
+ * (`q`, `sort`, `from`, …) are coerced to strings, so a wrong type is a 400 (or harmless) instead of a 500.
+ */
+export function normalizeExportFilters(raw: Record<string, z.infer<typeof filterValue>>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v === null || v === undefined || k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+    if (TEXT_FILTER_KEYS.has(k)) {
+      const first = Array.isArray(v) ? v[0] : v;
+      if (first !== undefined) out[k] = String(first);
+      continue;
+    }
+    out[k] = v;
+  }
+  return out;
+}
+
 export const exportRequest = z.object({
   format: z.enum(['csv', 'xlsx']),
-  filters: z.record(z.unknown()).optional(),
+  filters: z
+    .record(filterValue)
+    .refine((r) => Object.keys(r).length <= 50, { message: 'too many filters' })
+    .transform(normalizeExportFilters)
+    .optional(),
   ids: z.array(z.string().uuid()).max(5000).optional(),
   columns: z.array(z.string()).optional(),
 });

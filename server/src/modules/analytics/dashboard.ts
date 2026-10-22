@@ -3,6 +3,7 @@
  * `from`/`to` only affect `dau` and `registrationsByGovernorate`; every other block uses fixed windows.
  * Sections the caller lacks module permission for are returned as `null`.
  */
+import { catalogCache } from '../../common/services/catalog-cache.js';
 import { T } from '../../config/constants.js';
 import { db } from '../../config/db.js';
 import { packageRef, refCols, studentRef, subjectRef } from '../../common/dto/refs.js';
@@ -215,8 +216,34 @@ async function recentPayments() {
   }));
 }
 
+/** The permission-dependent sections of the composite (cache key component). */
+const sectionFlags = (admin: AdminPrincipal) =>
+  [
+    can(admin, 'payments.view', 'analytics.view'),
+    can(admin, 'packages.view', 'analytics.view'),
+    can(admin, 'analytics.view', 'dashboard.view'),
+    can(admin, 'users.view', 'analytics.view'),
+    can(admin, 'analytics.view', 'content.view'),
+    can(admin, 'schools.view'),
+    can(admin, 'marketers.view'),
+    can(admin, 'content.view'),
+    can(admin, 'payments.view'),
+  ]
+    .map((b) => (b ? '1' : '0'))
+    .join('');
+
 export const dashboardService = {
+  /**
+   * ADM-DSH-01. ~25 sequential aggregate queries (kept sequential to spare the shared pooler), so the composite is
+   * served from the shared read cache (≤15 s old, cleared by any admin mutation — common/services/catalog-cache.ts).
+   * Key: range rounded to the minute (the admin UI sends millisecond timestamps) + visible sections.
+   */
   async get(admin: AdminPrincipal, q: { from?: string; to?: string }) {
+    const key = `admin-dashboard:${q.from?.slice(0, 16) ?? ''}:${q.to?.slice(0, 16) ?? ''}:${sectionFlags(admin)}`;
+    return catalogCache.get(key, () => dashboardService.compute(admin, q));
+  },
+
+  async compute(admin: AdminPrincipal, q: { from?: string; to?: string }) {
     const r = resolveRange(q.from, q.to);
     // Sequential on purpose: keeps connection usage low on the shared Supabase pooler.
     const k = await kpis();

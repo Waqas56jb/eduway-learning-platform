@@ -10,21 +10,22 @@ import swaggerUi from 'swagger-ui-express';
 import { adminAuditTrail } from './common/middleware/audit.js';
 import { errorHandler, notFoundHandler } from './common/middleware/errorHandler.js';
 import { rateLimits } from './common/middleware/rateLimit.js';
+import { catalogCacheInvalidator } from './common/services/catalog-cache.js';
 import { clientContext, locale, requestId } from './common/middleware/requestContext.js';
 import './common/types/index.js';
-import { devFlags, env, trustProxySetting } from './config/env.js';
+import { devFlags, env, trustProxySetting, type DevFlags } from './config/env.js';
 import { logger } from './config/logger.js';
 import { generateOpenApiDocument } from './docs/openapi.js';
 import { modules } from './modules/index.js';
 
 const DEV_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/;
 
-export function corsOptions(): CorsOptions {
+export function corsOptions(flags: Pick<DevFlags, 'lanCors'> = devFlags): CorsOptions {
   const allowed = new Set([...env.CORS_ORIGINS, env.ADMIN_APP_URL, env.USER_APP_URL]);
   return {
     origin(origin, cb) {
       // Native apps / curl send no Origin header. LAN/localhost origins only with DEV_LAN_CORS (SEC-21).
-      if (!origin || allowed.has(origin) || (devFlags.lanCors && DEV_ORIGIN.test(origin))) return cb(null, true);
+      if (!origin || allowed.has(origin) || (flags.lanCors && DEV_ORIGIN.test(origin))) return cb(null, true);
       return cb(null, false);
     },
     credentials: true,
@@ -73,6 +74,7 @@ export function createApp(): Express {
   app.use(express.urlencoded({ extended: false, limit: '200kb' }));
   app.use(rateLimits.global);
   app.use(adminAuditTrail);
+  app.use(catalogCacheInvalidator);
 
   // API documentation (OpenAPI generated from the zod schemas registered by the route builder).
   // Never in production; elsewhere only with API_DOCS_PUBLIC (default on for an explicit NODE_ENV=development/test).

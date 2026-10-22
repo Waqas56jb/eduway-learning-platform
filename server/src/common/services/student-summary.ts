@@ -9,6 +9,7 @@ import { db } from '../../config/db.js';
 import { loadPackageExtras, toPackagePublic, type PackagePublic, type PackageRow } from '../dto/package.js';
 import type { SubjectRef } from '../dto/refs.js';
 import { daysRemaining, dayjs, BUSINESS_TZ } from '../utils/dates.js';
+import { loadAiSettings } from '../../modules/ai-tutor/settings.js';
 import { settingsStore } from './settings-store.js';
 
 export interface AiAllowance {
@@ -69,6 +70,12 @@ interface AiSettingsRow {
   reset_cycle: 'calendar' | 'billing';
 }
 
+/** Global AI settings through the ai-tutor cache (10 s TTL, invalidated on every admin write) — previously a
+ *  query per call, issued 3–4× per /auth/me and /progress/dashboard (docs/PERFORMANCE.md). */
+async function aiSettings(): Promise<AiSettingsRow> {
+  return (await loadAiSettings().catch(() => null)) ?? { enabled: true, monthly_allowance: 100, reset_cycle: 'calendar' };
+}
+
 /** Current allowance period [start, end) for a user. */
 export function allowancePeriod(cycle: 'calendar' | 'billing', subStart: Date | null, now = new Date()): { start: Date; end: Date } {
   if (cycle === 'billing' && subStart) {
@@ -81,20 +88,17 @@ export function allowancePeriod(cycle: 'calendar' | 'billing', subStart: Date | 
 }
 
 export async function aiAllowance(userId: string, sub?: SubRow | null): Promise<AiAllowance> {
-  const settings = (await db.maybeOne<AiSettingsRow>(`SELECT enabled, monthly_allowance, reset_cycle FROM ${T.ai_settings} WHERE id = 1`)) ?? {
-    enabled: true,
-    monthly_allowance: 100,
-    reset_cycle: 'calendar' as const,
-  };
-  const subscription = sub === undefined ? await currentSubscriptionRow(userId) : sub;
+  const [settings, subscription] = await Promise.all([aiSettings(), sub === undefined ? currentSubscriptionRow(userId) : sub]);
   const active = subscription && (subscription.status === 'active' || subscription.status === 'trial') && subscription.ends_at > new Date();
-  const profile = await db.maybeOne<{ ai_disabled: boolean }>(`SELECT ai_disabled FROM ${T.student_profiles} WHERE user_id = $1`, [userId]);
   const quota = active ? subscription.ai_quota : 0;
   const period = allowancePeriod(settings.reset_cycle, active ? subscription.starts_at : null);
-  const usage = await db.maybeOne<{ questions_used: number; bonus_questions: number }>(
-    `SELECT questions_used, bonus_questions FROM ${T.ai_usage} WHERE user_id = $1 AND period_start = $2`,
+  // profile flag + period usage in one round trip (was two sequential queries)
+  const usage = await db.maybeOne<{ ai_disabled: boolean | null; questions_used: number | null; bonus_questions: number | null }>(
+    `SELECT (SELECT ai_disabled FROM ${T.student_profiles} WHERE user_id = $1) AS ai_disabled, u.questions_used, u.bonus_questions
+       FROM (SELECT 1) one LEFT JOIN ${T.ai_usage} u ON u.user_id = $1 AND u.period_start = $2`,
     [userId, period.start],
   );
+  const profile = { ai_disabled: usage?.ai_disabled ?? false };
   const used = usage?.questions_used ?? 0;
   const total = quota + (usage?.bonus_questions ?? 0);
   const disabledReason: AiAllowance['disabledReason'] = !settings.enabled ? 'GLOBAL' : profile?.ai_disabled ? 'USER' : total <= 0 ? 'NOT_INCLUDED' : null;
@@ -109,19 +113,28 @@ export async function aiAllowance(userId: string, sub?: SubRow | null): Promise<
   };
 }
 
-export async function mySubscription(userId: string): Promise<MySubscription | null> {
-  const sub = await currentSubscriptionRow(userId);
+/**
+ * `pre` lets a composite endpoint (/auth/me, /progress/dashboard) share one subscription row / allowance between
+ * its sections instead of re-reading them (previously 3–4 identical subscription queries per request).
+ */
+export async function mySubscription(userId: string, pre?: { sub?: SubRow | null; ai?: Promise<AiAllowance> }): Promise<MySubscription | null> {
+  const sub = pre?.sub !== undefined ? pre.sub : await currentSubscriptionRow(userId);
   if (!sub) return null;
-  const pkg = await db.maybeOne<PackageRow>(`SELECT * FROM ${T.packages} WHERE id = $1`, [sub.package_id]);
+  // independent reads in parallel (were 6 sequential round trips)
+  const [pkg, extras, ai, app, subjects, aiAllowanceDto] = await Promise.all([
+    db.maybeOne<PackageRow>(`SELECT * FROM ${T.packages} WHERE id = $1`, [sub.package_id]),
+    loadPackageExtras([sub.package_id]),
+    aiSettings(),
+    settingsStore.app(),
+    db.many<{ id: string; slug: string; name_en: string; name_ar: string; color: string }>(
+      `SELECT s.id, s.slug, s.name_en, s.name_ar, s.color FROM ${T.package_subjects} ps JOIN ${T.subjects} s ON s.id = ps.subject_id
+        WHERE ps.package_id = $1 ORDER BY s.sort_order`,
+      [sub.package_id],
+    ),
+    pre?.ai ?? aiAllowance(userId, sub),
+  ]);
   if (!pkg) return null;
-  const extras = await loadPackageExtras([pkg.id]);
-  const defaultAi = (await db.scalar<number>(`SELECT monthly_allowance FROM ${T.ai_settings} WHERE id = 1`)) ?? 100;
-  const app = await settingsStore.app();
-  const subjects = await db.many<{ id: string; slug: string; name_en: string; name_ar: string; color: string }>(
-    `SELECT s.id, s.slug, s.name_en, s.name_ar, s.color FROM ${T.package_subjects} ps JOIN ${T.subjects} s ON s.id = ps.subject_id
-      WHERE ps.package_id = $1 ORDER BY s.sort_order`,
-    [pkg.id],
-  );
+  const defaultAi = ai.monthly_allowance ?? 100;
   const totalDays = Math.max(1, Math.round((sub.ends_at.getTime() - sub.starts_at.getTime()) / 86_400_000));
   const remaining = daysRemaining(sub.ends_at);
   return {
@@ -135,7 +148,7 @@ export async function mySubscription(userId: string): Promise<MySubscription | n
     totalDays,
     remainingPct: Math.round((Math.min(remaining, totalDays) / totalDays) * 1000) / 10,
     subjects: subjects.map((s) => ({ id: s.id, slug: s.slug, name: { en: s.name_en, ar: s.name_ar }, color: s.color })),
-    aiAllowance: await aiAllowance(userId, sub),
+    aiAllowance: aiAllowanceDto,
     renewal: pkg.renewal,
     source: (sub.source === 'promo' ? 'payment' : sub.source) as MySubscription['source'],
     lastPaymentId: sub.payment_id,

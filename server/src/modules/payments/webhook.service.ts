@@ -12,24 +12,30 @@ import { notifyStudent } from '../commerce/lib.js';
 import { awardMilestones } from '../marketers/milestones.js';
 import { subscriptionEngine } from '../subscriptions/engine.js';
 import type { PriceQuote } from './pricing.js';
-import { getProvider } from './providers.js';
+import { GATEWAYS, getProvider } from './providers.js';
 import { issueReceipt } from './receipt.js';
 import { paymentsRepo } from './repository.js';
 import { runWebhook, settlementProblem, type LockedPayment, type ParsedWebhook, type WebhookOutcome, type WebhookStore } from './webhook-core.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Gateways whose checkouts the MockGateway may confirm: itself + every gateway without credentials (SEC-28). */
+export function mockSettleableProviders(): string[] {
+  return GATEWAYS.filter((g) => g === 'mock' || !getProvider(g)?.configured());
+}
+
 export function dbWebhookStore(c: TxClient, provider: string): WebhookStore {
   return {
     async findPaymentForUpdate(evt) {
-      // SEC-10: an event from gateway X may only settle a payment made through gateway X (outside production the
-      // MockGateway may confirm any gateway's checkout — that is how dev/staging test unconfigured gateways).
-      const bound = provider === 'mock' && devFlags.mockPayments ? null : provider;
+      // SEC-10: an event from gateway X may only settle a payment made through gateway X. SEC-28: the MockGateway
+      // (DEV_MOCK_PAYMENTS only) may also settle checkouts of gateways running as a dev stub (no credentials) —
+      // never a checkout that went to a configured, real gateway.
+      const allowed = provider === 'mock' && devFlags.mockPayments ? mockSettleableProviders() : [provider];
       if (evt.paymentId && UUID.test(evt.paymentId)) {
-        return db.maybeOne<LockedPayment>(`SELECT id, status, total, currency FROM ${T.payments} WHERE id = $1 AND ($2::text IS NULL OR provider = $2::text) FOR UPDATE`, [evt.paymentId, bound], c);
+        return db.maybeOne<LockedPayment>(`SELECT id, status, total, currency FROM ${T.payments} WHERE id = $1 AND provider = ANY($2::text[]) FOR UPDATE`, [evt.paymentId, allowed], c);
       }
       if (evt.providerRef) {
-        return db.maybeOne<LockedPayment>(`SELECT id, status, total, currency FROM ${T.payments} WHERE (provider_ref = $1 OR ref = $1) AND ($2::text IS NULL OR provider = $2::text) FOR UPDATE`, [evt.providerRef, bound], c);
+        return db.maybeOne<LockedPayment>(`SELECT id, status, total, currency FROM ${T.payments} WHERE (provider_ref = $1 OR ref = $1) AND provider = ANY($2::text[]) FOR UPDATE`, [evt.providerRef, allowed], c);
       }
       return null;
     },

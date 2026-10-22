@@ -23,6 +23,8 @@ services:
         value: "4100"
       - key: API_PREFIX
         value: /api/v1
+      - key: TRUST_PROXY
+        value: "1"               # Render's edge proxy; client IP from X-Forwarded-For (docs/SECURITY.md SEC-22)
       - key: DB_POOL_MAX
         value: "4"
       - key: DB_SSL

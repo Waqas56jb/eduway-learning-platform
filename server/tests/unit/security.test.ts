@@ -80,7 +80,24 @@ describe('MFA challenge tokens (SEC-01)', () => {
 });
 
 describe('production env checks (SEC-06)', () => {
-  const base = { ...env, NODE_ENV: 'production' as const, JWT_ACCESS_SECRET: 'a'.repeat(40), JWT_ADMIN_SECRET: 'b'.repeat(40), JWT_REFRESH_SECRET: 'c'.repeat(40), CORS_ORIGINS: ['https://eduway.iq'] };
+  const base = {
+    ...env,
+    NODE_ENV: 'production' as const,
+    JWT_ACCESS_SECRET: 'a'.repeat(40),
+    JWT_ADMIN_SECRET: 'b'.repeat(40),
+    JWT_REFRESH_SECRET: 'c'.repeat(40),
+    CORS_ORIGINS: ['https://eduway.iq'],
+    PUBLIC_API_URL: 'https://api.eduway.iq',
+    ADMIN_APP_URL: 'https://admin.eduway.iq',
+    USER_APP_URL: 'https://eduway.iq',
+    DB_SSL: true,
+    TRUST_PROXY: '1',
+    API_DOCS_PUBLIC: undefined,
+    DEV_OTP_BYPASS: undefined,
+    DEV_LAN_CORS: undefined,
+    DEV_MOCK_PAYMENTS: undefined,
+    DEV_UNSIGNED_NOTIFICATION_WEBHOOKS: undefined,
+  };
   it('accepts distinct secrets', () => expect(envProblems(base)).toEqual([]));
   it('rejects shared JWT secrets in production', () => expect(envProblems({ ...base, JWT_ADMIN_SECRET: base.JWT_ACCESS_SECRET })).toHaveLength(1));
   it('rejects a CORS wildcard in production', () => expect(envProblems({ ...base, CORS_ORIGINS: ['*'] })).toHaveLength(1));

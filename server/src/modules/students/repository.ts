@@ -1,5 +1,6 @@
 import { T } from '../../config/constants.js';
 import { db, type Executor } from '../../config/db.js';
+import { likeContains } from '../../common/utils/like.js';
 
 /** Base SELECT for AdminStudentRow (latest subscription via LATERAL). */
 export const STUDENT_SELECT = `
@@ -87,7 +88,7 @@ export function buildStudentWhere(f: StudentFilter): { sql: string; params: unkn
   };
   if (f.q) {
     for (const word of f.q.trim().toLowerCase().split(/\s+/).slice(0, 5)) {
-      add((n) => `(lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(coalesce(u.email,'')) LIKE ${n} OR lower(coalesce(sp.referral_code,'')) LIKE ${n} OR u.id::text = trim(both '%' from ${n}))`, `%${word.replace(/^0/, '')}%`);
+      add((n) => `(lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(coalesce(u.email,'')) LIKE ${n} OR lower(coalesce(sp.referral_code,'')) LIKE ${n} OR u.id::text = trim(both '%' from ${n}))`, likeContains(word.replace(/^0/, '')));
     }
   }
   if (f.status === 'locked') w.push(`u.status = 'locked'`);

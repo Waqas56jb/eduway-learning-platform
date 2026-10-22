@@ -6,6 +6,7 @@ import { mySubscription } from '../../common/services/student-summary.js';
 import { orderBy } from '../../common/utils/pagination.js';
 import { iso, isoOrNull, L, NONE, type Row } from '../commerce/lib.js';
 import type { SubscriptionFilter } from './schemas.js';
+import { likeContains } from '../../common/utils/like.js';
 
 export interface AdminSubscriptionDto {
   id: string;
@@ -61,7 +62,7 @@ function where(f: SubscriptionFilter): { sql: string; params: unknown[] } {
   if (f.expiringBefore) add((n) => `s.ends_at <= ${n}::timestamptz`, f.expiringBefore);
   if (f.ids?.length) add((n) => `s.id = ANY(${n}::uuid[])`, f.ids);
   if (f.q) {
-    for (const word of f.q.trim().toLowerCase().split(/\s+/).slice(0, 5)) add((n) => `(lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(p.name_en) LIKE ${n})`, `%${word.replace(/^0/, '')}%`);
+    for (const word of f.q.trim().toLowerCase().split(/\s+/).slice(0, 5)) add((n) => `(lower(u.name_en) LIKE ${n} OR u.name_ar LIKE ${n} OR u.phone LIKE ${n} OR lower(p.name_en) LIKE ${n})`, likeContains(word.replace(/^0/, '')));
   }
   return { sql: w.length ? ` AND ${w.join(' AND ')}` : '', params: p };
 }

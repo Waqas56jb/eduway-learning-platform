@@ -24,7 +24,8 @@ export async function studentOtpLogin(page: Page, guard?: Guard): Promise<string
     if (res.ok()) break;
     const body = (await res.json().catch(() => ({}))) as { error?: { details?: { retryAfterSeconds?: number } } };
     const wait = body.error?.details?.retryAfterSeconds ?? Number(res.headers()['retry-after'] ?? 30);
-    expect(wait, `send-otp ${res.status()} without retry hint`).toBeLessThan(120);
+    // Short cool-downs are waited out; the 30-min resend window (3 codes) is not — fail with a clear hint.
+    expect(wait, `OTP sending is rate limited for the demo phone (${res.status()}): retry in ~${Math.ceil(wait / 60)} min`).toBeLessThan(120);
     await page.waitForTimeout((wait + 1) * 1000);
   }
   await page.waitForURL(/\/verify-otp/);

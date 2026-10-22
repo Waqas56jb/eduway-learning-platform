@@ -7,6 +7,7 @@ import { db } from '../../config/db.js';
 import { entitlements, evaluateSubjectAccess, type AccessDecision, type EntitlementRecord } from '../../common/entitlements.js';
 import { NotFoundError } from '../../common/errors/index.js';
 import type { Localized } from '../../common/i18n/index.js';
+import { catalogCache } from '../../common/services/catalog-cache.js';
 import { settingsStore } from '../../common/services/settings-store.js';
 import { storage } from '../../common/services/storage.js';
 import {
@@ -22,11 +23,29 @@ import {
   type QuestionPublic,
   type WatchRow,
 } from '../learning-core/index.js';
-import { effectiveQuizRuleDto, lessonPool } from '../quizzes/engine.js';
+import { effectiveQuizRuleDto } from '../quizzes/engine.js';
 import { contentRepo, type CatalogLessonRow, type ResourceRow, type SubjectRow } from './repository.js';
 import type { LessonDetail, LessonSummary, StreamUrlDto, StudentResource, SubjectDetail, SubjectSummary } from './types.js';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Max quiz pool size considered by the lesson detail card (same cap the quiz engine's lessonPool() is called with). */
+const LESSON_POOL_CAP = 200;
+
+/**
+ * Published catalog reads shared by every student (cached — see common/services/catalog-cache.ts). Per-student data
+ * (entitlements, progress, notes) is never cached here.
+ */
+const catalog = {
+  subjects: () => catalogCache.get('subjects:active', () => contentRepo.subjects()),
+  subjectsByIds: (ids: string[]) => catalogCache.get(`subjects:ids:${[...ids].sort().join(',')}`, () => contentRepo.subjects({ includeHidden: true, ids })),
+  subject: (idOrSlug: string) => catalogCache.get(`subject:${idOrSlug}`, () => contentRepo.subject(idOrSlug)),
+  lessons: (subjectIds?: string[]) =>
+    catalogCache.get(`lessons:${subjectIds ? [...subjectIds].sort().join(',') : '*'}`, () => contentRepo.catalogLessons(subjectIds ? { subjectIds } : {})),
+  units: (subjectId: string) => catalogCache.get(`units:${subjectId}`, () => contentRepo.units(subjectId)),
+  topics: (subjectId: string) => catalogCache.get(`topics:${subjectId}`, () => contentRepo.topicsOfSubject(subjectId)),
+  quizPoolSize: (subjectId: string) => catalogCache.get(`quizpool:${subjectId}`, () => contentRepo.quizPoolSize(subjectId, LESSON_POOL_CAP)),
+};
 
 interface Viewer {
   userId: string;
@@ -90,7 +109,7 @@ async function toSummaries(subjects: SubjectRow[], v: Viewer | null): Promise<Su
   const avatars = await storage.resolveMany(subjects.map((s) => s.t_avatar_url));
   let lessonsBySubject = new Map<string, CatalogLessonRow[]>();
   if (v) {
-    const rows = await contentRepo.catalogLessons({ subjectIds: subjects.map((s) => s.id) });
+    const rows = await catalog.lessons(subjects.map((s) => s.id));
     lessonsBySubject = rows.reduce((m, r) => m.set(r.subject_id, [...(m.get(r.subject_id) ?? []), r]), new Map<string, CatalogLessonRow[]>());
   }
   return subjects.map((s, i) => {
@@ -140,9 +159,17 @@ async function liveLesson(idOrSlug: string): Promise<CatalogLessonRow & { subjec
 
 /** Lock state of one lesson for a student (computed against the full subject sequence). */
 async function lessonContext(idOrSlug: string, userId: string) {
-  const lesson = await liveLesson(idOrSlug);
-  const v = await viewer(userId);
-  const rows = await contentRepo.catalogLessons({ subjectIds: [lesson.subject_id] });
+  // The viewer (entitlements / completions / watch progress) only needs the user → start it right away; then the
+  // subject row and the subject's lesson sequence (which contains this lesson's catalog row) in parallel —
+  // previously 5 sequential round trips incl. a second catalog query for the lesson itself.
+  const viewerP = viewer(userId);
+  viewerP.catch(() => undefined); // awaited below; avoid an unhandled rejection if the lesson lookup throws first
+  const ref = await contentRepo.lessonId(idOrSlug);
+  if (!ref || ref.deleted_at || ref.status !== 'published') throw new NotFoundError('lesson');
+  const [subject, rows, v] = await Promise.all([catalog.subject(ref.subject_id), catalog.lessons([ref.subject_id]), viewerP]);
+  const row = rows.find((r) => r.id === ref.id);
+  if (!subject || !row) throw new NotFoundError('lesson');
+  const lesson = { ...row, subject };
   const summaries = await summarize(rows, v, new Map([[lesson.subject_id, lesson.subject.sequential_unlock]]));
   const idx = summaries.findIndex((s) => s.id === lesson.id);
   return { lesson, v: v as Viewer, rows, summaries, idx, summary: summaries[idx] as LessonSummary };
@@ -160,24 +187,21 @@ export async function assertLessonUnlocked(idOrSlug: string, userId: string) {
 
 /** Lesson summaries for the given subjects as seen by a student (used by progress/dashboard/search). */
 export async function lessonSummariesFor(userId: string | undefined, subjectIds?: string[]): Promise<LessonSummary[]> {
-  const v = await viewer(userId);
-  const rows = await contentRepo.catalogLessons(subjectIds ? { subjectIds } : {});
-  const subjects = await contentRepo.subjects({ includeHidden: true, ids: [...new Set(rows.map((r) => r.subject_id))] });
+  const [v, rows] = await Promise.all([viewer(userId), catalog.lessons(subjectIds)]);
+  const subjects = await catalog.subjectsByIds([...new Set(rows.map((r) => r.subject_id))]);
   return summarize(rows, v, new Map(subjects.map((s) => [s.id, s.sequential_unlock])));
 }
 
 export const catalogService = {
   async subjects(userId?: string): Promise<SubjectSummary[]> {
-    const [subjects, v] = await Promise.all([contentRepo.subjects(), viewer(userId)]);
+    const [subjects, v] = await Promise.all([catalog.subjects(), viewer(userId)]);
     return toSummaries(subjects, v);
   },
 
   async subjectDetail(idOrSlug: string, userId?: string): Promise<SubjectDetail> {
-    const s = await contentRepo.subject(idOrSlug);
+    const [s, v] = await Promise.all([catalog.subject(idOrSlug), viewer(userId)]);
     if (!s || s.status !== 'active') throw new NotFoundError('subject');
-    const v = await viewer(userId);
-    const [summary] = await toSummaries([s], v);
-    const [units, topics, rows] = await Promise.all([contentRepo.units(s.id), contentRepo.topicsOfSubject(s.id), contentRepo.catalogLessons({ subjectIds: [s.id] })]);
+    const [[summary], units, topics, rows] = await Promise.all([toSummaries([s], v), catalog.units(s.id), catalog.topics(s.id), catalog.lessons([s.id])]);
     const lessons = await summarize(rows, v, new Map([[s.id, s.sequential_unlock]]));
     const next = lessons.find((l) => l.status === 'in-progress') ?? lessons.find((l) => l.status === 'not-started') ?? lessons[0];
     return {
@@ -227,14 +251,17 @@ export const catalogService = {
   async lessonDetail(idOrSlug: string, userId: string): Promise<LessonDetail> {
     const { lesson, v, summaries, idx, summary } = await lessonContext(idOrSlug, userId);
     const unitLessons = summaries.filter((l) => l.unitId === lesson.unit_id);
-    const units = await contentRepo.units(lesson.subject_id);
-    const resources = summary.locked ? [] : (await contentRepo.resources([lesson.id])).map(resourceDto);
-    const [rule, poolIds, note, best] = await Promise.all([
+    // All remaining reads are independent → one parallel batch. The quiz card only needs the pool SIZE, so count
+    // (capped) instead of loading up to 5 000 question rows per lesson view (quizzes/engine lessonPool()).
+    const [units, resourceRows, rule, poolSize, note, best] = await Promise.all([
+      catalog.units(lesson.subject_id),
+      summary.locked ? Promise.resolve([] as ResourceRow[]) : contentRepo.resources([lesson.id]),
       effectiveQuizRuleDto({ id: lesson.id, subject_id: lesson.subject_id }, userId),
-      lessonPool({ id: lesson.id, subject_id: lesson.subject_id, unit_id: lesson.unit_id, topic_id: lesson.topic_id }, 200),
+      catalog.quizPoolSize(lesson.subject_id),
       contentRepo.note(userId, lesson.id),
       contentRepo.bestQuizScore(userId, lesson.id),
     ]);
+    const resources = resourceRows.map(resourceDto);
     const prereqLive = lesson.prerequisite_lesson_id && summaries.some((s) => s.id === lesson.prerequisite_lesson_id) ? lesson.prerequisite_lesson_id : null;
     return {
       ...summary,
@@ -249,7 +276,7 @@ export const catalogService = {
       nextLessonId: summaries[idx + 1]?.id ?? null,
       unitProgress: { done: unitLessons.filter((l) => v.completed.has(l.id)).length, total: unitLessons.length },
       bestQuizScore: best === null || best === undefined ? null : Number(best),
-      quiz: { available: poolIds.length > 0, questionCount: Math.min(rule.questionCount, poolIds.length), estimatedMinutes: rule.estimatedMinutes, passThreshold: rule.passThreshold },
+      quiz: { available: poolSize > 0, questionCount: Math.min(rule.questionCount, poolSize), estimatedMinutes: rule.estimatedMinutes, passThreshold: rule.passThreshold },
       note: note?.body ?? '',
     };
   },

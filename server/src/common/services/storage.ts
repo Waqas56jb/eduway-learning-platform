@@ -45,13 +45,14 @@ export const PURPOSE_RULES: Record<UploadPurpose, PurposeRule> = {
   subject_image: { bucket: BUCKETS.thumbnails, folder: 'subjects', maxBytes: 5 * MB, types: IMG, adminPerms: ['content.edit', 'content.create'] },
   teacher_avatar: { bucket: BUCKETS.thumbnails, folder: 'teachers', maxBytes: 5 * MB, types: IMG, adminPerms: ['content.edit', 'content.create'] },
   testimonial_avatar: { bucket: BUCKETS.thumbnails, folder: 'cms', maxBytes: 5 * MB, types: IMG, adminPerms: ['settings.edit'] },
-  logo: { bucket: BUCKETS.thumbnails, folder: 'branding', maxBytes: 2 * MB, types: /^image\/(png|jpeg|webp|svg\+xml)$/, adminPerms: ['settings.edit'] },
+  // SEC-32: no SVG for any purpose (scriptable when opened directly); logos are PNG/JPEG/WebP.
+  logo: { bucket: BUCKETS.thumbnails, folder: 'branding', maxBytes: 2 * MB, types: IMG, adminPerms: ['settings.edit'] },
   admin_avatar: { bucket: BUCKETS.thumbnails, folder: 'admins', maxBytes: 5 * MB, types: IMG, adminSelf: true },
   student_avatar: { bucket: BUCKETS.thumbnails, folder: 'avatars', maxBytes: 5 * MB, types: RASTER_IMG, student: true },
   lesson_resource: { bucket: BUCKETS.resources, folder: 'lessons', maxBytes: 50 * MB, types: /^application\/pdf$/, adminPerms: ['content.edit', 'content.create'] },
   lesson_captions: { bucket: BUCKETS.resources, folder: 'captions', maxBytes: 2 * MB, types: /^(text\/vtt|application\/x-subrip|text\/plain)$/, adminPerms: ['content.edit'] },
   ai_attachment: { bucket: BUCKETS.resources, folder: 'ai', maxBytes: 8 * MB, types: RASTER_IMG, student: true },
-  question_image: { bucket: BUCKETS.questionImages, folder: 'questions', maxBytes: 5 * MB, types: /^image\//, adminPerms: ['questions.create', 'questions.edit'] },
+  question_image: { bucket: BUCKETS.questionImages, folder: 'questions', maxBytes: 5 * MB, types: RASTER_IMG, adminPerms: ['questions.create', 'questions.edit'] },
   question_import: { bucket: BUCKETS.resources, folder: 'imports', maxBytes: 10 * MB, types: /^(text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|text\/plain|application\/octet-stream)$/, adminPerms: ['questions.create'] },
   reconciliation_import: { bucket: BUCKETS.resources, folder: 'reconciliation', maxBytes: 20 * MB, types: /^(text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|text\/plain|application\/octet-stream)$/, adminPerms: ['payments.approve'] },
 };
@@ -184,7 +185,8 @@ export const storage = {
         throw new AppError('VALIDATION_ERROR', 400, { reason: 'FILE_TOO_LARGE', details: { maxMb: Math.round(rule.maxBytes / MB) } });
       }
       // MIME is enforced for student (untrusted) purposes; resumable admin uploads may be stored as octet-stream.
-      if (rule?.student && meta.mimetype && !rule.types.test(meta.mimetype)) {
+      // SVG is refused for every purpose (SEC-32), admin uploads included.
+      if (rule && meta.mimetype && (rule.student || /svg/i.test(meta.mimetype)) && !rule.types.test(meta.mimetype)) {
         throw new AppError('VALIDATION_ERROR', 400, { reason: 'FILE_TYPE_NOT_ALLOWED', details: { contentType: meta.mimetype } });
       }
     }

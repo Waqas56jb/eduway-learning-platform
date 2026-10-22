@@ -15,6 +15,7 @@ import type { AdminPrincipal } from '../../common/types/index.js';
 import { orderBy } from '../../common/utils/pagination.js';
 import { loadQuestions, normalizeText, ruleError, similarity, sqlSearch, toReview, type QuestionReview } from '../learning-core/index.js';
 import type { QuestionListQuery, QuestionStatus, QuestionWrite } from './schemas.js';
+import { likePrefix } from '../../common/utils/like.js';
 
 export interface AdminQuestion {
   id: string;
@@ -243,7 +244,7 @@ async function nextCode(subjectId: string, unitId: string, ex: Executor): Promis
   const s = await db.one<{ slug: string; title_en: string | null }>(`SELECT s.slug, u.title_en FROM ${T.subjects} s LEFT JOIN ${T.units} u ON u.id = $2 WHERE s.id = $1`, [subjectId, unitId], ex);
   const initials = (s.title_en ?? 'GEN').split(/\s+/).filter((w) => /^[A-Za-z]/.test(w)).map((w) => w[0]!.toUpperCase()).join('').slice(0, 3) || 'GEN';
   const prefix = `${s.slug.slice(0, 4).toUpperCase()}-${initials}-`;
-  const n = (await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE code LIKE $1`, [`${prefix}%`], ex)) ?? 0;
+  const n = (await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE code LIKE $1`, [likePrefix(prefix)], ex)) ?? 0;
   for (let k = n + 1; k < n + 1000; k++) {
     const code = `${prefix}${String(k).padStart(4, '0')}`;
     if (!(await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE code = $1`, [code], ex))) return code;
@@ -484,7 +485,7 @@ export const questionsAdminService = {
   async duplicate(id: string, admin: AdminPrincipal) {
     const src = await this.get(id);
     const newId = await tx(async (c) => {
-      const n = (await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE code LIKE $1`, [`${src.code}-C%`], c)) ?? 0;
+      const n = (await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE code LIKE $1`, [likePrefix(`${src.code}-C`)], c)) ?? 0;
       let k = n + 1;
       while (await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE code = $1`, [`${src.code}-C${k}`], c)) k++;
       const qid = await insertQuestion(

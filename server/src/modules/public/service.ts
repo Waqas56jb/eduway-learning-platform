@@ -9,6 +9,7 @@ import { TtlCache } from '../../common/utils/cache.js';
 import { compareSemver } from '../../common/utils/semver.js';
 import { cmsService } from '../settings/cms.js';
 import { supportService } from '../students/support.js';
+import { likeContains } from '../../common/utils/like.js';
 
 const cache = new TtlCache<unknown>(30_000);
 type R = Record<string, unknown>;
@@ -92,7 +93,7 @@ export const publicService = {
     const p: unknown[] = [q.governorateId ?? null];
     let where = `s.status = 'active' AND s.deleted_at IS NULL`;
     if (q.q) {
-      p.push(`%${q.q.toLowerCase()}%`);
+      p.push(likeContains(q.q.toLowerCase()));
       where += ` AND (lower(s.name_en) LIKE $${p.length} OR s.name_ar LIKE $${p.length})`;
     }
     p.push(q.limit);

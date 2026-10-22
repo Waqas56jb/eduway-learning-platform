@@ -1,6 +1,7 @@
 import { T } from '../../config/constants.js';
 import { db, type Executor } from '../../config/db.js';
 import type { AdminRow } from './types.js';
+import { likeContains } from '../../common/utils/like.js';
 
 const SELECT_ADMIN = `
   SELECT u.id, u.name_en, u.name_ar, u.email, u.phone, u.avatar_url, u.status, u.created_at,
@@ -43,7 +44,7 @@ export const adminsRepo = {
       where.push(`u.status = $${params.length}`);
     }
     if (f.q) {
-      params.push(`%${f.q.toLowerCase()}%`);
+      params.push(likeContains(f.q.toLowerCase()));
       where.push(`(lower(u.name_en) LIKE $${params.length} OR u.name_ar LIKE $${params.length} OR lower(u.email) LIKE $${params.length} OR coalesce(u.phone,'') LIKE $${params.length})`);
     }
     const base = `${SELECT_ADMIN}${where.length ? ` AND ${where.join(' AND ')}` : ''}`;

@@ -201,6 +201,10 @@ export const quizzesService = {
     if (!g.answered) throw ruleError('ANSWER_REQUIRED');
     const { values } = await effectiveRule(lesson);
     const mistakeId = await tx(async (c) => {
+      // SEC-34: lock the attempt and re-check it is open, so an answer racing submit() cannot add mistake /
+      // activity rows after the attempt was scored (submit takes the same row lock).
+      const locked = await attempt(userId, attemptId, true, c);
+      if (locked.status !== 'in_progress') throw conflictError('ATTEMPT_CLOSED');
       const ins = await db.query(
         `INSERT INTO ${T.quiz_attempt_answers} (attempt_id, question_id, selected_option_id, text_answer, is_correct, time_sec)
          VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (attempt_id, question_id) DO NOTHING`,

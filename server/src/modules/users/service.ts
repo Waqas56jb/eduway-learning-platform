@@ -5,7 +5,7 @@ import { entitlements } from '../../common/entitlements.js';
 import { AppError, BusinessRuleError, NotFoundError } from '../../common/errors/index.js';
 import { settingsStore } from '../../common/services/settings-store.js';
 import { storage } from '../../common/services/storage.js';
-import { aiAllowance, currentSubscriptionRow, mySubscription, unreadNotifications } from '../../common/services/student-summary.js';
+import { aiAllowance, currentSubscriptionRow, mySubscription, unreadNotifications, type AiAllowance } from '../../common/services/student-summary.js';
 import { businessDate, daysRemaining, addDays } from '../../common/utils/dates.js';
 import type { StudentPrincipal } from '../../common/types/index.js';
 import { sessions, toSessionDto } from '../auth/sessions.js';
@@ -28,10 +28,13 @@ export function prefsOf(raw: Partial<NotificationPrefs> | null | undefined): Not
   return { ...DEFAULT_NOTIFICATION_PREFS, ...(raw ?? {}) };
 }
 
-async function toStudentUser(r: StudentRow): Promise<StudentUser> {
+type SubRow = Awaited<ReturnType<typeof currentSubscriptionRow>>;
+
+/** `pre` shares an already-loaded subscription row / allowance with the caller (see usersService.me). */
+async function toStudentUser(r: StudentRow, pre?: { sub: SubRow; ai: Promise<AiAllowance> }): Promise<StudentUser> {
   const [sub, ai, pending, learning] = await Promise.all([
-    currentSubscriptionRow(r.id),
-    aiAllowance(r.id),
+    pre ? pre.sub : currentSubscriptionRow(r.id),
+    pre ? pre.ai : aiAllowance(r.id),
     usersRepo.pendingLegal(r.id),
     settingsStore.get('learning'),
   ]);
@@ -92,12 +95,14 @@ export const usersService = {
   },
 
   async me(userId: string): Promise<MeStudentDto> {
-    const row = await getRow(userId);
+    // One subscription row + one allowance shared by every section (was 4 subscription and 3 allowance reads).
+    const [row, sub] = await Promise.all([getRow(userId), currentSubscriptionRow(userId)]);
+    const aiP = aiAllowance(userId, sub);
     const [user, ents, subscription, ai, unread] = await Promise.all([
-      toStudentUser(row),
+      toStudentUser(row, { sub, ai: aiP }),
       entitlements.dtos(userId),
-      mySubscription(userId),
-      aiAllowance(userId),
+      mySubscription(userId, { sub, ai: aiP }),
+      aiP,
       unreadNotifications(userId),
     ]);
     return { user, entitlements: ents, subscription, aiAllowance: ai, unreadNotifications: unread, notificationPrefs: prefsOf(row.notification_prefs) };

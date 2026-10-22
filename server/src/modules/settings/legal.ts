@@ -9,6 +9,7 @@ import { BusinessRuleError, ConflictError, NotFoundError } from '../../common/er
 import type { Localized } from '../../common/i18n/index.js';
 import { invalidatePrincipal } from '../../common/auth/principal.js';
 import { settingsStore } from '../../common/services/settings-store.js';
+import { likeContains } from '../../common/utils/like.js';
 
 export type LegalDoc = 'terms' | 'privacy';
 
@@ -175,7 +176,7 @@ export const legalService = {
     const p: unknown[] = [id];
     let where = '';
     if (q) {
-      p.push(`%${q.toLowerCase()}%`);
+      p.push(likeContains(q.toLowerCase()));
       where = ` AND (lower(u.name_en) LIKE $2 OR u.name_ar LIKE $2 OR u.phone LIKE $2)`;
     }
     const total = (await db.scalar<number>(`SELECT count(*)::int FROM ${T.legal_acceptances} a JOIN ${T.users} u ON u.id = a.user_id WHERE a.document_id = $1${where}`, p)) ?? 0;

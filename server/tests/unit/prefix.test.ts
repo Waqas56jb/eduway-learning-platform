@@ -54,7 +54,7 @@ describe('migrations', () => {
 
   it('create every table listed in TABLES (except the runner ledger)', () => {
     const all = files.map((f) => f.sql).join('\n');
-    const created = new Set([...all.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?(?:public\.)?eduway_platform_([a-z_]+)/g)].map((m) => m[1]));
+    const created = new Set([...all.matchAll(/CREATE (?:UNLOGGED )?TABLE (?:IF NOT EXISTS )?(?:public\.)?eduway_platform_([a-z_]+)/g)].map((m) => m[1]));
     for (const name of TABLES.filter((n) => n !== 'schema_migrations')) expect(created.has(name), name).toBe(true);
   });
 

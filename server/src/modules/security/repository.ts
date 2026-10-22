@@ -1,5 +1,6 @@
 import { T } from '../../config/constants.js';
 import { db } from '../../config/db.js';
+import { likeContains, likePrefix } from '../../common/utils/like.js';
 
 /** Actions considered sensitive in the audit KPI / `sensitive=true` filter. */
 export const SENSITIVE_ACTION_PATTERNS = ['role.%', 'admin.%', 'settings.%', 'feature_flag.%', 'refund.%', 'student.grant_access', 'student.lock', 'student.block', 'export.%', 'legal_document.%', 'admin_session.%', 'security_alert.%'];
@@ -31,12 +32,12 @@ export function auditWhere(f: AuditFilter): { sql: string; params: unknown[] } {
   if (f.actorId) add((n) => `l.actor_id = ${n}::uuid`, f.actorId);
   if (f.entity) add((n) => `l.entity = ${n}`, f.entity);
   if (f.entityId) add((n) => `l.entity_id = ${n}`, f.entityId);
-  if (f.action) add((n) => `l.action LIKE ${n}`, `${f.action.replace(/[%_]/g, '\\$&')}%`);
+  if (f.action) add((n) => `l.action LIKE ${n}`, likePrefix(f.action));
   if (f.sensitive) add((n) => `l.action LIKE ANY(${n}::text[])`, SENSITIVE_ACTION_PATTERNS);
   if (f.q) {
     add(
       (n) => `(lower(l.actor_name) LIKE ${n} OR lower(l.action) LIKE ${n} OR lower(l.entity) LIKE ${n} OR lower(coalesce(l.entity_id,'')) LIKE ${n} OR lower(l.summary) LIKE ${n} OR coalesce(l.ip,'') LIKE ${n})`,
-      `%${f.q.toLowerCase()}%`,
+      likeContains(f.q.toLowerCase()),
     );
   }
   return { sql: w.length ? `WHERE ${w.join(' AND ')}` : '', params: p };
@@ -93,7 +94,7 @@ export const securityRepo = {
       w.push(`COALESCE(e.subject_type, u.kind::text) = $${p.length}`);
     }
     if (f.q) {
-      p.push(`%${f.q.toLowerCase()}%`);
+      p.push(likeContains(f.q.toLowerCase()));
       w.push(`(lower(e.subject_label) LIKE $${p.length} OR lower(e.detail) LIKE $${p.length})`);
     }
     const where = `WHERE ${w.join(' AND ')}`;

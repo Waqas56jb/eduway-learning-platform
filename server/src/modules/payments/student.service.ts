@@ -53,6 +53,14 @@ export function toStudentPayment(r: Row): StudentPaymentDto {
   };
 }
 
+/** SEC-28: mock confirmation is allowed for the MockGateway and for gateways running as a dev stub (no credentials). */
+export function mockConfirmAllowed(provider: string): boolean {
+  if (!devFlags.mockPayments) return false;
+  if (provider === 'mock') return true;
+  const gw = getProvider(provider);
+  return !!gw && !gw.configured();
+}
+
 async function assertGatewayEnabled(gateway: Gateway): Promise<void> {
   const settings = await settingsStore.get('payments');
   if (gateway === 'mock') {
@@ -150,8 +158,11 @@ export const studentPayments = {
   /** PAY-07 — emits a signed MockGateway webhook into the normal pipeline (DEV_MOCK_PAYMENTS only, never production). */
   async mockConfirm(userId: string, paymentId: string, outcome: 'success' | 'failure' | 'cancel') {
     if (!devFlags.mockPayments) throw new NotFoundError('resource');
-    const p = await db.maybeOne<{ user_id: string; status: string; total: number; provider_ref: string | null }>(`SELECT user_id, status, total, provider_ref FROM ${T.payments} WHERE id = $1`, [paymentId]);
+    const p = await db.maybeOne<{ user_id: string; status: string; total: number; provider_ref: string | null; provider: string }>(`SELECT user_id, status, total, provider_ref, provider FROM ${T.payments} WHERE id = $1`, [paymentId]);
     if (!p || p.user_id !== userId) throw new NotFoundError('payment');
+    // SEC-28: only MockGateway checkouts and dev stubs of UNCONFIGURED gateways may be confirmed here — never a
+    // checkout that went to a real (credentialed) gateway.
+    if (!mockConfirmAllowed(p.provider)) throw new NotFoundError('payment');
     if (['initiated', 'pending'].includes(p.status)) {
       const type = outcome === 'success' ? 'payment.succeeded' : outcome === 'cancel' ? 'payment.cancelled' : 'payment.failed';
       const body = { id: `evt_mock_${paymentId}_${outcome}`, type, data: { paymentId, providerRef: p.provider_ref, amount: p.total, ...(outcome === 'failure' ? { reason: 'declined' } : {}) } };

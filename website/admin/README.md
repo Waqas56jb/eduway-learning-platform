@@ -22,13 +22,13 @@ npm run dev        # http://localhost:5174
 
 ### Demo sign-in
 
-| Field    | Value             |
-| -------- | ----------------- |
-| Email    | `admin@eduway.iq` |
-| Password | `Admin@123`       |
-| 2FA code | `123456`          |
+Sign in with the super admin created by `npm run seed` in `server/`:
 
-The other seeded admins (e.g. `huda.kareem@eduway.iq`, `sami.hashimi@eduway.iq`, `mariam.abbas@eduway.iq`) also sign in with the same password and 2FA code. Each one has a different role.
+- **Email:** `SEED_SUPER_ADMIN_EMAIL` (default `admin@eduway.iq`).
+- **Password:** the value of `SEED_SUPER_ADMIN_PASSWORD` in `server/.env`. When it is empty, the first seed generates a strong password and prints it once.
+- **2FA:** only if you enrolled an authenticator app. Use its current code, or one of the recovery codes shown at enrolment (each one works once).
+
+The other seeded staff admins (e.g. `huda.kareem@eduway.iq`) get an unusable random password. Activate them with an invite or a password reset. No password is shared between accounts or documented here.
 
 **Role preview (dev helper):** open the avatar menu (top right) and choose **Preview portal as…** to switch between Super Admin, Finance Admin, Academic Supervisor, Content Teacher and Support. The sidebar, route guards and action buttons update to match that role's permission matrix. You can edit the matrix under **Security → Roles**.
 

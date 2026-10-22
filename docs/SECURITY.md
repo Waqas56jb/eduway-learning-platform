@@ -4,7 +4,7 @@ Review date: 2026-10-23. Scope: `server/` (Express 5 + TS + Supabase). The depen
 
 How the review was done: source review of every module, a route manifest check, a live read-only inspection of the shared database's grants and RLS on `eduway_platform_*` objects only, and light probes of the running API on :4100.
 
-Regression tests are in `server/tests/unit/security.test.ts`. They read the route manifest that is now recorded by `defineRoute` (`server/src/common/http/route.ts`, `routeManifest`). The tests fail when a future route:
+Regression tests are in `server/tests/unit/security.test.ts` (SEC-01..20) and `server/tests/unit/security-followups.test.ts` (SEC-21..32). They read the route manifest that is now recorded by `defineRoute` (`server/src/common/http/route.ts`, `routeManifest`). The tests fail when a future route:
 - under `/admin` is missing a permission gate, or
 - takes a `:param` without zod validation, or
 - is a public write without a rate limit.
@@ -33,8 +33,21 @@ Status values: **Fixed** (code changed, verified), **Open** (documented, not cha
 | SEC-17 | Low | Push-token rebinding to another account | Fixed |
 | SEC-18 | Low | Bulk endpoints echoed raw pg error messages | Fixed |
 | SEC-19 | Low | Bookmarks exposed draft/rejected question text | Fixed |
-| SEC-20 | Medium | Dependency vulnerabilities | Partly fixed (see below) |
-| SEC-21..33 | Low to Medium | Remaining items | Open (see below) |
+| SEC-20 | Medium | Dependency vulnerabilities | Fixed for server; website majors open (see below) |
+| SEC-21 | Medium | Dev-only behaviours keyed on a defaulted `NODE_ENV`; production could start without its settings | Fixed |
+| SEC-22 | Medium | `trust proxy` hard-coded to 1 | Fixed (`TRUST_PROXY`) |
+| SEC-23 | Medium | Per-process rate-limit store | Fixed (`RATE_LIMIT_STORE=postgres`, migration 403) |
+| SEC-24 | Medium | Payment adapters: no currency check, success without amount, no replay window | Fixed |
+| SEC-25 | Low | Unsigned notification receipts outside production; provider not bound | Fixed |
+| SEC-26 | Low | TOTP replay inside its window; recovery codes unusable | Fixed (migration 403) |
+| SEC-27 | Low | Refresh reuse detection only one rotation back | Fixed (migration 403) |
+| SEC-28 | Low | Mock confirm could settle a real-gateway checkout | Fixed |
+| SEC-29 | Low | LIKE/ILIKE wildcards not escaped | Fixed |
+| SEC-30 | Low | Export `filters` cast, not validated | Fixed |
+| SEC-31 | Low | Readiness messages and constraint names public | Fixed |
+| SEC-32 | Low | SVG allowed for `logo` / `question_image` | Fixed |
+| SEC-33 | Low | Practice result before finish; sample password in the admin README | Fixed |
+| SEC-34 | Low | Quiz answer/submit race | Fixed |
 
 ## Fixed
 
@@ -124,7 +137,7 @@ Secrets must be at least 32 characters (zod), are read only in `env.ts`, and are
 **Where:** `server/src/modules/auth/repository.ts`, `server/src/modules/auth/admin-auth.service.ts:218,234`.
 
 ### SEC-09 · Medium · API docs in production
-`/api/docs` and `/api/docs/openapi.json` are now served only when `NODE_ENV !== 'production'` or `API_DOCS_PUBLIC=1`.
+`/api/docs` and `/api/docs/openapi.json` are now served only when `NODE_ENV !== 'production'` or `API_DOCS_PUBLIC=1`. Superseded by SEC-21: the docs are never served in production, and outside production only with `API_DOCS_PUBLIC` (on by default for an explicit `NODE_ENV=development`/`test`).
 
 **Where:** `server/src/app.ts:77`, `server/.env.example`.
 
@@ -203,9 +216,97 @@ Bookmarking and listing are restricted to `status = 'published'`.
 
 | Project | Change | Remaining |
 |---------|--------|-----------|
-| server | `overrides.uuid = $uuid` (11.1.1) for exceljs and node-cron; both were smoke-tested and the unit suite passes | **nodemailer ≤10.0.9 (high)**: the fix is a major upgrade (6 → 10). This is the email adapter area, owned by the provider agent. Upgrade and retest SMTP. |
+| server | `overrides.uuid = $uuid` (11.1.1) for exceljs and node-cron; both were smoke-tested and the unit suite passes. **nodemailer 6.10 → 10.0.16** (patched; a release more than two weeks old was picked over the day-old 10.2.x). The adapter only uses `createTransport` (SMTP URL / options, `jsonTransport`) and `sendMail`, which are unchanged; `tests/unit/providers-messaging.test.ts` (SMTP via a stream transport) passes. `npm audit --omit=dev`: 0 vulnerabilities. | Dev-only: vitest 3 / tinypool advisories (fix needs vitest 5, a major upgrade of the test runner). |
 | website/user | axios 1.7.9 → 1.20.0, katex 0.16.11 → 0.16.47, react-router-dom 6.28.0 → 6.30.6 (exact pins kept) | katex < 0.19 and react-router < 7.18 (moderate). The fixes need major upgrades. |
 | website/admin | katex → 0.16.47, react-router-dom → 6.30.6 | Same as website/user. |
+
+### SEC-21 · Medium · Dev-only behaviours and production startup checks
+**Before:** `NODE_ENV` defaulted to `development`, and every dev convenience was keyed on `!isProd`. A deploy that forgot `NODE_ENV` got the OTP bypass code, LAN CORS, the MockGateway with mock confirm, and public API docs.
+
+**Fix:**
+- Each behaviour has its own flag: `API_DOCS_PUBLIC`, `DEV_OTP_BYPASS`, `DEV_LAN_CORS`, `DEV_MOCK_PAYMENTS`, `DEV_UNSIGNED_NOTIFICATION_WEBHOOKS`. The code reads the resolved `devFlags` from `config/env.ts`, never `!isProd`.
+- Outside production, an unset flag is on only when `NODE_ENV` was set **explicitly** to `development` or `test`. With `NODE_ENV` unset, all of them are off. `DEV_UNSIGNED_NOTIFICATION_WEBHOOKS` is never on by default. Local dev (`server/.env` has `NODE_ENV=development`) keeps working unchanged.
+- In production every flag is forced off. Setting one to `true` there is a startup error.
+- `envProblems()` now refuses to start in production unless: `PUBLIC_API_URL`, `ADMIN_APP_URL` and `USER_APP_URL` are public `https://` URLs; `CORS_ORIGINS` has only `https://` non-localhost origins; `TRUST_PROXY` is set (and not `true`); `DB_SSL=true`; the JWT secrets differ (SEC-06). The check runs for the server and every script that loads the env.
+- The provider status log reports `payments.<gateway>: disabled` / `mock-confirm` from the same flags.
+
+**Where:** `server/src/config/env.ts` (`resolveDevFlags`, `envProblems`, `devFlags`), `server/src/app.ts`, `server/src/modules/auth/student-auth.service.ts` (`isDevBypass`), `server/src/modules/settings/service.ts`, `server/src/modules/payments/{providers,student.service,webhook.service}.ts`, `server/src/modules/payments/gateways/common.ts`, `server/src/modules/public/service.ts`, `server/src/common/providers/status.ts`, `server/.env.example`, `docs/DEPLOYMENT.md`.
+
+### SEC-22 · Medium · `trust proxy`
+`TRUST_PROXY` sets Express `trust proxy`: a hop count (`1` on Render / Fly / Railway), `false`, or a list of proxy addresses / CIDRs / presets. Unset means `loopback` (only a local dev proxy is trusted). Production requires it and rejects `true`, which would trust every client-supplied `X-Forwarded-For` hop. `render.yaml` and `fly.toml` set `TRUST_PROXY=1`.
+
+**Where:** `server/src/config/env.ts` (`trustProxySetting`), `server/src/app.ts`.
+
+### SEC-23 · Medium · Shared rate-limit store
+`RATE_LIMIT_STORE=postgres` swaps the in-memory counters for `PostgresRateLimitStore`. It keeps one fixed-window row per limiter key in `eduway_platform_rate_limits`, an UNLOGGED table from migration 403, using a single atomic upsert per request. Expired windows are swept at most once a minute per process. A store failure lets the request through and is logged (`passOnStoreError`). `memory` stays the default.
+
+**Where:** `server/src/common/middleware/rateLimit.ts`, `server/src/db/migrations/403_security_followups.sql`.
+
+### SEC-24 · Medium · Payment settlement checks
+**Fix:**
+- `settlementProblem()` in the webhook core checks every success event.
+  - Without an amount, the event is rejected. It is recorded (`payment_events`, `rejected: amount_missing`), the payment stays pending and the event id is **not** consumed, so a later delivery with the amount can still settle it.
+  - A wrong amount or a currency different from `payments.currency` fails the payment (`amount_mismatch` / `currency_mismatch`).
+- ZainCash, FastPay and Qi Card refuse a non-IQD checkout before calling the gateway.
+- Events carry the gateway's currency: ZainCash is always IQD; FastPay `validate` and Qi `status` report it. An empty amount is now `null`, not `0`.
+- Replay windows:
+  - ZainCash callback tokens whose `iat` is more than 1 h from server time are refused.
+  - Signed generic webhooks (MockGateway, the hosted AsiaHawala / Visa adapters) check `created` within ±5 min. It is required for the hosted adapters and checked when present for the mock.
+  - FastPay and Qi publish no signed timestamp. Their notifications are re-validated with the gateway API, and event ids are idempotent, so a replay cannot change state.
+
+**Where:** `server/src/modules/payments/webhook-core.ts`, `webhook.service.ts`, `providers.ts` (`parseGeneric`), `gateways/{common,zaincash,fastpay,qicard}.ts`.
+
+### SEC-25 · Low · Notification receipts
+`/webhooks/notifications/:provider` needs a valid `X-Signature` in every environment. Without `NOTIFICATION_WEBHOOK_SECRET`, receipts are rejected unless `DEV_UNSIGNED_NOTIFICATION_WEBHOOKS=true`, which is never allowed in production. A receipt only updates deliveries sent through that provider; `twilio` also matches `twilio-whatsapp`.
+
+**Where:** `server/src/modules/notifications/routes.ts` (`verifyReceiptSignature`), `server/src/modules/notifications/service.ts` (`receipt`).
+
+### SEC-26 · Low · TOTP replay and recovery codes
+- The accepted TOTP time step is stored in `admin_users.mfa_last_used_step` (migration 403) with a compare-and-set update. The same or an older step is refused, including two parallel logins with one code. This covers `/auth/admin/login` (`totp`), `/auth/admin/mfa/verify` and the TOTP path of `/mfa/disable`.
+- Recovery codes (10, `XXXXX-XXXXX`, stored as HMAC hashes at enrolment) are accepted at login and step-up. The format is case- and dash-insensitive. A code is consumed by `array_remove` in the same statement that checks it, so it works once. Failed codes count toward the existing MFA lockout. The audit summary says "Signed in with a 2FA recovery code".
+- The admin portal's 2FA screen has a "Use a recovery code instead" option.
+
+**Where:** `server/src/modules/auth/admin-auth.service.ts` (`totpStep`, `consumeTotp`, `consumeRecoveryCode`), `server/src/modules/auth/schemas.ts`, `website/admin/src/pages/auth/Verify2FA.tsx`.
+
+### SEC-27 · Low · Refresh-token reuse history
+Each rotation pushes the old hash onto `sessions.previous_token_hashes` (migration 403, GIN-indexed). The list keeps the last 5. A token from any of them is detected as reuse, which revokes the session family as before.
+
+**Where:** `server/src/modules/auth/sessions.ts` (`REFRESH_HASH_HISTORY`, `findByRefreshToken`, `rotate`).
+
+### SEC-28 · Low · Mock confirm scope
+`POST /payments/mock/:id/confirm` needs `DEV_MOCK_PAYMENTS`. It works only for MockGateway payments and for gateways running as a dev stub (no credentials). The mock webhook can only lock payments of those providers (`mockSettleableProviders`), never a checkout that went to a configured gateway.
+
+**Where:** `server/src/modules/payments/student.service.ts` (`mockConfirmAllowed`), `server/src/modules/payments/webhook.service.ts`.
+
+### SEC-29 · Low · LIKE wildcards
+`escapeLike` / `likeContains` / `likePrefix` escape `\`, `%` and `_`. Postgres' default LIKE escape is `\`. They are used by every search that built a pattern from input: admins, AI flags / flagged users, AI retrieval, notification templates / campaigns / deliveries, payments, refunds, public schools, question codes, audit log, security alerts, admin sessions, legal acceptances, feature flags, settlements, students, support tickets and subscriptions. `learning-core/text.ts` already strips the wildcard characters.
+
+**Where:** `server/src/common/utils/like.ts`.
+
+### SEC-30 · Low · Export filters
+`ExportRequest.filters` is now validated to what a query string can produce: flat strings, numbers, booleans, null, or arrays of strings and numbers. Nested objects are rejected (400) and the limit is 50 keys. Single-string keys (`q`, `search`, `sort`, `report`, `from`, `to`, `partnerType`, `period`) are coerced to one string, and prototype keys are dropped. A wrong type is a 400, or harmless, instead of a 500. The SQL was already parameterized.
+
+**Where:** `server/src/common/services/exporter.ts` (`normalizeExportFilters`).
+
+### SEC-31 · Low · Internals in public errors
+In production, `/health/ready` returns only `status` and `latencyMs` per check; the admin system-health panel keeps the messages. Postgres constraint names (`details.constraint` on 409/400) are only sent outside production.
+
+**Where:** `server/src/modules/health/routes.ts` (`publicChecks`), `server/src/common/middleware/errorHandler.ts`.
+
+### SEC-32 · Low · SVG uploads
+No upload purpose accepts `image/svg+xml` any more: `logo` is PNG/JPEG/WebP and `question_image` is raster only. At attach time an object stored as SVG is refused for every purpose, admin uploads included. The admin logo picker no longer offers SVG. `npm run buckets` now also syncs the MIME allowlists of our existing buckets, which drops SVG; run it once per environment.
+
+**Where:** `server/src/common/services/storage.ts`, `server/src/common/middleware/upload.ts`, `server/scripts/storage-buckets.ts`, `website/admin/src/pages/settings/General.tsx`.
+
+### SEC-33 · Low · Practice result and README credential
+`GET /practice/:id/result` answers 409 `ATTEMPT_IN_PROGRESS` while the session is in progress. `finish` still returns the result. `website/admin/README.md` no longer documents a password; it points to `SEED_SUPER_ADMIN_PASSWORD`.
+
+**Where:** `server/src/modules/practice/service.ts`, `website/admin/README.md`.
+
+### SEC-34 · Low · Quiz answer/submit race
+`answer()` locks the attempt row (`FOR UPDATE`) inside its transaction and re-checks `in_progress` before it writes the answer, mistake and activity rows. `submit()` takes the same lock.
+
+**Where:** `server/src/modules/quizzes/service.ts`.
 
 ## Verified, no change needed
 - **RBAC:** all 432 routes go through `defineRoute`; there are no raw `router.get` calls. Every one of the 307 admin routes uses `auth: 'admin'`. Every `/admin` route has a `permission`/`anyPermission`, except the self-service routes `/admin/me*` and `/admin/lookups` (now enforced by a test). Super Admin bypasses. Mandatory-MFA admins are confined to their profile and MFA endpoints until they enrol.
@@ -218,27 +319,19 @@ Bookmarking and listing are restricted to `status = 'published'`.
 
 ## Open (not changed)
 
-| ID | Severity | Item | Recommendation |
-|----|----------|------|----------------|
-| SEC-21 | Medium | `NODE_ENV` defaults to `development`. A production deploy that forgets it gets the OTP dev bypass, LAN CORS, the mock gateway, mock confirm and public API docs. | Set `NODE_ENV=production` in every deployed environment, including staging if it holds real data. Consider a startup assertion keyed on `PUBLIC_API_URL`. |
-| SEC-22 | Medium | `trust proxy = 1` (`server/src/app.ts`). Without exactly one reverse proxy, `X-Forwarded-For` is spoofable and the per-IP rate limits and lockout IPs can be bypassed. | Match the setting to the real proxy topology. |
-| SEC-23 | Medium | Rate-limit store is in memory (per process). | Use a shared store (Redis or Postgres) before scaling horizontally. |
-| SEC-24 | Medium | Payment adapters (`server/src/modules/payments/providers.ts`, `gateways/*`, owned by the provider agent): no signed-timestamp or replay window; currency is not compared; `payment.succeeded` without an amount is accepted. | Require amount == `payment.total` and currency == `payment.currency`, and verify a timestamp within about 5 minutes in each adapter's `parseWebhook`/`verifyWebhook`. |
-| SEC-25 | Low | `/webhooks/notifications/:provider` accepts unsigned receipts when `NOTIFICATION_WEBHOOK_SECRET` is unset outside production. The provider param is not bound to the delivery row. | Fail closed whenever the secret is unset, and filter by provider. |
-| SEC-26 | Low | TOTP codes can be replayed within their 90 s window (no last-used-step tracking). Recovery codes are generated but not accepted at login. | Store the last accepted step per admin, and add a recovery-code login path. |
-| SEC-27 | Low | Reuse detection covers only one rotation back (`previous_token_hash`). | Keep a short history of hashes per family if needed. |
-| SEC-28 | Low | `POST /payments/mock/:id/confirm` (non-production only) can mark a real-gateway checkout as paid. This is intended for dev/staging. | Make sure staging uses `NODE_ENV=production` or disables mock confirm. |
-| SEC-29 | Low | ILIKE searches don't escape `%`/`_` (wildcard abuse and slow scans, not injection). | Add a shared `escapeLike()`. |
-| SEC-30 | Low | Export `filters` (`z.record(z.unknown())`) are cast, not parsed. Wrong types cause 500s; the SQL stays parameterized. | Parse with each list query schema `.partial()`. |
-| SEC-31 | Low | `/health/ready` is public and shows the error text from failed checks. pg constraint names appear in 409 details. | Hide check messages in production. |
-| SEC-32 | Low | SVG is still allowed for the admin-only `logo` and `question_image` purposes, and the thumbnails and question-images buckets allow `image/svg+xml`. | Sanitize SVGs or drop the type. Serve user files from a separate origin (already the case: supabase.co). |
-| SEC-33 | Low | Practice result returns answers for an unfinished session (the student is already entitled to them via the bank). `website/admin/README.md` documents an `Admin@123` sample password. | Require `status = 'finished'`, and remove the sample credential from the README. |
-| SEC-34 | Low | Quiz answer/submit race: `quizzes/service.ts` `answer()` reads the attempt without `FOR UPDATE`, so a late answer can add mistake/activity rows after submit (score unaffected). | Lock the attempt row inside the transaction. |
+None of SEC-21..34 remain open. Residual notes:
+- SEC-24: FastPay and Qi Card publish no signed timestamp. Replay safety for them comes from the gateway re-check and idempotent event ids, not a time window. Confirm the field names with each gateway before go-live (TODOs in the adapters).
+- SEC-30: filters are validated generically (shape and types), not with each list endpoint's own query schema.
+- SEC-32: existing buckets keep `image/svg+xml` in their Supabase allowlist until `npm run buckets` is run. The API already refuses SVG at attach time.
+- SEC-33/34 change SQL paths that need a database. They are covered by review and the integration suite, not by the unit suite.
+- Dependency audit: website majors (katex, react-router) and the dev-only vitest/tinypool advisories, as listed under SEC-20.
 
 ## Verification
-In `server/`:
-- `npm run typecheck`: pass.
+In `server/` (after SEC-21..34):
+- `NODE_OPTIONS=--max-old-space-size=4096 npm run typecheck`: pass.
 - `npm run lint`: pass.
-- `npm test`: 24 files, 272 tests, all pass, including 18 new security tests.
-- `npm run check-prefix`: pass.
-- `npm run migrate`: 402 recorded as applied.
+- `npm test`: 25 files, 308 tests, all pass (new: `security-followups.test.ts`, SEC-24 cases in `commerce-webhook.test.ts`).
+- `npm run check-prefix`: pass (18 SQL files, every object prefixed `eduway_platform_`).
+- `npm run migrate`: `403_security_followups.sql` recorded as applied (additive, idempotent, no DROP/TRUNCATE).
+- `npm audit --omit=dev`: 0 vulnerabilities.
+- `website/admin`: type-check and ESLint pass for the 2FA recovery-code screen.

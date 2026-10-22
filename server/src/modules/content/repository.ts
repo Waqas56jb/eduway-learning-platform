@@ -219,6 +219,19 @@ export const contentRepo = {
     );
   },
 
+  /** Size of a lesson's quiz pool (published mcq/true_false questions of the subject — quizzes/engine lessonPool()),
+   *  capped at `cap`, without loading the rows (lesson detail only needs the count). */
+  async quizPoolSize(subjectId: string, cap: number, ex?: Executor): Promise<number> {
+    return (
+      (await db.scalar<number>(
+        `SELECT count(*)::int FROM (SELECT 1 FROM ${T.questions} q
+          WHERE q.subject_id = $1 AND q.status = 'published' AND q.deleted_at IS NULL AND q.type = ANY($2::text[]) LIMIT $3) pool`,
+        [subjectId, ['mcq', 'true_false'], cap],
+        ex,
+      )) ?? 0
+    );
+  },
+
   units(subjectId: string, ex?: Executor) {
     return db.many<UnitRow>(`SELECT id, subject_id, title_en, title_ar, sort_order FROM ${T.units} WHERE subject_id = $1 AND deleted_at IS NULL ORDER BY sort_order, created_at`, [subjectId], ex);
   },

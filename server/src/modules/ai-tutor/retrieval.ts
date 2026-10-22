@@ -13,6 +13,7 @@ import { logger } from '../../config/logger.js';
 import { TtlCache } from '../../common/utils/cache.js';
 import { embeddingProvider, type RetrievedChunk } from './providers/index.js';
 import { normalizeText } from './safety.js';
+import { likeContains } from '../../common/utils/like.js';
 
 export interface RetrievalToggles {
   transcripts: boolean;
@@ -86,7 +87,7 @@ interface QuestionHit {
 async function keywordSearch(userId: string, subjectId: string | null, question: string, lang: 'en' | 'ar', toggles: RetrievalToggles, limit: number): Promise<RetrievedChunk[]> {
   const terms = searchTerms(question);
   if (!terms.length) return [];
-  const patterns = terms.map((w) => `%${w.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+  const patterns = terms.map((w) => likeContains(w));
   const out: RetrievedChunk[] = [];
 
   if (toggles.transcripts) {

@@ -10,6 +10,7 @@ import { adminsService } from '../admins/service.js';
 import { studentsService } from '../students/service.js';
 import { securityRepo, type AuditFilter } from './repository.js';
 import type { AuditLogDto, SecurityAlertDto } from './types.js';
+import { likeContains } from '../../common/utils/like.js';
 
 export function toAuditDto(r: Record<string, unknown>): AuditLogDto {
   const kind = r.actor_kind as string | null;
@@ -73,7 +74,7 @@ export const securityService = {
       where += ` AND s.user_id = $${p.length}`;
     }
     if (f.q) {
-      p.push(`%${f.q.toLowerCase()}%`);
+      p.push(likeContains(f.q.toLowerCase()));
       where += ` AND (lower(u.name_en) LIKE $${p.length} OR lower(u.email) LIKE $${p.length} OR coalesce(s.ip,'') LIKE $${p.length} OR lower(coalesce(s.device_name,'')) LIKE $${p.length})`;
     }
     const base = `${ADMIN_SESSION_SELECT}${where}`;

@@ -7,6 +7,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { MulterError } from 'multer';
 import { ZodError } from 'zod';
 import { PG_ERR } from '../../config/db.js';
+import { isProd } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { AppError, NotFoundError, ServiceUnavailableError, ValidationError } from '../errors/index.js';
 import { isKnownReason, translate } from '../i18n/index.js';
@@ -22,8 +23,11 @@ interface PgLikeError {
 const isPgError = (e: unknown): e is PgLikeError =>
   typeof e === 'object' && e !== null && typeof (e as PgLikeError).code === 'string' && /^[0-9A-Z]{5}$/.test((e as PgLikeError).code ?? '');
 
+/** SEC-31: constraint names reveal the schema — only shown outside production. */
+const constraintDetails = (e: PgLikeError, prod = isProd) => (prod || !e.constraint ? undefined : { constraint: e.constraint });
+
 /** Normalize anything thrown into an AppError. */
-export function toAppError(err: unknown): AppError {
+export function toAppError(err: unknown, prod = isProd): AppError {
   if (err instanceof AppError) return err;
   if (err instanceof ZodError) return validationErrorFrom(zodIssues(err));
 
@@ -37,12 +41,12 @@ export function toAppError(err: unknown): AppError {
   if (isPgError(err)) {
     switch (err.code) {
       case PG_ERR.uniqueViolation:
-        return new AppError('CONFLICT', 409, { reason: 'ALREADY_EXISTS', details: { constraint: err.constraint } });
+        return new AppError('CONFLICT', 409, { reason: 'ALREADY_EXISTS', details: constraintDetails(err, prod) });
       case PG_ERR.foreignKeyViolation:
-        return new AppError('CONFLICT', 409, { reason: 'HAS_DEPENDENTS', details: { constraint: err.constraint } });
+        return new AppError('CONFLICT', 409, { reason: 'HAS_DEPENDENTS', details: constraintDetails(err, prod) });
       case PG_ERR.checkViolation:
       case PG_ERR.notNullViolation:
-        return new AppError('VALIDATION_ERROR', 400, { details: { constraint: err.constraint } });
+        return new AppError('VALIDATION_ERROR', 400, { details: constraintDetails(err, prod) });
       case PG_ERR.invalidTextRepresentation:
         return new NotFoundError('resource');
       case '57014':

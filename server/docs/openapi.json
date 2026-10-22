@@ -3509,7 +3509,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -4641,7 +4673,7 @@
                   },
                   "totp": {
                     "type": "string",
-                    "pattern": "^\\d{6}$"
+                    "pattern": "^(\\d{6}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5})$"
                   },
                   "remember": {
                     "type": "boolean"
@@ -4718,7 +4750,7 @@
                   },
                   "code": {
                     "type": "string",
-                    "pattern": "^\\d{6}$"
+                    "pattern": "^(\\d{6}|[A-Za-z0-9]{5}-?[A-Za-z0-9]{5})$"
                   },
                   "remember": {
                     "type": "boolean"
@@ -7055,7 +7087,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -7392,7 +7456,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -10576,7 +10672,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -12364,7 +12492,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -16410,7 +16570,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -17978,7 +18170,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -19040,7 +19264,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -22535,7 +22791,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -24740,7 +25028,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -25748,7 +26068,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -28867,7 +29219,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -29256,7 +29640,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -30426,7 +30842,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -31334,7 +31782,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -32126,7 +32606,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -32181,7 +32693,7 @@
           "Webhooks"
         ],
         "summary": "Delivery receipts from SMS/WhatsApp/email providers (WHK-03)",
-        "description": "Header `X-Signature` = hex HMAC-SHA256 of the raw body with NOTIFICATION_WEBHOOK_SECRET.",
+        "description": "Header `X-Signature` = hex HMAC-SHA256 of the raw body with NOTIFICATION_WEBHOOK_SECRET (required in every environment). Only deliveries sent through `:provider` are updated.",
         "security": [],
         "parameters": [
           {
@@ -32788,7 +33300,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -34057,7 +34601,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -34500,7 +35076,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -34805,7 +35413,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -35756,6 +36396,90 @@
         }
       }
     },
+    "/api/v1/payments/callback/{provider}": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Gateway browser return (ZainCash token / Qi finish / FastPay return) — verified, idempotent, 302 to the app",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 30
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Gateway browser return (ZainCash token / Qi finish / FastPay return) — verified, idempotent, 302 to the app",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 30
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/payments/{paymentId}": {
       "get": {
         "tags": [
@@ -36405,7 +37129,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -37016,7 +37772,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -37700,7 +38488,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -38255,7 +39075,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -41282,7 +42134,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {
@@ -43115,7 +43999,39 @@
                   "filters": {
                     "type": "object",
                     "additionalProperties": {
-                      "nullable": true
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 1000
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "nullable": true
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "maxItems": 500
+                        },
+                        {
+                          "nullable": true
+                        }
+                      ]
                     }
                   },
                   "ids": {

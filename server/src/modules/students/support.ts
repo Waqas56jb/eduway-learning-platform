@@ -8,6 +8,7 @@ import type { AdminPrincipal } from '../../common/types/index.js';
 import { orderBy } from '../../common/utils/pagination.js';
 import { notify } from '../notifications/notify.js';
 import type { SupportTicketDetailDto, SupportTicketDto, SupportTicketMessageDto } from './types.js';
+import { likeContains } from '../../common/utils/like.js';
 
 const SELECT = `
   SELECT t.*, u.id AS u_id, u.name_en AS u_name_en, u.name_ar AS u_name_ar, u.phone AS u_phone, u.avatar_url AS u_avatar_url,
@@ -73,7 +74,7 @@ function where(f: TicketFilter, opts: { ignoreStatus?: boolean } = {}) {
         `(lower(t.subject_en) LIKE ${n} OR t.subject_ar LIKE ${n} OR lower(t.number) LIKE ${n} OR lower(t.message) LIKE ${n}
           OR lower(coalesce(u.name_en,'')) LIKE ${n} OR coalesce(u.name_ar,'') LIKE ${n} OR coalesce(u.phone,'') LIKE ${n}
           OR lower(coalesce(t.contact_name,'')) LIKE ${n} OR lower(coalesce(t.contact_value,'')) LIKE ${n})`,
-      `%${f.q.toLowerCase()}%`,
+      likeContains(f.q.toLowerCase()),
     );
   }
   return { sql: w.length ? ` WHERE ${w.join(' AND ')}` : '', params: p };

@@ -220,7 +220,10 @@ export const practiceService = {
   },
 
   async result(userId: string, sessionId: string) {
-    return result(await session(userId, sessionId));
+    const s = await session(userId, sessionId);
+    // SEC-33: the result carries every correct answer — only once the session is finished (finish returns it too).
+    if (s.status === 'in_progress') throw conflictError('ATTEMPT_IN_PROGRESS', { sessionId });
+    return result(s);
   },
 
   async sessions(userId: string, page: number, limit: number) {

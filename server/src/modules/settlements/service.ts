@@ -10,6 +10,7 @@ import { orderBy } from '../../common/utils/pagination.js';
 import { businessDay, iso, isoOrNull, L, type Row } from '../commerce/lib.js';
 import { calcIncentive, parsePeriodKey, previousPeriod, type PeriodRange } from '../incentives/calculator.js';
 import { incentiveRules, type PartnerType } from '../incentives/service.js';
+import { likeContains } from '../../common/utils/like.js';
 
 type Ref = { id: string; name: { en: string; ar: string }; avatarUrl: string | null };
 export interface SettlementDto {
@@ -96,7 +97,7 @@ function where(f: SettlementFilter) {
   if (f.period) add((n) => `st.period = ${n}`, f.period);
   if (f.status) add((n) => `st.status = ${n}`, f.status);
   if (f.ids?.length) add((n) => `st.id = ANY(${n}::uuid[])`, f.ids);
-  if (f.q) add((n) => `(lower(COALESCE(sc.name_en, mk.name_en)) LIKE ${n} OR COALESCE(sc.name_ar, mk.name_ar) LIKE ${n} OR st.period LIKE ${n} OR lower(COALESCE(sc.code, '')) LIKE ${n})`, `%${f.q.toLowerCase()}%`);
+  if (f.q) add((n) => `(lower(COALESCE(sc.name_en, mk.name_en)) LIKE ${n} OR COALESCE(sc.name_ar, mk.name_ar) LIKE ${n} OR st.period LIKE ${n} OR lower(COALESCE(sc.code, '')) LIKE ${n})`, likeContains(f.q.toLowerCase()));
   return { sql: ` AND ${w.join(' AND ')}`, params: p };
 }
 

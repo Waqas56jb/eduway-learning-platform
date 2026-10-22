@@ -30,6 +30,6 @@ export function uploadSingle(field: string, opts: UploadOptions = {}) {
 export const MIME = {
   csv: ['text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/plain'],
   xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  images: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
+  images: ['image/png', 'image/jpeg', 'image/webp'], // no SVG (SEC-32)
   pdf: ['application/pdf'],
 } as const;

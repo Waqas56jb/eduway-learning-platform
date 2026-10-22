@@ -13,6 +13,7 @@ import { aiRepo, type AiSettingsRow } from './repository.js';
 import { vectorStoreReady } from './retrieval.js';
 import { maxSeverity, type Severity } from './safety.js';
 import { invalidateAiSettings, loadAiSettings, modelCatalog } from './settings.js';
+import { likeContains } from '../../common/utils/like.js';
 
 type Row = Record<string, unknown>;
 
@@ -124,7 +125,7 @@ function flagWhere(q: Partial<FlagsQuery>): { where: string; params: unknown[] }
   if (q.studentId) add('f.user_id = ?', q.studentId);
   if (q.from) add('f.created_at >= ?', q.from);
   if (q.to) add('f.created_at <= ?', q.to);
-  if (q.q) add(`(f.excerpt ILIKE ? OR u.name_en ILIKE $${params.length + 1} OR u.name_ar ILIKE $${params.length + 1} OR u.phone ILIKE $${params.length + 1})`, `%${q.q}%`);
+  if (q.q) add(`(f.excerpt ILIKE ? OR u.name_en ILIKE $${params.length + 1} OR u.name_ar ILIKE $${params.length + 1} OR u.phone ILIKE $${params.length + 1})`, likeContains(q.q));
   return { where: cond.join(' AND '), params };
 }
 
@@ -338,7 +339,7 @@ export const aiAdminService = {
     const params: unknown[] = [];
     let search = 'TRUE';
     if (q.q) {
-      params.push(`%${q.q}%`);
+      params.push(likeContains(q.q));
       search = `(u.name_en ILIKE $1 OR u.name_ar ILIKE $1 OR u.phone ILIKE $1)`;
     }
     const SORT: Record<string, string> = {
