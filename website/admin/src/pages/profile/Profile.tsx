@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Check, Copy, KeyRound, Moon, Palette, ShieldCheck, ShieldOff, Sun, UserRound, X } from 'lucide-react';
@@ -8,12 +8,13 @@ import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { useQueryClient } from '@tanstack/react-query';
-import { Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, Field, FileUpload, Input, Segmented, SkeletonCard, Switch, useConfirm } from '@/components/ui';
+import { Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, Field, FileUpload, Input, PhoneInput, Segmented, SkeletonCard, Switch, useConfirm } from '@/components/ui';
 import { useLocalize } from '@/hooks/useLocale';
 import { useAuth, useCurrentAdmin, useCurrentRole } from '@/store/auth';
 import { useUi } from '@/store/ui';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtRelative } from '@/utils/format';
+import { isValidPhone, toE164 } from '@/utils/phone';
 import { adminMeApi, authApi, type MfaSetupDto } from '@/api/auth';
 import { errorMessage, isApiError, toastError } from '@/api/client';
 import { qk } from '@/api/keys';
@@ -67,7 +68,7 @@ export default function Profile() {
     name: z.string().trim().min(3, t('profile.nameMin')),
     name_ar: z.string().trim().min(3, t('profile.nameMin')),
     email: z.string().email(t('errors.invalidEmail')),
-    mobile: z.string().regex(/^\+964\s?7\d{2}\s?\d{3}\s?\d{4}$/, t('profile.mobileInvalid')),
+    mobile: z.string().trim().refine((m) => isValidPhone(m), t('profile.mobileInvalid')),
   });
   type ProfileForm = z.infer<typeof profileSchema>;
   const profileValues = useMemo(
@@ -107,7 +108,7 @@ export default function Profile() {
 
   const saveProfile = async (v: ProfileForm) => {
     try {
-      await adminMeApi.update({ name: { en: v.name, ar: v.name_ar }, email: v.email, mobile: v.mobile });
+      await adminMeApi.update({ name: { en: v.name, ar: v.name_ar }, email: v.email, mobile: toE164(v.mobile) ?? v.mobile });
       await refreshMe();
       toast.success(t('profile.saved'));
     } catch (e) {
@@ -263,7 +264,13 @@ export default function Profile() {
                     <Input id="pf-email" type="email" dir="ltr" invalid={!!pe.email} {...pf.register('email')} />
                   </Field>
                   <Field label={t('profile.mobile')} error={pe.mobile?.message} htmlFor="pf-mobile" required>
-                    <Input id="pf-mobile" dir="ltr" invalid={!!pe.mobile} {...pf.register('mobile')} />
+                    <Controller
+                      control={pf.control}
+                      name="mobile"
+                      render={({ field }) => (
+                        <PhoneInput id="pf-mobile" name={field.name} ref={field.ref} value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!pe.mobile} />
+                      )}
+                    />
                   </Field>
                 </div>
               </CardBody>

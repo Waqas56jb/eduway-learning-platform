@@ -6,7 +6,7 @@ import { rateLimits } from '../../common/middleware/rateLimit.js';
 import { exportRequest, type ExportColumn } from '../../common/services/exporter.js';
 import { paginationQuery } from '../../common/utils/pagination.js';
 import { paged } from '../../common/utils/response.js';
-import { fileKey, iraqiPhone, idParam, isoDate, okDto } from '../../common/validation/schemas.js';
+import { anyPhone, fileKey, idParam, isoDate, okDto } from '../../common/validation/schemas.js';
 import { z } from '../../common/validation/zod.js';
 import { sendTableExport } from '../commerce/lib.js';
 import { attributedStudents } from '../commerce/students.js';
@@ -20,7 +20,7 @@ const A = 'admin' as const;
 const loc = z.object({ en: z.string().trim().min(2).max(200), ar: z.string().trim().min(2).max(200) });
 const writeFields = z.object({
   name: loc,
-  mobile: iraqiPhone,
+  mobile: anyPhone,
   email: z.string().trim().email().max(200),
   governorateId: z.string().min(2).max(40),
   status: z.enum(['active', 'inactive']).default('active'),

@@ -1,6 +1,6 @@
 /** Reusable zod building blocks for request/response schemas. */
 import { CLIENT_PLATFORMS, STUDENT_PLATFORMS } from '../../config/constants.js';
-import { normalizeIraqiPhone } from '../utils/phone.js';
+import { normalizePhone } from '../utils/phone.js';
 import { z } from './zod.js';
 
 export const uuid = z.string().uuid();
@@ -18,20 +18,31 @@ export const localized = z
 
 export const localizedInput = z.object({ en: z.string().trim().min(1).max(5000), ar: z.string().trim().min(1).max(5000) });
 
-/** Iraqi mobile → E.164 (`+9647XXXXXXXXX`). Fails with PHONE_INVALID-friendly message. */
-export const iraqiPhone = z
-  .string()
-  .trim()
-  .max(40)
-  .transform((v, ctx) => {
-    const n = normalizeIraqiPhone(v);
-    if (!n) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'PHONE_INVALID' });
-      return z.NEVER;
-    }
-    return n;
-  })
-  .openapi({ example: '+9647701234567', description: 'Iraqi mobile; any common format accepted, normalized to E.164' });
+/**
+ * Any international phone number → E.164 (`+447911123456`). Iraqi local formats (07…, 7…, 964…) stay accepted and
+ * normalize to `+964…`. Fails with the localized PHONE_INVALID reason. `mobileOnly` rejects fixed-line / toll-free
+ * numbers (OTP-capable numbers only).
+ */
+export function phoneSchema(opts: { mobileOnly?: boolean } = {}) {
+  return z
+    .string()
+    .trim()
+    .max(40)
+    .transform((v, ctx) => {
+      const n = normalizePhone(v, { mobileOnly: opts.mobileOnly });
+      if (!n) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'PHONE_INVALID' });
+        return z.NEVER;
+      }
+      return n;
+    })
+    .openapi({ example: '+9647701234567', description: 'International phone number in any common format (Iraqi 07… accepted), normalized to E.164' });
+}
+
+/** Student mobile (OTP login / registration): international, mobile-capable, E.164. */
+export const mobilePhone = phoneSchema({ mobileOnly: true });
+/** Any international phone (contact details, admin profile, WhatsApp test-send), E.164. */
+export const anyPhone = phoneSchema();
 
 export const clientPlatform = z.enum(CLIENT_PLATFORMS);
 export const studentPlatform = z.enum(STUDENT_PLATFORMS);

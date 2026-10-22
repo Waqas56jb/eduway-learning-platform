@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { useAuth, useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { fmtDateTime, fmtNumber, fmtPercent, fmtRelative } from '@/utils/format';
+import { isValidPhone, toE164 } from '@/utils/phone';
 import { exportRequest, useApiMutation, useExport, usePagedList } from '@/api/hooks';
 import { qk } from '@/api/keys';
 import { useLookups } from '@/api/lookups';
@@ -27,6 +28,7 @@ import {
   MenuDivider,
   MenuItem,
   Modal,
+  PhoneInput,
   Popover,
   Select,
   StatCard,
@@ -85,7 +87,7 @@ export default function AdminUsers() {
   });
   const inviteM = useApiMutation(
     (v: InviteValues) =>
-      securityApi.invite({ name: { en: v.name.trim(), ar: v.name_ar.trim() || v.name.trim() }, email: v.email.trim().toLowerCase(), roleId: v.roleId }),
+      securityApi.invite({ name: { en: v.name.trim(), ar: v.name_ar.trim() || v.name.trim() }, email: v.email.trim().toLowerCase(), roleId: v.roleId, mobile: v.mobile.trim() ? (toE164(v.mobile) ?? v.mobile.trim()) : null }),
     {
       invalidate: [qk.admins.all, qk.roles.all, qk.lookups],
       success: (a) => t('security.admins.invited', { email: a.email }),
@@ -343,6 +345,7 @@ interface InviteValues {
   name: string;
   name_ar: string;
   email: string;
+  mobile: string;
   roleId: string;
 }
 
@@ -363,15 +366,17 @@ function InviteDrawer({
     name: z.string().trim().min(2, t('errors.required')),
     name_ar: z.string().trim(),
     email: z.string().trim().email(t('errors.invalidEmail')),
+    mobile: z.string().trim().refine((m) => !m || isValidPhone(m), t('phone.invalid')),
     roleId: z.string().min(1, t('errors.required')),
   });
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<InviteValues>({ resolver: zodResolver(schema), defaultValues: { name: '', name_ar: '', email: '', roleId: '' } });
+  } = useForm<InviteValues>({ resolver: zodResolver(schema), defaultValues: { name: '', name_ar: '', email: '', mobile: '', roleId: '' } });
 
   const close = () => {
     reset();
@@ -408,6 +413,7 @@ function InviteDrawer({
           }
           if (err.code === 'CONFLICT') setError('email', { message: t('security.admins.emailTaken') });
           else if (err.fields.email) setError('email', { message: err.fields.email });
+          else if (err.fields.mobile) setError('mobile', { message: err.fields.mobile });
           else if (err.fields.roleId) setError('roleId', { message: err.fields.roleId });
           else if (err.fields['name.en']) setError('name', { message: err.fields['name.en'] });
           else toastError(err);
@@ -421,6 +427,15 @@ function InviteDrawer({
         </Field>
         <Field label={t('common.email')} error={errors.email?.message} required htmlFor="inv-email">
           <Input id="inv-email" type="email" dir="ltr" invalid={!!errors.email} placeholder="name@eduway.iq" {...register('email')} />
+        </Field>
+        <Field label={t('security.admins.mobileOptional')} hint={t('phone.hint')} error={errors.mobile?.message} htmlFor="inv-mobile">
+          <Controller
+            control={control}
+            name="mobile"
+            render={({ field }) => (
+              <PhoneInput id="inv-mobile" name={field.name} ref={field.ref} value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.mobile} />
+            )}
+          />
         </Field>
         <Field label={t('security.admins.role')} error={errors.roleId?.message} required htmlFor="inv-role">
           <Select id="inv-role" options={[{ value: '', label: t('security.admins.selectRole') }, ...roleOptions]} invalid={!!errors.roleId} {...register('roleId')} />

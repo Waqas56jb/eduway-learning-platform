@@ -44,7 +44,8 @@ export const REASON_MESSAGES = {
   DRAFT_EXISTS: { en: 'A draft version already exists.', ar: 'توجد نسخة مسودة بالفعل.' },
 
   // ── student auth / OTP (§0.3) ─────────────────────────────────────────────────────────────────────
-  PHONE_INVALID: { en: 'Enter a valid Iraqi mobile number (e.g. 0770 123 4567).', ar: 'أدخل رقم هاتف عراقي صحيح (مثال: 0770 123 4567).' },
+  PHONE_INVALID: { en: 'Enter a valid mobile number for the selected country.', ar: 'أدخل رقم هاتف صحيح للدولة المختارة.' },
+  CONTACT_INVALID: { en: 'Enter a valid email address or phone number.', ar: 'أدخل بريداً إلكترونياً أو رقم هاتف صحيحاً.' },
   ACCOUNT_NOT_FOUND: { en: 'No account found for this number. Please create an account.', ar: 'لا يوجد حساب بهذا الرقم. يرجى إنشاء حساب.' },
   ACCOUNT_EXISTS: { en: 'This mobile number is already registered. Please sign in.', ar: 'رقم الهاتف هذا مسجّل مسبقاً. يرجى تسجيل الدخول.' },
   ACCOUNT_LOCKED: { en: 'Your account is locked. Please contact support.', ar: 'حسابك مقفل. يرجى التواصل مع الدعم.' },

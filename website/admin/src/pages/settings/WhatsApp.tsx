@@ -3,10 +3,11 @@ import { AlertTriangle, CheckCircle2, Link2, LogOut, MessageCircle, QrCode, Refr
 import { useTranslation } from 'react-i18next';
 import { useWhatsAppConnect, useWhatsAppDisconnect, useWhatsAppQr, useWhatsAppStatus, useWhatsAppTestSend, type WhatsAppStatus } from '@/api/whatsapp';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Badge, Button, Field, Input, Segmented, Skeleton, SkeletonCard, Textarea, useConfirm, type Tone } from '@/components/ui';
+import { Badge, Button, Field, PhoneInput, Segmented, Skeleton, SkeletonCard, Textarea, useConfirm, type Tone } from '@/components/ui';
 import { QueryError } from '@/components/ui/QueryError';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtRelative } from '@/utils/format';
+import { formatPhone, isValidPhone, toE164 } from '@/utils/phone';
 import { ReadOnlyNotice, Section, useCanEditSettings } from './_shared';
 
 const STATUS_TONE: Record<WhatsAppStatus, Tone> = { connected: 'success', qr_pending: 'warning', connecting: 'info', disconnected: 'neutral' };
@@ -50,10 +51,10 @@ export default function WhatsAppSettings() {
     if (ok) disconnect.mutate(true);
   };
 
-  const phoneOk = /^\+?[\d\s\-()]{8,20}$/.test(phone.trim());
+  const phoneOk = isValidPhone(phone);
   const onTestSend = () => {
     if (!phoneOk) return;
-    testSend.mutate({ phone: phone.trim(), ...(text.trim() ? { text: text.trim() } : {}) });
+    testSend.mutate({ phone: toE164(phone) ?? phone.trim(), ...(text.trim() ? { text: text.trim() } : {}) });
   };
 
   const status = s?.status ?? 'disconnected';
@@ -119,7 +120,7 @@ export default function WhatsAppSettings() {
                 <li className="flex justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2.5">
                   <span className="text-muted">{t('whatsapp.linkedNumber')}</span>
                   <span className="font-semibold num" dir="ltr">
-                    {s.phone ?? '—'}
+                    {s.phone ? formatPhone(s.phone) : '—'}
                   </span>
                 </li>
                 <li className="flex justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2.5">
@@ -139,7 +140,7 @@ export default function WhatsAppSettings() {
                 <div className="flex items-center gap-3 rounded-2xl border border-success/30 bg-success/[0.07] p-4">
                   <CheckCircle2 className="h-8 w-8 shrink-0 text-success" />
                   <div className="min-w-0 text-sm">
-                    <div className="font-semibold text-ink">{t('whatsapp.connectedTitle', { phone: s.phone ?? '' })}</div>
+                    <div className="font-semibold text-ink">{t('whatsapp.connectedTitle', { phone: isolatePhone(s.phone) })}</div>
                     <div className="text-muted">{t('whatsapp.connectedHint', { date: fmtDateTime(s.connectedAt) })}</div>
                   </div>
                 </div>
@@ -181,7 +182,7 @@ export default function WhatsAppSettings() {
             <Section title={t('whatsapp.testTitle')} subtitle={t('whatsapp.testHint')} icon={<Send className="h-4 w-4" />}>
               <fieldset disabled={!editable || status !== 'connected'} className="grid gap-4 sm:grid-cols-2">
                 <Field label={t('whatsapp.testPhone')} hint={t('whatsapp.testPhoneHint')} error={phone && !phoneOk ? t('whatsapp.testPhoneInvalid') : undefined}>
-                  <Input dir="ltr" inputMode="tel" placeholder="+964 770 123 4567" value={phone} invalid={!!phone && !phoneOk} onChange={(e) => setPhone(e.target.value)} />
+                  <PhoneInput value={phone} invalid={!!phone && !phoneOk} onChange={setPhone} />
                 </Field>
                 <Field label={t('whatsapp.testText')} hint={t('whatsapp.testTextHint')} className="sm:col-span-2">
                   <Textarea rows={3} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('whatsapp.testTextPlaceholder')} />
@@ -220,7 +221,7 @@ export default function WhatsAppSettings() {
                     'max-w-[92%] whitespace-pre-line rounded-xl rounded-ss-sm bg-white px-3.5 py-2.5 text-sm leading-relaxed text-[#111B21] shadow-sm dark:bg-[#202C33] dark:text-[#E9EDEF]',
                   )}
                 >
-                  <div className="mb-1 text-xs font-semibold text-[#008069] dark:text-[#25D366]">{s.phone ?? 'EDUWAY'}</div>
+                  <div className="mb-1 text-xs font-semibold text-[#008069] dark:text-[#25D366]">{s.phone ? <span dir="ltr">{formatPhone(s.phone)}</span> : 'EDUWAY'}</div>
                   {previewLang === 'ar' ? s.otpPreview.ar : s.otpPreview.en}
                 </div>
               </div>

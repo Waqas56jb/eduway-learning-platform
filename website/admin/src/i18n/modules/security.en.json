@@ -64,6 +64,7 @@
     "inviteSub": "They will receive an email with a secure link to set a password and enroll in 2FA.",
     "fullName": "Full name",
     "fullNameAr": "Full name (Arabic)",
+    "mobileOptional": "Mobile (optional)",
     "role": "Role",
     "mfa": "MFA",
     "mfaOn": "MFA on",

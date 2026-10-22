@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,8 @@ import { isApiError, toastError } from '@/api/client';
 import { useLookups } from '@/api/lookups';
 import { marketersApi, partnerKeys, type MarketerVM, type MarketerWriteDto } from '@/api/partners';
 import { useLocalize } from '@/hooks/useLocale';
-import { Button, Drawer, Field, Input, Select } from '@/components/ui';
+import { Button, Drawer, Field, Input, PhoneInput, Select } from '@/components/ui';
+import { isValidPhone, toE164 } from '@/utils/phone';
 
 interface MarketerFormProps {
   open: boolean;
@@ -28,7 +29,7 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
   const schema = z.object({
     name_en: z.string().trim().min(3, req),
     name_ar: z.string().trim().min(3, req),
-    mobile: z.string().trim().regex(/^\+?964[\s]?7\d{2}[\s]?\d{3}[\s]?\d{4}$/, t('marketers.mobileFormat')),
+    mobile: z.string().trim().refine((m) => isValidPhone(m), t('marketers.mobileFormat')),
     email: z.string().trim().email(t('errors.invalidEmail')),
     governorateId: z.string().min(1, req),
     status: z.enum(['active', 'inactive']),
@@ -51,6 +52,7 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setError,
@@ -65,7 +67,7 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
   const onSubmit = async (v: FormValues) => {
     const body: MarketerWriteDto = {
       name: { en: v.name_en, ar: v.name_ar },
-      mobile: v.mobile,
+      mobile: toE164(v.mobile) ?? v.mobile,
       email: v.email,
       governorateId: v.governorateId,
       status: v.status,
@@ -119,8 +121,12 @@ export function MarketerForm({ open, onClose, marketer }: MarketerFormProps) {
         <Field label={t('marketers.fields.nameAr')} error={errors.name_ar?.message} required htmlFor="mf-ar">
           <Input id="mf-ar" dir="rtl" invalid={!!errors.name_ar} {...register('name_ar')} />
         </Field>
-        <Field label={t('marketers.fields.mobile')} error={errors.mobile?.message} required htmlFor="mf-mob">
-          <Input id="mf-mob" dir="ltr" inputMode="tel" placeholder="+964 770 123 4567" invalid={!!errors.mobile} {...register('mobile')} />
+        <Field label={t('marketers.fields.mobile')} hint={t('phone.hint')} error={errors.mobile?.message} required htmlFor="mf-mob">
+          <Controller
+            control={control}
+            name="mobile"
+            render={({ field }) => <PhoneInput id="mf-mob" name={field.name} ref={field.ref} value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.mobile} />}
+          />
         </Field>
         <Field label={t('marketers.fields.email')} error={errors.email?.message} required htmlFor="mf-email">
           <Input id="mf-email" type="email" dir="ltr" placeholder="name@partners.eduway.iq" invalid={!!errors.email} {...register('email')} />

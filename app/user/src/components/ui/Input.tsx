@@ -22,6 +22,8 @@ export interface InputProps extends TextInputProps {
   icon?: IconName;
   /** Fixed prefix such as "+964"; always rendered left-to-right in its own segment. */
   prefix?: string;
+  /** Interactive prefix segment (e.g. a country-code button); rendered LTR before the divider, like `prefix`. */
+  prefixElement?: ReactNode;
   rightElement?: ReactNode;
   /** Style for the outer wrapper (label + field + messages). */
   containerStyle?: StyleProp<ViewStyle>;
@@ -37,6 +39,7 @@ export const Input = forwardRef<ComponentRef<typeof TextInput>, InputProps>(func
     hint,
     icon,
     prefix,
+    prefixElement,
     rightElement,
     containerStyle,
     style,
@@ -70,7 +73,7 @@ export const Input = forwardRef<ComponentRef<typeof TextInput>, InputProps>(func
     transform: [{ scale: 1 + (1 - focus.value) * 0.015 }],
   }));
 
-  const isLtrField = !!prefix || LTR_KEYBOARDS.has(keyboardType);
+  const isLtrField = !!prefix || !!prefixElement || LTR_KEYBOARDS.has(keyboardType);
   // Let text fields follow the natural (layout) direction; force LTR for numbers/phones/emails.
   let textAlign: TextStyle['textAlign'];
   if (isLtrField) textAlign = 'left';
@@ -121,11 +124,13 @@ export const Input = forwardRef<ComponentRef<typeof TextInput>, InputProps>(func
             </View>
           ) : null}
 
-          {prefix ? (
+          {prefix || prefixElement ? (
             <View style={styles.prefix}>
-              <Text variant="bodyMedium" color="ink" tabular style={styles.prefixText}>
-                {prefix}
-              </Text>
+              {prefixElement ?? (
+                <Text variant="bodyMedium" color="ink" tabular style={styles.prefixText}>
+                  {prefix}
+                </Text>
+              )}
               <View style={[styles.prefixDivider, { backgroundColor: colors.border }]} />
             </View>
           ) : null}

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,8 @@ import { useLookups } from '@/api/lookups';
 import { partnerKeys, schoolsApi, type SchoolWriteDto } from '@/api/partners';
 import { useLocalize } from '@/hooks/useLocale';
 import { useAttributionGuard } from '@/pages/marketers/attribution';
-import { Button, Drawer, Field, Input, Select } from '@/components/ui';
+import { Button, Drawer, Field, Input, PhoneInput, Select } from '@/components/ui';
+import { isValidPhone, toE164 } from '@/utils/phone';
 
 interface SchoolFormProps {
   open: boolean;
@@ -44,7 +45,7 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
       city_ar: z.string().trim().min(2, req),
       governorateId: z.string().min(1, req),
       contactName: z.string().trim().min(3, req),
-      contactMobile: z.string().trim().regex(/^\+?[\d\s]{10,16}$/, t('marketers.mobileFormat')),
+      contactMobile: z.string().trim().refine((m) => isValidPhone(m), t('marketers.mobileFormat')),
       marketerId: z.string(),
       contractStart: z.string().min(1, req),
       contractEnd: z.string().min(1, req),
@@ -73,6 +74,7 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setError,
@@ -91,7 +93,7 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
       city: { en: v.city_en, ar: v.city_ar },
       governorateId: v.governorateId,
       contactName: v.contactName,
-      contactMobile: v.contactMobile,
+      contactMobile: toE164(v.contactMobile) ?? v.contactMobile,
       contractStart: new Date(v.contractStart).toISOString(),
       contractEnd: new Date(v.contractEnd).toISOString(),
       status: v.status,
@@ -189,7 +191,13 @@ export function SchoolForm({ open, onClose, school }: SchoolFormProps) {
             <Input id="sf-cn" invalid={!!errors.contactName} {...register('contactName')} />
           </Field>
           <Field label={t('schools.fields.contactMobile')} error={errors.contactMobile?.message} required htmlFor="sf-cm">
-            <Input id="sf-cm" dir="ltr" inputMode="tel" placeholder="+964 770 123 4567" invalid={!!errors.contactMobile} {...register('contactMobile')} />
+            <Controller
+              control={control}
+              name="contactMobile"
+              render={({ field }) => (
+                <PhoneInput id="sf-cm" name={field.name} ref={field.ref} value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={!!errors.contactMobile} />
+              )}
+            />
           </Field>
           <Field label={t('schools.fields.contractStart')} error={errors.contractStart?.message} required htmlFor="sf-cs">
             <Input id="sf-cs" type="date" invalid={!!errors.contractStart} {...register('contractStart')} />

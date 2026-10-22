@@ -1,9 +1,17 @@
 /**
- * Iraqi mobile numbers → E.164 (`+9647XXXXXXXXX`).
- * Accepts: 07701234567, 7701234567, 9647701234567, +964 770 123 4567, 00964-770-123-4567,
- * and Arabic-Indic digits (٠٧٧٠١٢٣٤٥٦٧).
- * Iraqi mobile numbers: 10 national digits starting with 7 (operators 75x/77x/78x/79x …).
+ * International phone numbers → E.164 (libphonenumber-js, full "max" metadata so validation checks real
+ * number ranges, not only lengths).
+ *
+ * Accepts any international format (`+44 7911 123456`, `0044-7911-123456`, `+1 (202) 555-0123`) and keeps the
+ * legacy Iraqi local formats working: `07701234567`, `7701234567`, `9647701234567`, `00964 770 123 4567`
+ * (numbers without a `+`/`00` prefix are read as Iraqi first — the platform's home market). Arabic-Indic and
+ * Persian digits (٠٧٧٠١٢٣٤٥٦٧) are accepted too.
+ *
+ * Reserved fictional ranges (UK Ofcom drama numbers `+44 7700 900000–900999`, NANP `+1 NXX 555-01XX`) are
+ * accepted outside production only, so QA can register test accounts without ever reaching a real person.
  */
+import { parsePhoneNumberFromString, type CountryCode, type NumberType, type PhoneNumber } from 'libphonenumber-js/max';
+
 const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
 
 function toLatinDigits(s: string): string {
@@ -13,33 +21,91 @@ function toLatinDigits(s: string): string {
   });
 }
 
-/** Returns the E.164 form or null when the input is not a valid Iraqi mobile number. */
-export function normalizeIraqiPhone(input: string | null | undefined): string | null {
-  if (!input) return null;
-  let digits = toLatinDigits(String(input)).replace(/[\s\-().]/g, '');
-  if (!/^\+?\d+$/.test(digits)) return null;
-  digits = digits.replace(/^\+/, '');
-  if (digits.startsWith('00964')) digits = digits.slice(5);
-  else if (digits.startsWith('964')) digits = digits.slice(3);
-  if (digits.startsWith('0')) digits = digits.slice(1);
-  // API_CONTRACT §4.1: after normalization `^\+9647[3-9]\d{8}$` (Korek 75x, Asiacell 77x, Zain 78x/79x, …).
-  if (!/^7[3-9][0-9]{8}$/.test(digits)) return null;
-  return `+964${digits}`;
+/** Number types that can never receive an SMS / WhatsApp OTP. */
+const NON_MOBILE_TYPES: ReadonlySet<NumberType> = new Set<NumberType>(['FIXED_LINE', 'TOLL_FREE', 'PREMIUM_RATE', 'SHARED_COST', 'VOICEMAIL', 'UAN', 'PAGER']);
+
+/** Fictional/test ranges that libphonenumber (correctly) treats as invalid. */
+const TEST_RANGES: readonly RegExp[] = [/^\+447700900\d{3}$/, /^\+1[2-9]\d{2}55501\d{2}$/];
+
+export const isTestPhoneNumber = (e164: string): boolean => TEST_RANGES.some((r) => r.test(e164));
+
+const isProduction = () => process.env.NODE_ENV === 'production';
+
+export interface NormalizePhoneOptions {
+  /** Country used for numbers typed without `+` / `00`. Default `IQ` (legacy 07… input). */
+  defaultCountry?: CountryCode;
+  /** Reject fixed-line / toll-free / premium numbers (student OTP login). Default false. */
+  mobileOnly?: boolean;
+  /** Accept reserved fictional test ranges. Default: everywhere except production. */
+  allowTestNumbers?: boolean;
 }
 
-export function isValidIraqiPhone(input: string | null | undefined): boolean {
-  return normalizeIraqiPhone(input) !== null;
+function accept(p: PhoneNumber | undefined, opts: NormalizePhoneOptions): string | null {
+  if (!p) return null;
+  const e164 = p.number;
+  if (!/^\+[1-9]\d{6,14}$/.test(e164)) return null;
+  if (!p.isValid()) {
+    const allowTest = opts.allowTestNumbers ?? !isProduction();
+    return allowTest && isTestPhoneNumber(e164) ? e164 : null;
+  }
+  if (opts.mobileOnly) {
+    const type = p.getType();
+    if (type && NON_MOBILE_TYPES.has(type)) return null;
+  }
+  return e164;
 }
 
-/** `+9647701234567` → `+964 770 123 4567` */
-export function formatIraqiPhone(e164: string): string {
-  const m = /^\+964(7\d{2})(\d{3})(\d{4})$/.exec(e164);
-  return m ? `+964 ${m[1]} ${m[2]} ${m[3]}` : e164;
+/** Returns the E.164 form (`+447911123456`) or null when the input is not a valid phone number. */
+export function normalizePhone(input: string | null | undefined, opts: NormalizePhoneOptions = {}): string | null {
+  if (input === null || input === undefined) return null;
+  let s = toLatinDigits(String(input)).trim().replace(/[\s\-().‎‏‪-‮]/g, '');
+  if (!s || !/^\+?\d+$/.test(s)) return null;
+  if (s.length > 20) return null;
+  if (s.startsWith('00')) s = `+${s.slice(2)}`;
+  if (s.startsWith('+')) return accept(parsePhoneNumberFromString(s), opts);
+
+  const country = opts.defaultCountry ?? 'IQ';
+  // Legacy Iraqi input without a plus: 9647XXXXXXXXX.
+  if (country === 'IQ' && /^9647\d{9}$/.test(s)) return accept(parsePhoneNumberFromString(`+${s}`), opts);
+  // National format of the default country (07…, 7…), then digits that already carry a country code.
+  return accept(parsePhoneNumberFromString(s, country), opts) ?? accept(parsePhoneNumberFromString(`+${s}`), opts);
 }
 
-/** `+9647701234567` → `+964 770 ••• ••67` (API maskedPhone, logs, security alerts). */
+export function isValidPhone(input: string | null | undefined, opts?: NormalizePhoneOptions): boolean {
+  return normalizePhone(input, opts) !== null;
+}
+
+/** ISO-3166 alpha-2 country of an E.164 number (`+9647701234567` → `IQ`), or null. */
+export function phoneCountry(e164: string | null | undefined): CountryCode | null {
+  if (!e164) return null;
+  return parsePhoneNumberFromString(e164)?.country ?? null;
+}
+
+/** `+9647701234567` → `+964 770 123 4567`; `+447911123456` → `+44 7911 123456`. Unparseable input is returned as is. */
+export function formatPhone(e164: string | null | undefined): string {
+  if (!e164) return '';
+  return parsePhoneNumberFromString(e164)?.formatInternational() ?? e164;
+}
+
+/**
+ * `+9647701234567` → `+964 770 ••• ••67` (API maskedPhone, logs, security alerts): the country code, the first
+ * three national digits and the last two stay visible; grouping follows the international format.
+ */
 export function maskPhone(e164: string | null | undefined): string {
   if (!e164) return '';
-  const m = /^\+964(7\d{2})(\d{3})(\d{2})(\d{2})$/.exec(e164);
-  return m ? `+964 ${m[1]} ••• ••${m[4]}` : '•••';
+  const p = parsePhoneNumberFromString(e164);
+  if (!p) return '•••';
+  const formatted = p.formatInternational();
+  const cc = `+${p.countryCallingCode}`;
+  if (!formatted.startsWith(cc)) return '•••';
+  const national = formatted.slice(cc.length);
+  const total = national.replace(/\D/g, '').length;
+  const head = total >= 8 ? 3 : 1;
+  const tail = 2;
+  let i = 0;
+  const masked = national.replace(/\d/g, (d) => {
+    const pos = i++;
+    return pos < head || pos >= total - tail ? d : '•';
+  });
+  return `${cc}${masked}`;
 }

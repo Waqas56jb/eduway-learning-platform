@@ -6,7 +6,7 @@ import { CODE_MESSAGES, REASON_MESSAGES, resolveLocale, translate } from '../../
 import { errorHandler } from '../../src/common/middleware/errorHandler.js';
 import { locale, requestId } from '../../src/common/middleware/requestContext.js';
 import { validate } from '../../src/common/middleware/validate.js';
-import { iraqiPhone } from '../../src/common/validation/schemas.js';
+import { mobilePhone } from '../../src/common/validation/schemas.js';
 import { z } from '../../src/common/validation/zod.js';
 
 const ARABIC = /[؀-ۿ]/;
@@ -64,7 +64,7 @@ describe('error envelope localization (errorHandler)', () => {
   app.get('/boom', () => {
     throw new Error('kaboom');
   });
-  app.post('/v', validate({ body: z.object({ phone: iraqiPhone, n: z.number().int().min(1) }) }), (_req, res) => {
+  app.post('/v', validate({ body: z.object({ phone: mobilePhone, n: z.number().int().min(1) }) }), (_req, res) => {
     res.json({ success: true });
   });
   app.use(errorHandler);

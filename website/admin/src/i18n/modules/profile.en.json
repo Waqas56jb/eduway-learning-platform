@@ -12,7 +12,7 @@
   "lastLogin": "Last login {{time}}",
   "saved": "Profile updated",
   "nameMin": "Name must be at least 3 characters",
-  "mobileInvalid": "Enter a valid Iraqi mobile (+964 7XX XXX XXXX)",
+  "mobileInvalid": "Enter a valid mobile number for the selected country.",
   "password": {
     "title": "Change password",
     "sub": "Use at least 10 characters with upper and lower case letters, a number and a symbol.",

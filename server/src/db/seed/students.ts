@@ -6,7 +6,7 @@
 import { T } from '../../config/constants.js';
 import type { TxClient } from '../../config/db.js';
 import { hashToken } from '../../common/utils/crypto.js';
-import { normalizeIraqiPhone } from '../../common/utils/phone.js';
+import { normalizePhone } from '../../common/utils/phone.js';
 import { PACKAGE_BY_ADMIN, packageId, SUBJECT_BY_ADMIN, subjectId } from './catalog.js';
 import { daysAgo, e164, insertMany, rebase, rng, sid } from './helpers.js';
 import { govFromAdmin, marketerId, schoolId } from './partners.js';
@@ -19,13 +19,13 @@ const PLATFORMS = ['web', 'ios', 'android'] as const;
 
 export async function seedStudents(c: TxClient, mock: AdminMock, adminIdByName: Map<string, string>, adminIdByMock: Map<string, string>): Promise<void> {
   const r = rng(2026);
-  const students = mock.students.filter((s) => normalizeIraqiPhone(s.mobile) && e164(s.mobile) !== '+9647701234567');
+  const students = mock.students.filter((s) => normalizePhone(s.mobile) && e164(s.mobile) !== '+9647701234567');
 
   await insertMany(
     c,
     T.users,
     ['id', 'kind', 'phone', 'email', 'name_en', 'name_ar', 'avatar_url', 'locale', 'status', 'locked_at', 'locked_reason', 'last_active_at', 'created_at'],
-    students.map((s) => [studentId(s.id), 'student', normalizeIraqiPhone(s.mobile), s.email, s.name_en, s.name_ar, s.avatar, r.next() < 0.75 ? 'ar' : 'en', s.locked ? 'locked' : 'active', s.locked ? rebase(s.lastActive) : null, s.locked ? 'Account sharing detected' : null, rebase(s.lastActive), rebase(s.createdAt)]),
+    students.map((s) => [studentId(s.id), 'student', normalizePhone(s.mobile), s.email, s.name_en, s.name_ar, s.avatar, r.next() < 0.75 ? 'ar' : 'en', s.locked ? 'locked' : 'active', s.locked ? rebase(s.lastActive) : null, s.locked ? 'Account sharing detected' : null, rebase(s.lastActive), rebase(s.createdAt)]),
     '(id) DO NOTHING',
   );
   await insertMany(

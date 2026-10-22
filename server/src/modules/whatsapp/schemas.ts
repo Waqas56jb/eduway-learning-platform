@@ -1,23 +1,5 @@
-import { normalizeIraqiPhone } from '../../common/utils/phone.js';
+import { anyPhone } from '../../common/validation/schemas.js';
 import { z } from '../../common/validation/zod.js';
-
-/** Any international number (E.164 after normalization); Iraqi local formats (07…) are accepted too. */
-export const anyPhone = z
-  .string()
-  .trim()
-  .max(40)
-  .transform((v, ctx) => {
-    const iraqi = normalizeIraqiPhone(v);
-    if (iraqi) return iraqi;
-    const digits = v.replace(/[\s\-().]/g, '').replace(/^00/, '+');
-    const e164 = digits.startsWith('+') ? digits : `+${digits}`;
-    if (!/^\+[1-9]\d{7,14}$/.test(e164)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'PHONE_INVALID' });
-      return z.NEVER;
-    }
-    return e164;
-  })
-  .openapi({ example: '+9647701234567', description: 'International number, normalized to E.164' });
 
 export const disconnectBody = z.object({ logout: z.boolean().default(true) }).default({});
 

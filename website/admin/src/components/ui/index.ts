@@ -16,3 +16,4 @@ export * from './FileUpload';
 export * from './DateRangePicker';
 export * from './Latex';
 export * from './TagInput';
+export * from './PhoneInput';

@@ -1,4 +1,4 @@
-import { localized } from '../../common/validation/schemas.js';
+import { anyPhone, localized } from '../../common/validation/schemas.js';
 import { z } from '../../common/validation/zod.js';
 import { paginationQuery } from '../../common/utils/pagination.js';
 
@@ -29,13 +29,12 @@ export const meAdminDto = z
   })
   .openapi('MeAdminDto');
 
-const ADMIN_PHONE = /^\+964\s?7\d{2}\s?\d{3}\s?\d{4}$/;
 const loc3 = z.object({ en: z.string().trim().min(3).max(80), ar: z.string().trim().min(3).max(80) });
 
 export const updateMeBody = z.object({
   name: loc3.optional(),
   email: z.string().email().max(200).optional(),
-  mobile: z.string().regex(ADMIN_PHONE).optional(),
+  mobile: anyPhone.optional(),
   avatarFileKey: z.string().regex(/^upl_[0-9a-f-]{36}$/).nullable().optional(),
 });
 
@@ -57,7 +56,7 @@ export const inviteBody = z.object({
   name: z.object({ en: z.string().trim().min(2).max(80), ar: z.string().trim().max(80).default('') }),
   email: z.string().email().max(200),
   roleId: z.string().uuid(),
-  mobile: z.string().max(25).nullable().optional(),
+  mobile: z.union([z.literal('').transform(() => null), anyPhone]).nullable().optional(),
 });
 
 export const roleIdBody = z.object({ roleId: z.string().uuid() });

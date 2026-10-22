@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 import { Icon, type IconName } from '@/components/icons';
@@ -9,12 +9,14 @@ interface PickerRowProps {
   title: string;
   subtitle?: string;
   icon?: IconName;
+  /** Custom content for the leading circle (e.g. a flag emoji); takes precedence over `icon`. */
+  leading?: ReactNode;
   selected?: boolean;
   onPress: () => void;
 }
 
 /** Selectable row used inside the auth picker sheets (gold check when selected). */
-export const PickerRow = memo(function PickerRow({ title, subtitle, icon, selected, onPress }: PickerRowProps) {
+export const PickerRow = memo(function PickerRow({ title, subtitle, icon, leading, selected, onPress }: PickerRowProps) {
   const { colors } = useTheme();
   return (
     <PressableScale
@@ -32,9 +34,9 @@ export const PickerRow = memo(function PickerRow({ title, subtitle, icon, select
         },
       ]}
     >
-      {icon ? (
+      {leading || icon ? (
         <View style={[styles.iconWrap, { backgroundColor: selected ? colors.surface : colors.surfaceMuted }]}>
-          <Icon name={icon} size={18} color={selected ? colors.accent : colors.muted} />
+          {leading ?? (icon ? <Icon name={icon} size={18} color={selected ? colors.accent : colors.muted} /> : null)}
         </View>
       ) : null}
       <View style={styles.texts}>

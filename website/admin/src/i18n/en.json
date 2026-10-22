@@ -153,6 +153,13 @@
     "addRow": "Add row",
     "browse": "Browse files"
   },
+  "phone": {
+    "country": "Country code",
+    "searchCountry": "Search country or code…",
+    "noCountry": "No matching country",
+    "invalid": "Enter a valid mobile number for the selected country.",
+    "hint": "Pick the country, then type the number. Iraqi numbers like 0770 123 4567 work too."
+  },
   "common": {
     "loading": "Loading…",
     "all": "All",
@@ -501,6 +508,7 @@
     "UPLOAD_FAILED": "Upload failed. Please try again.",
     "reasons": {
       "ACCOUNT_LOCKED": "This account is locked.",
+      "PHONE_INVALID": "Enter a valid mobile number for the selected country.",
       "HAS_DEPENDENTS": "Can't delete — {{count}} dependent records exist.",
       "INVALID_TRANSITION": "This status change isn't allowed ({{from}} → {{to}}).",
       "SELF_ACTION": "You can't perform this action on your own account.",

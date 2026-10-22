@@ -38,7 +38,7 @@ describe('app', () => {
     expect(r.body.error.details.reason).toBe('TOKEN_INVALID');
   });
 
-  it('send-otp validates the Iraqi phone before touching the DB', async () => {
+  it('send-otp validates the phone before touching the DB', async () => {
     const r = await request(app).post('/api/v1/auth/send-otp').set('Accept-Language', 'en').send({ phone: '12345', purpose: 'login' });
     expect(r.status).toBe(400);
     expect(r.body.error.details.reason).toBe('PHONE_INVALID');

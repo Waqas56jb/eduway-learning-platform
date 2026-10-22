@@ -1,4 +1,4 @@
-import { isValidIraqiPhone } from '../../common/utils/phone.js';
+import { isValidPhone } from '../../common/utils/phone.js';
 import { z } from '../../common/validation/zod.js';
 
 export const appConfigQuery = z.object({ platform: z.enum(['web', 'ios', 'android']).optional() });
@@ -14,7 +14,7 @@ export const contactBody = z.object({
     .string()
     .trim()
     .max(200)
-    .refine((v) => z.string().email().safeParse(v).success || isValidIraqiPhone(v), 'Enter an email or Iraqi mobile number'),
+    .refine((v) => z.string().email().safeParse(v).success || isValidPhone(v), 'CONTACT_INVALID'),
   subject: z.enum(['general', 'support', 'billing', 'partnerships', 'schools']),
   message: z.string().trim().min(20).max(4000),
   locale: z.enum(['en', 'ar']).optional(),

@@ -18,7 +18,7 @@
     "joined": "Joined",
     "code": "Referral code"
   },
-  "mobileFormat": "Use an Iraqi mobile number, e.g. +964 770 123 4567",
+  "mobileFormat": "Enter a valid mobile number for the selected country.",
   "deleteBody": "The marketer will be removed and their schools become unassigned. Paid settlements are kept.",
   "kpi": {
     "active": "Active marketers",

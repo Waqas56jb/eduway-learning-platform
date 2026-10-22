@@ -9,7 +9,7 @@ import { settingsStore } from '../../common/services/settings-store.js';
 import { storage } from '../../common/services/storage.js';
 import { mirrorAuthUser } from '../../common/services/auth-mirror.js';
 import { hashToken, isStrongPassword, randomToken } from '../../common/utils/crypto.js';
-import { normalizeIraqiPhone } from '../../common/utils/phone.js';
+import { normalizePhone } from '../../common/utils/phone.js';
 import type { AdminPrincipal } from '../../common/types/index.js';
 import { ADMIN_SESSION_SELECT, sessions, toAdminSessionDto, type AdminSessionRow } from '../auth/sessions.js';
 import { emptyMatrix, rolesService } from '../roles/service.js';
@@ -120,7 +120,7 @@ export const adminsService = {
   async invite(input: { name: Localized; email: string; roleId: string; mobile?: string | null }, by: AdminPrincipal): Promise<AdminUserDto> {
     if ((await adminsRepo.emailTaken(input.email)) ?? 0) throw new ConflictError('ALREADY_EXISTS', { field: 'email' });
     await rolesService.get(input.roleId);
-    const mobile = input.mobile ? normalizeIraqiPhone(input.mobile) : null;
+    const mobile = input.mobile ? normalizePhone(input.mobile) : null;
     const id = await tx((c) =>
       adminsRepo.insertAdmin({ nameEn: input.name.en, nameAr: input.name.ar || input.name.en, email: input.email, mobile, status: 'invited', passwordHash: null, invitedBy: by.userId, roleId: input.roleId }, c),
     );
@@ -181,7 +181,7 @@ export const adminsService = {
       if ((await adminsRepo.emailTaken(input.email, userId)) ?? 0) throw new ConflictError('ALREADY_EXISTS', { field: 'email' });
       patch.email = input.email.toLowerCase();
     }
-    if (input.mobile) patch.phone = normalizeIraqiPhone(input.mobile) ?? input.mobile.replace(/\s/g, '');
+    if (input.mobile) patch.phone = normalizePhone(input.mobile) ?? input.mobile;
     if (input.avatarFileKey !== undefined) {
       if (input.avatarFileKey === null) patch.avatar_url = null;
       else {

@@ -1,4 +1,4 @@
-import { iraqiPhone, studentPlatform } from '../../common/validation/schemas.js';
+import { mobilePhone, studentPlatform } from '../../common/validation/schemas.js';
 import { z } from '../../common/validation/zod.js';
 import { personName } from '../users/schemas.js';
 
@@ -27,13 +27,13 @@ export const registerDto = z
   .openapi('RegisterDto');
 
 export const sendOtpBody = z.object({
-  phone: iraqiPhone,
+  phone: mobilePhone,
   purpose: z.enum(['login', 'register']).default('login'),
   channel: z.enum(['sms', 'whatsapp']).optional(),
 });
 
 export const verifyOtpBody = z.object({
-  phone: iraqiPhone,
+  phone: mobilePhone,
   code: z.string().trim().regex(/^\d{4,6}$/),
   purpose: z.enum(['login', 'register']).default('login'),
   deviceId: z.string().min(6).max(128).optional(),
