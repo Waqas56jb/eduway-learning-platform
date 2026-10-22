@@ -72,6 +72,7 @@ export interface MessageRow {
   status: 'pending' | 'streaming' | 'complete' | 'failed' | 'blocked';
   client_message_id: string | null;
   lang: string | null;
+  citations?: unknown;
   created_at: Date;
   updated_at: Date;
 }

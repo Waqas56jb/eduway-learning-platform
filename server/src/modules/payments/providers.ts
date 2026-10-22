@@ -177,6 +177,25 @@ export function getProvider(id: string): PaymentProvider | null {
   return g ? REGISTRY[g] : null;
 }
 
+/**
+ * How a gateway currently takes payments: `live` (real money), `sandbox` (real gateway API in its test/staging/UAT
+ * environment — no real money), `mock` (dev stub confirmed through the MockGateway) or `disabled`.
+ * Shown as the "Sandbox / test mode" badge in the admin settings and the student checkout.
+ */
+export type GatewayMode = 'live' | 'sandbox' | 'mock' | 'disabled';
+const SANDBOX_ENV: Partial<Record<Gateway, () => boolean>> = {
+  zaincash: () => env.ZAINCASH_ENV === 'test',
+  fastpay: () => env.FASTPAY_ENV === 'staging',
+  qicard: () => env.QICARD_ENV === 'uat',
+};
+export function gatewayMode(id: string): GatewayMode {
+  const g = canonicalGateway(id);
+  if (!g) return 'disabled';
+  if (g === 'mock') return devFlags.mockPayments ? 'mock' : 'disabled';
+  if (REGISTRY[g].configured()) return SANDBOX_ENV[g]?.() ? 'sandbox' : 'live';
+  return devFlags.mockPayments ? 'mock' : 'disabled';
+}
+
 /** Sign a body the way the MockGateway does (used by PAY-07 and tests). */
 export function signMock(body: string): string {
   return `sha256=${hmacHex(mockSecret(), body)}`;

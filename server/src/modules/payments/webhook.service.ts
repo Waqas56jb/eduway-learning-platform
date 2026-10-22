@@ -8,7 +8,9 @@ import { db, tx, type TxClient } from '../../config/db.js';
 import { devFlags, env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { NotFoundError, UnauthorizedError } from '../../common/errors/index.js';
+import { adminInbox } from '../../common/services/admin-inbox.js';
 import { notifyStudent } from '../commerce/lib.js';
+import { emailStudent, userUrl } from '../notifications/email/recipients.js';
 import { awardMilestones } from '../marketers/milestones.js';
 import { subscriptionEngine } from '../subscriptions/engine.js';
 import type { PriceQuote } from './pricing.js';
@@ -100,7 +102,25 @@ export function dbWebhookStore(c: TxClient, provider: string): WebhookStore {
 export async function applyWebhookEvent(provider: string, evt: ParsedWebhook): Promise<WebhookOutcome> {
   const out = await tx((c) => runWebhook(dbWebhookStore(c, provider), provider, evt));
   if (out.applied === 'paid' && out.paymentId) await notifyPaid(out.paymentId);
+  if (out.rejected && out.paymentId) await alertSettlementProblem(provider, out.paymentId, out.rejected);
   return out;
+}
+
+/** A gateway confirmed a payment with a wrong amount / currency: the payment was failed; tell the payments team. */
+async function alertSettlementProblem(provider: string, paymentId: string, problem: string): Promise<void> {
+  const ref = (await db.scalar<string>(`SELECT ref FROM ${T.payments} WHERE id = $1`, [paymentId]).catch(() => null)) ?? paymentId;
+  await adminInbox.notify({
+    permission: 'payments.approve',
+    kind: 'danger',
+    category: 'reconciliation',
+    title: { en: `Payment ${ref}: gateway ${problem.replace(/_/g, ' ')}`, ar: `الدفعة ${ref}: عدم تطابق في بيانات البوابة` },
+    body: {
+      en: `${provider} reported a payment whose ${problem === 'currency_mismatch' ? 'currency' : 'amount'} does not match the order. The payment was marked failed and no access was granted. Check it in the gateway dashboard.`,
+      ar: `أبلغت بوابة ${provider} عن دفعة ${problem === 'currency_mismatch' ? 'عملتها' : 'مبلغها'} لا يطابق الطلب. تم تعليم الدفعة كفاشلة ولم يُمنح أي وصول. تحقّق منها في لوحة البوابة.`,
+    },
+    href: `/payments/transactions?q=${encodeURIComponent(ref)}`,
+    dedupeKey: `settlement:${paymentId}`,
+  });
 }
 
 /** Payment confirmation (after commit): template `payment_confirmation`, in-app + push. */
@@ -123,6 +143,27 @@ async function notifyPaid(paymentId: string): Promise<void> {
     },
     link: '/subscription',
   });
+  // Receipt email with the PDF attached (only to a confirmed student email).
+  const receipt = await db.maybeOne<{ number: string; currency: string; paid_at: Date | null; provider: string }>(
+    `SELECT rc.number, p.currency, p.paid_at, p.provider FROM ${T.payments} p LEFT JOIN ${T.receipts} rc ON rc.payment_id = p.id WHERE p.id = $1`,
+    [paymentId],
+  );
+  await emailStudent(
+    info.user_id,
+    'payment_receipt',
+    {
+      package: { en: info.pkg_en, ar: info.pkg_ar },
+      amount: info.total,
+      currency: receipt?.currency ?? 'IQD',
+      ref: info.ref,
+      receiptNumber: receipt?.number ?? info.ref,
+      paidAt: (receipt?.paid_at ?? new Date()).toISOString(),
+      until: info.ends_at ? info.ends_at.toISOString() : null,
+      gateway: receipt?.provider ?? null,
+      link: userUrl('/student/subscription'),
+    },
+    { attachments: [{ kind: 'receipt_pdf', paymentId }], dedupeKey: `receipt:${paymentId}` },
+  );
 }
 
 async function recordUnverified(provider: string, body: Record<string, unknown>, note: string): Promise<void> {

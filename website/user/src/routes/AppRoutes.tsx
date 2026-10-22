@@ -17,6 +17,7 @@ const Login = lazy(() => import('@/pages/public/Login'));
 const Register = lazy(() => import('@/pages/public/Register'));
 const VerifyOtp = lazy(() => import('@/pages/public/VerifyOtp'));
 const NotFound = lazy(() => import('@/pages/public/NotFound'));
+const VerifyEmail = lazy(() => import('@/pages/public/VerifyEmail'));
 
 // Student
 const Dashboard = lazy(() => import('@/pages/student/Dashboard'));
@@ -45,7 +46,7 @@ function RouteFallback() {
 /**
  * Route map
  *  /                       Landing
- *  /pricing /about /contact /terms /privacy
+ *  /pricing /about /contact /terms /privacy /verify-email
  *  /login /register /verify-otp            (guests only)
  *  /student/dashboard
  *  /student/subjects, /student/subjects/:subjectId
@@ -68,6 +69,7 @@ export function AppRoutes() {
             <Route path="contact" element={<Contact />} />
             <Route path="terms" element={<Terms />} />
             <Route path="privacy" element={<Privacy />} />
+            <Route path="verify-email" element={<VerifyEmail />} />
           </Route>
 
           <Route element={<GuestOnlyRoute />}>

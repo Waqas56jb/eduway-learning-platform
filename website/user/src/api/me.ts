@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { del, get, patch } from './client';
+import { del, get, patch, post } from './client';
 import { keys } from './keys';
 import type { Entitlement, MeStudentDto, NotificationPrefs, SessionDto, StudentUser, UpdateMeBody } from './types';
 
@@ -14,6 +14,10 @@ export const meApi = {
   prefs: () => get<NotificationPrefs>('/me/notification-preferences'),
   updatePrefs: (body: Partial<NotificationPrefs>) => patch<NotificationPrefs>('/me/notification-preferences', body),
   entitlements: () => get<Entitlement[]>('/me/entitlements'),
+  /** ME-12: email a confirmation link to the profile email. */
+  requestEmailVerification: () => post<{ sent: boolean; email: string | null; alreadyVerified: boolean }>('/me/email/verification'),
+  /** AUTH-30 (public): confirm an email with the link token. */
+  confirmEmail: (token: string) => post<{ verified: true; email: string }>('/auth/email/verify', { token }),
 };
 
 export function useUpdateMe() {

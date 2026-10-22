@@ -6,8 +6,9 @@
 import { Expo, type ExpoPushMessage, type ExpoPushReceipt, type ExpoPushTicket } from 'expo-server-sdk';
 import { env, type Env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
-import { emailProviderName, mailer } from '../../common/providers/mail.js';
+import { emailProviderName } from '../../common/providers/mail.js';
 import { SmsSendError, smsProvider } from '../../common/providers/sms.js';
+import { sendEmailPayload, type EmailPayload } from './email/send.js';
 
 export interface PushMessage {
   to: string;
@@ -148,9 +149,20 @@ function smsChannelName(channel: 'sms' | 'whatsapp'): string {
   return channel === 'whatsapp' && !name.startsWith('whatsapp') ? `${name}-whatsapp` : name;
 }
 
-export async function sendEmail(to: string, subject: string, text: string): Promise<{ provider: string; id?: string | null }> {
-  const r = await mailer.sendOrThrow({ to, subject, text });
-  return { provider: emailProviderName(), id: r.messageId };
+/**
+ * Email delivery: transactional template rows (`payload.template`) and plain notification/campaign rows are both
+ * rendered into the branded bilingual HTML layout (+ plain-text part, attachments) — see ./email/.
+ * SMTP 5xx / invalid-recipient errors are permanent (no retry); connection errors and 4xx are retried.
+ */
+export async function sendEmail(to: string, payload: EmailPayload): Promise<{ provider: string; id?: string | null }> {
+  try {
+    const r = await sendEmailPayload(to, payload);
+    return { provider: emailProviderName(), id: r.messageId };
+  } catch (err) {
+    const e = err as Error & { responseCode?: number; code?: string; permanent?: boolean };
+    const permanent = e.permanent === true || e.code === 'EENVELOPE' || (typeof e.responseCode === 'number' && e.responseCode >= 500 && e.code !== 'EAUTH');
+    throw Object.assign(e, { permanent });
+  }
 }
 
 /** Provider name per channel (delivery rows, provider health cards). */

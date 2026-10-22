@@ -33,7 +33,7 @@ export function openAiSamplingParams(model: string, req: Pick<AiGenerateRequest,
 
 export function contextBlock(context: RetrievedChunk[], lang: 'en' | 'ar'): string {
   if (!context.length) return '';
-  const head = lang === 'ar' ? 'مقتطفات من مواد EDUWAY (استخدمها عند الحاجة):' : 'Excerpts from EDUWAY course material (use when relevant):';
+  const head = lang === 'ar' ? 'EDUWAY course material — مقتطفات من مواد EDUWAY (استخدمها عند الحاجة):' : 'EDUWAY course material — excerpts (use when relevant):';
   return `${head}\n${context.map((c, i) => `[${i + 1}] ${c.title}\n${c.content}`).join('\n\n')}`;
 }
 

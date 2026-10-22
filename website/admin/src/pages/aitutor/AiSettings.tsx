@@ -54,6 +54,7 @@ import {
   useConfirm,
 } from '@/components/ui';
 import { QueryError } from '@/components/ui/QueryError';
+import { KnowledgeBaseCard } from './KnowledgeBaseCard';
 
 type Draft = Required<
   Pick<
@@ -428,6 +429,9 @@ export default function AiSettings() {
               </p>
             </CardBody>
           </Card>
+
+          {/* Knowledge base (RAG index) */}
+          <KnowledgeBaseCard editable={editable} />
 
           {/* Suggested prompts (student tutor home) */}
           <Card className="xl:col-span-2">

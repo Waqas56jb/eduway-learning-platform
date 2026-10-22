@@ -151,6 +151,8 @@ export interface StudentUser {
   firstName: Localized;
   mobile: string;
   email: string | null;
+  /** The email was confirmed via the emailed link (ME-12 / AUTH-30). */
+  emailVerified?: boolean;
   gender: 'male' | 'female' | null;
   governorate: string;
   governorateName: Localized;

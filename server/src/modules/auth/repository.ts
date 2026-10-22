@@ -18,6 +18,7 @@ export interface StudentAuthRow {
   id: string;
   status: string;
   profile_completed: boolean | null;
+  locale: string | null;
 }
 
 export interface LockoutRow {
@@ -29,7 +30,7 @@ export interface LockoutRow {
 export const authRepo = {
   findStudentByPhone(phone: string, ex?: Executor) {
     return db.maybeOne<StudentAuthRow>(
-      `SELECT u.id, u.status, sp.profile_completed FROM ${T.users} u
+      `SELECT u.id, u.status, u.locale, sp.profile_completed FROM ${T.users} u
          LEFT JOIN ${T.student_profiles} sp ON sp.user_id = u.id
         WHERE u.kind = 'student' AND u.phone = $1 AND u.deleted_at IS NULL`,
       [phone],
@@ -56,12 +57,16 @@ export const authRepo = {
   invalidateActive(phone: string, ex?: Executor) {
     return db.exec(`UPDATE ${T.otp_codes} SET invalidated_at = now() WHERE phone = $1 AND consumed_at IS NULL AND invalidated_at IS NULL`, [phone], ex);
   },
-  insertOtp(o: { phone: string; purpose: string; codeHash: string; maxAttempts: number; expiresAt: Date; ip: string | null; ua: string | null; provider: string }) {
+  insertOtp(o: { phone: string; purpose: string; codeHash: string; maxAttempts: number; expiresAt: Date; ip: string | null; ua: string | null; provider: string; channel?: 'sms' | 'whatsapp' }) {
     return db.one<{ id: string }>(
-      `INSERT INTO ${T.otp_codes} (phone, purpose, code_hash, max_attempts, expires_at, ip, user_agent, provider)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [o.phone, o.purpose, o.codeHash, o.maxAttempts, o.expiresAt, o.ip, o.ua, o.provider],
+      `INSERT INTO ${T.otp_codes} (phone, purpose, code_hash, max_attempts, expires_at, ip, user_agent, provider, channel)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [o.phone, o.purpose, o.codeHash, o.maxAttempts, o.expiresAt, o.ip, o.ua, o.provider, o.channel ?? 'sms'],
     );
+  },
+  /** Channel/provider actually used (after a WhatsApp → SMS fallback). */
+  setOtpChannel(id: string, channel: 'sms' | 'whatsapp', provider: string) {
+    return db.exec(`UPDATE ${T.otp_codes} SET channel = $2, provider = $3 WHERE id = $1`, [id, channel, provider]);
   },
   deleteOtp(id: string) {
     return db.exec(`DELETE FROM ${T.otp_codes} WHERE id = $1`, [id]);
@@ -170,6 +175,10 @@ export const authRepo = {
       `SELECT id, user_id FROM ${T.password_resets} WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
       [tokenHash],
     );
+  },
+  /** Retire every unused reset link of a user (a new link was issued, or the password was just reset). */
+  retireResets(userId: string) {
+    return db.exec(`UPDATE ${T.password_resets} SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, [userId]);
   },
   /** Single-use: false when the token was already used (concurrent replay). */
   async useReset(id: string, ex?: Executor): Promise<boolean> {

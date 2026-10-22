@@ -7,6 +7,7 @@ import { T } from '../../config/constants.js';
 import { db, tx } from '../../config/db.js';
 import { supabaseService } from '../../config/supabase.js';
 import { BusinessRuleError } from '../../common/errors/index.js';
+import { adminInbox } from '../../common/services/admin-inbox.js';
 import { settingsStore } from '../../common/services/settings-store.js';
 import { storage } from '../../common/services/storage.js';
 import type { AdminPrincipal } from '../../common/types/index.js';
@@ -194,6 +195,20 @@ export const reconciliation = {
         );
       }
     });
+    if (mismatches > 0) {
+      await adminInbox.notify({
+        permission: 'payments.approve',
+        kind: 'warning',
+        category: 'reconciliation',
+        title: { en: `Reconciliation: ${mismatches} mismatched day(s) for ${body.gateway}`, ar: `التسوية: ${mismatches} يوم غير مطابق لبوابة ${body.gateway}` },
+        body: {
+          en: `The imported settlement file for ${body.gateway} has ${mismatches} of ${rows.length} day(s) whose reported amount differs from EDUWAY's records. Review and resolve them.`,
+          ar: `ملف التسوية المستورد لبوابة ${body.gateway} يحتوي على ${mismatches} من أصل ${rows.length} يوم لا يطابق مبلغها سجلات EDUWAY. يرجى المراجعة والمعالجة.`,
+        },
+        href: `/payments/reconciliation?gateway=${encodeURIComponent(body.gateway)}`,
+        dedupeKey: `reconciliation:${body.gateway}:${body.fileKey}`,
+      });
+    }
     return { days: rows.length, matched, mismatches };
   },
 };

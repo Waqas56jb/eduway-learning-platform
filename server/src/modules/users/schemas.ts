@@ -54,6 +54,7 @@ export const studentUserDto = z
     firstName: localized,
     mobile: z.string(),
     email: z.string().nullable(),
+    emailVerified: z.boolean(),
     gender: z.enum(['male', 'female']).nullable(),
     governorate: z.string(),
     governorateName: localized,

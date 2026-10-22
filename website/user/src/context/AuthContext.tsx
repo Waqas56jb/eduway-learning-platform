@@ -28,6 +28,8 @@ export interface PendingAuth {
   resendInSeconds: number;
   expiresInSeconds: number;
   sentAt: number;
+  /** Channel the code was actually delivered on (WhatsApp when the linked number is connected, else SMS). */
+  channel?: 'sms' | 'whatsapp';
 }
 
 export type AuthStatus = 'loading' | 'authenticated' | 'guest' | 'error';
@@ -80,6 +82,7 @@ const toPending = (res: SendOtpDto, registration?: RegisterDto): PendingAuth => 
   resendInSeconds: res.resendInSeconds,
   expiresInSeconds: res.expiresInSeconds,
   sentAt: Date.now(),
+  channel: res.channel,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {

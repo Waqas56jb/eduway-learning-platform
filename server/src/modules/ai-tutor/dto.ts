@@ -15,6 +15,30 @@ export interface TutorMessage {
   rating: 'up' | 'down' | null;
   date: string;
   at: string;
+  /** Knowledge-base sources the answer was grounded on (tutor messages; [] otherwise). */
+  citations: TutorCitation[];
+}
+
+export interface TutorCitation {
+  type: string;
+  id: string;
+  lessonId: string | null;
+  subjectId: string | null;
+  title: string;
+}
+
+/** Stored `ai_messages.citations` JSON → DTO (tolerates rows written before subjectId existed). */
+export function toCitations(raw: unknown): TutorCitation[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object' && typeof (c as { id?: unknown }).id === 'string')
+    .map((c) => ({
+      type: String(c.type ?? ''),
+      id: String(c.id),
+      lessonId: typeof c.lessonId === 'string' ? c.lessonId : null,
+      subjectId: typeof c.subjectId === 'string' ? c.subjectId : null,
+      title: String(c.title ?? ''),
+    }));
 }
 
 export interface ConversationSummary {
@@ -52,7 +76,7 @@ export async function toTutorMessage(m: MessageRow, locale: 'en' | 'ar', conv?: 
   const at = m.created_at.toISOString();
   if (m.role === 'system') {
     const w = welcomeText(conv?.subject_name_en ? { en: conv.subject_name_en, ar: conv.subject_name_ar ?? conv.subject_name_en } : null);
-    return { id: m.id, conversationId: m.conversation_id, role: 'tutor', kind: 'welcome', text: w[locale], content: w, imageUrl: null, status: 'complete', rating: null, date: at, at };
+    return { id: m.id, conversationId: m.conversation_id, role: 'tutor', kind: 'welcome', text: w[locale], content: w, imageUrl: null, status: 'complete', rating: null, date: at, at, citations: [] };
   }
   const text = liveText ?? m.content;
   return {
@@ -67,6 +91,7 @@ export async function toTutorMessage(m: MessageRow, locale: 'en' | 'ar', conv?: 
     rating: m.feedback,
     date: at,
     at,
+    citations: m.role === 'assistant' ? toCitations(m.citations) : [],
   };
 }
 

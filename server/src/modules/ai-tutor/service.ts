@@ -47,13 +47,48 @@ export function liveText(messageId: string): string | undefined {
   return live.get(messageId)?.text;
 }
 
-function systemPrompt(safetyRules: string, lang: Lang, subject: { en: string; ar: string } | null): string {
-  const base =
-    'You are EDUWAY Tutor, a patient study assistant for Iraqi 6th-grade scientific students. Explain step by step, use Markdown, ' +
-    'and write math in LaTeX ($…$ inline, $$…$$ display). Never give answers to live exam questions.';
-  const langLine = lang === 'ar' ? 'Answer in Arabic (Modern Standard Arabic).' : 'Answer in English.';
+/**
+ * Tutor persona: Iraqi 6th preparatory, scientific branch (السادس الإعدادي العلمي), Arabic by default. Math in the
+ * LaTeX dialect the web/app renderers support ($…$ / $$…$$ only). Retrieved course excerpts are appended by the
+ * provider (contextBlock) — the model grounds on them; citations are returned separately in the message DTO.
+ */
+export function systemPrompt(safetyRules: string, lang: Lang, subject: { en: string; ar: string } | null): string {
+  const base = [
+    'You are EDUWAY Tutor (معلّم إيدوواي), a patient, encouraging study assistant for Iraqi students in the 6th preparatory grade, scientific branch (السادس الإعدادي العلمي), following the Iraqi Ministry of Education curriculum and preparing for the ministerial exams (الامتحانات الوزارية).',
+    'How to answer:',
+    '- Explain step by step in short paragraphs; use Markdown lists or bold for key steps; keep it focused (usually under 250 words unless a full worked solution is needed).',
+    '- Use the terminology of the Iraqi textbooks. When useful, give the other-language term of a key concept in parentheses once.',
+    '- Write ALL mathematics, physics and chemistry notation in LaTeX: $…$ inline and $$…$$ for display equations. Never use \\( \\) or \\[ \\]. Use \\text{} for units and \\mathrm{} for chemical formulas (e.g. $\\mathrm{H_2SO_4}$).',
+    '- When "EDUWAY course material" excerpts are provided, ground the answer in them first and stay consistent with them; you may mention the lesson by name. Do not print excerpt numbers or invent lesson names. If the excerpts do not cover the question, answer from the curriculum and keep it accurate.',
+    '- For homework or practice problems, show the method and reasoning, then the result; end with a short check question or exam tip when it helps.',
+    '- Never give answers to questions from a live exam. Stay on study topics and politely redirect anything else.',
+  ].join('\n');
+  const langLine =
+    lang === 'ar'
+      ? 'Answer in clear Modern Standard Arabic (فصحى مبسّطة) suitable for an Iraqi student, even if the excerpts are in English. Keep LaTeX and variable names in Latin letters.'
+      : 'Answer in English, even if the excerpts are in Arabic.';
   const subj = subject ? `Current subject: ${subject.en} (${subject.ar}).` : '';
   return [base, safetyRules.trim(), subj, langLine].filter(Boolean).join('\n\n');
+}
+
+/** Rewrite \( \) / \[ \] math delimiters to the $ / $$ dialect the clients render. */
+export function normalizeMathDelimiters(text: string): string {
+  return text.replace(/\\\[([\s\S]+?)\\\]/g, (_m, x: string) => `$$${x.trim()}$$`).replace(/\\\(([\s\S]+?)\\\)/g, (_m, x: string) => `$${x.trim()}$`);
+}
+
+/** Citations for the message DTO: one per source (best chunk first), max 3; the student's own notes are not cited. */
+export function citationsFor(context: RetrievedChunk[]): { type: string; id: string; lessonId: string | null; subjectId: string | null; title: string }[] {
+  const seen = new Set<string>();
+  const out: { type: string; id: string; lessonId: string | null; subjectId: string | null; title: string }[] = [];
+  for (const c of context) {
+    if (c.sourceType === 'lesson_notes' || !c.title) continue;
+    const k = `${c.sourceType}:${c.sourceId}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ type: c.sourceType, id: c.sourceId, lessonId: c.lessonId, subjectId: c.subjectId ?? null, title: c.title });
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 async function ownConversation(userId: string, id: string): Promise<ConversationRow> {
@@ -144,7 +179,7 @@ export const aiTutorService = {
   async sendMessage(
     student: StudentPrincipal,
     conversationId: string,
-    body: { text: string; attachmentFileKey?: string; lang: Lang; clientMessageId?: string },
+    body: { text: string; attachmentFileKey?: string; lang: Lang; clientMessageId?: string; lessonId?: string },
     opts: { sse: boolean; res?: Response; locale: Lang },
   ): Promise<unknown> {
     const userId = student.userId;
@@ -200,7 +235,7 @@ export const aiTutorService = {
     const cls = text ? classifyMessage(text) : null;
     if (cls) await aiRepo.insertFlag({ conversationId, messageId: studentRow.id, userId, subjectId: conv.subject_id, reason: cls.reason, severity: cls.severity, excerpt: excerpt(text), source: 'auto' });
 
-    const gen = this.startGeneration({ student, conv, studentRow, tutorRow, question, imageUrl, lang: body.lang, locale: opts.locale });
+    const gen = this.startGeneration({ student, conv, studentRow, tutorRow, question, imageUrl, lang: body.lang, locale: opts.locale, lessonId: body.lessonId ?? null });
     const studentMessage = await toTutorMessage(studentRow, opts.locale, conv);
 
     if (!opts.sse || !opts.res) {
@@ -249,7 +284,7 @@ export const aiTutorService = {
     return undefined;
   },
 
-  startGeneration(input: { student: StudentPrincipal; conv: ConversationRow; studentRow: MessageRow; tutorRow: MessageRow; question: string; imageUrl: string | null; lang: Lang; locale: Lang }): LiveGeneration {
+  startGeneration(input: { student: StudentPrincipal; conv: ConversationRow; studentRow: MessageRow; tutorRow: MessageRow; question: string; imageUrl: string | null; lang: Lang; locale: Lang; lessonId?: string | null }): LiveGeneration {
     const { student, conv, tutorRow, lang } = input;
     const userId = student.userId;
     inFlight.add(userId);
@@ -269,14 +304,19 @@ export const aiTutorService = {
       let lastFlush = Date.now();
       try {
         const settings = await loadAiSettings();
-        const history = (await aiRepo.history(conv.id, 12)).filter((m) => m.id !== input.studentRow.id);
-        const context: RetrievedChunk[] = await retrieveContext({
-          userId,
-          subjectId: conv.subject_id,
-          question: input.question,
-          lang,
-          toggles: { transcripts: settings.retrieval_transcripts, explanations: settings.retrieval_explanations, lessonNotes: settings.retrieval_lesson_notes },
-        });
+        // History + retrieval (question embedding + one vector SQL) run in parallel.
+        const [historyRows, context]: [MessageRow[], RetrievedChunk[]] = await Promise.all([
+          aiRepo.history(conv.id, 12),
+          retrieveContext({
+            userId,
+            subjectId: conv.subject_id,
+            lessonId: input.lessonId ?? null,
+            question: input.question,
+            lang,
+            toggles: { transcripts: settings.retrieval_transcripts, explanations: settings.retrieval_explanations, lessonNotes: settings.retrieval_lesson_notes },
+          }),
+        ]);
+        const history = historyRows.filter((m) => m.id !== input.studentRow.id);
         const messages: AiChatMessage[] = [
           ...history.map((m) => ({ role: m.role === 'user' ? ('user' as const) : ('assistant' as const), content: m.content })),
           { role: 'user', content: input.question, imageUrl: input.imageUrl },
@@ -302,7 +342,7 @@ export const aiTutorService = {
             }
           },
         );
-        const finalText = result.text || gen.text;
+        const finalText = normalizeMathDelimiters(result.text || gen.text);
         if (!finalText.trim()) throw new Error('empty answer');
         const cost = costUsd(result.tokensIn, result.tokensOut, Number(settings.cost_per_1k_input_usd), Number(settings.cost_per_1k_output_usd));
         // Consume one question of the allowance (successful generation only) BEFORE the answer becomes
@@ -318,7 +358,7 @@ export const aiTutorService = {
           tokensOut: result.tokensOut,
           costUsd: cost,
           model: result.model,
-          citations: context.map((c) => ({ type: c.sourceType, id: c.sourceId, lessonId: c.lessonId, title: c.title })),
+          citations: citationsFor(context),
         });
         await db.query(`UPDATE ${T.users} SET last_active_at = now() WHERE id = $1`, [userId]).catch(() => undefined);
         emit({ type: 'done', message: await toTutorMessage(done, input.locale, conv), allowance: await aiAllowance(userId) });

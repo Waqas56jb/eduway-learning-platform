@@ -99,6 +99,45 @@ export interface AiUsageDto {
 
 export type AiModels = Record<AiProvider, { value: string; label: string }[]>;
 
+/** Knowledge base / RAG index (ADM-AI-16/17). */
+export type KbSourceType = 'lesson' | 'unit' | 'topic' | 'question_explanation' | 'faq';
+export type KbRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'skipped';
+export interface KbRunDto {
+  id: ID;
+  trigger: 'manual' | 'content' | 'cron' | 'script';
+  status: KbRunStatus;
+  full: boolean;
+  progressPct: number;
+  model: string;
+  sourcesTotal: number;
+  chunksTotal: number;
+  chunksEmbedded: number;
+  chunksUnchanged: number;
+  chunksDeleted: number;
+  tokens: number;
+  costUsd: number;
+  error: string | null;
+  requestedBy: { id: ID; name: Localized } | null;
+  startedAt: ISODate | null;
+  finishedAt: ISODate | null;
+  createdAt: ISODate;
+}
+export interface KbStatusDto {
+  available: boolean;
+  embeddingModel: string;
+  realEmbeddings: boolean;
+  totals: {
+    sources: number;
+    chunks: number;
+    tokens: number;
+    byType: Record<KbSourceType, { sources: number; chunks: number }>;
+  };
+  lastIndexedAt: ISODate | null;
+  running: boolean;
+  lastRun: KbRunDto | null;
+  recentRuns: KbRunDto[];
+}
+
 export interface StudentSearchHit {
   id: ID;
   name: Localized;
@@ -128,6 +167,8 @@ export const aiApi = {
       message ? { message } : {},
     ),
   models: () => api.get<AiModels>('/admin/ai/models'),
+  knowledgeBase: () => api.get<KbStatusDto>('/admin/ai/knowledge-base'),
+  reindex: (force = false) => api.post<KbRunDto>('/admin/ai/knowledge-base/reindex', { force }),
   lockStudent: (id: ID, reason: string) => api.post(`/admin/students/${id}/lock`, { reason }),
   unlockStudent: (id: ID, reason?: string) =>
     api.post(`/admin/students/${id}/unlock`, reason ? { reason } : {}),
@@ -157,6 +198,18 @@ export const useAiSettings = () => useApiQuery(qk.ai.sub('settings'), aiApi.sett
 
 export const useAiModels = () =>
   useApiQuery(qk.ai.sub('models'), aiApi.models, { staleTime: 10 * 60_000 });
+
+/** Polls every 2 s while a run is queued/running. */
+export const useKnowledgeBase = () =>
+  useApiQuery(qk.ai.sub('knowledgeBase'), aiApi.knowledgeBase, {
+    refetchInterval: (q) => (q.state.data?.running ? 2000 : false),
+  });
+
+export const useReindexKnowledgeBase = () =>
+  useApiMutation((force: boolean) => aiApi.reindex(force), {
+    invalidate: [qk.ai.sub('knowledgeBase')],
+    success: 'aitutor.kb.queuedToast',
+  });
 
 export const useAiFlagDetail = (id: ID | null) =>
   useApiQuery(qk.ai.sub('flag', id), () => aiApi.flag(id as ID), { enabled: !!id });

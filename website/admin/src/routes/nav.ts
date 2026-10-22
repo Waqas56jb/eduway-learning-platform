@@ -191,6 +191,7 @@ export const NAV: NavGroup[] = [
         children: [
           { key: 'general', path: '/settings/general' },
           { key: 'otp', path: '/settings/otp' },
+          { key: 'whatsapp', path: '/settings/whatsapp' },
           { key: 'featureFlags', path: '/settings/feature-flags' },
           { key: 'legal', path: '/settings/legal' },
           { key: 'support', path: '/settings/support' },

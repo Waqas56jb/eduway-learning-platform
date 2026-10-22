@@ -27,6 +27,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check-prefix": "tsx scripts/check-prefix.ts",
+    "kb:index": "tsx scripts/kb-index.ts",
     "docs": "tsx scripts/generate-openapi.ts",
     "buckets": "tsx scripts/storage-buckets.ts",
     "create-admin": "tsx scripts/create-admin.ts",

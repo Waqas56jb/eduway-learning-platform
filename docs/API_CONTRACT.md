@@ -336,6 +336,7 @@ interface StudentUser {              // superset of website/user & app/user `Use
   firstName: Localized;              // first word of name
   mobile: string;                    // E.164 "+9647701234567"; display formatting is client-side
   email: string | null;
+  emailVerified: boolean;            // email confirmed via ME-12 / AUTH-30 link
   gender: 'male' | 'female' | null;
   governorate: string;               // Governorate.id slug (unchanged field name)
   governorateName: Localized;
@@ -704,6 +705,10 @@ normalizes to E.164 `+9647XXXXXXXXX` (regex after normalization `^\+9647[3-9]\d{
 Auth public · rl:otp. Headers `X-Client-Platform`, `X-Device-Id`.
 Body `{ phone: string; purpose: 'login' | 'register'; channel?: 'sms' | 'whatsapp' }`.
 → data `{ phone: string /*E.164*/; maskedPhone: string /*"+964 770 ••• ••67"*/; purpose; isRegistered: boolean; codeLength: 4 | 6; expiresInSeconds: number; resendInSeconds: number; resendsLeft: number; channel: 'sms' | 'whatsapp' }`.
+`channel` omitted → `whatsapp` while the admin-linked WhatsApp number is connected (`WHATSAPP_PROVIDER=baileys`, §31a), else `sms`. The response
+`channel` is the channel the code was **actually** sent on: a WhatsApp OTP falls back to SMS when the session is down or the number is not on
+WhatsApp. Clients show "sent via WhatsApp" when `channel = 'whatsapp'`. The WhatsApp text is bilingual, in the student's language first
+(account `locale`, else `Accept-Language`).
 Errors: 400; 422 `ACCOUNT_NOT_FOUND` (login, unknown phone); 409 `ACCOUNT_EXISTS` (register, known phone); 429 `OTP_RESEND_COOLDOWN` /
 `OTP_RESEND_LIMIT` / `OTP_LOCKED`; 403 `ACCOUNT_LOCKED`. Resend = call again (same purpose). Dev: `MockSmsProvider` logs the code;
 non-prod accepts `settings.otp.devBypassCode` (`123456`) for the seeded demo student.
@@ -799,12 +804,19 @@ Auth admin. Body `{ code?: string; password?: string }` (one required). → `{ m
 Errors 401, 422 `MFA_REQUIRED` when MFA is mandatory. Used by: AD Profile.
 
 #### AUTH-15 · `POST /auth/admin/forgot-password`
-Auth public · rl:auth. Body `{ email: string }`. Always → `OkDto` (enumeration-safe); emails a reset link
-`${ADMIN_URL}/reset-password?token=…` (valid 60 min). Used by: AD ForgotPassword.
+Auth public · rl:auth. Body `{ email: string }`. Always → `OkDto` (enumeration-safe); for an active admin emails a reset link
+`${ADMIN_APP_URL}/reset-password?token=…` (valid `auth.passwordResetExpiryMinutes`, single use; issuing a new link retires
+earlier unused ones). The email (template `admin_password_reset`, bilingual) is queued — the response never waits for SMTP.
+Used by: AD ForgotPassword.
 
 #### AUTH-16 · `POST /auth/admin/reset-password`
 Auth public · rl:auth. Body `{ token: string; newPassword: string }`. Password policy: ≥10 chars, upper, lower, digit, symbol.
-→ `OkDto`; revokes all admin sessions. Errors 422 `RESET_TOKEN_INVALID`, `PASSWORD_POLICY`. Used by: AD reset-password page (**new page**).
+→ `OkDto`; revokes all admin sessions, retires the user's other reset links and emails a "password changed" security alert.
+Errors 422 `RESET_TOKEN_INVALID`, `PASSWORD_POLICY`. Used by: AD reset-password page.
+
+Admin security emails (no endpoint of their own): invite (ADM-ADM-02/03, set-password link), password changed (AUTH-16 and
+ADM-ME-03), 2FA enabled (AUTH-13) / disabled (AUTH-14, ADM-ADM-05), sign-in from a new device or browser (AUTH-10/11/18) —
+see docs/PROVIDERS.md §2.
 
 #### AUTH-17 · `GET /auth/admin/invite/:token`
 Auth public. → data `{ email: string; name: Localized; roleName: Localized; expiresAt: ISODate }`. Errors 422 `INVITE_INVALID`.
@@ -855,6 +867,18 @@ Body `Partial<NotificationPrefs>`. → data `NotificationPrefs`. Used by: U Prof
 
 #### ME-11 · `GET /me/entitlements`
 → data `Entitlement[]`. Used by: U `useSubjectAccess`, A `hasSubject` (also embedded in `MeStudentDto`).
+
+#### ME-12 · `POST /me/email/verification`
+Auth student · rl 6/h per student (service: ≤ 5 links/h). No body. Emails a confirmation link
+`${USER_APP_URL}/verify-email?token=…` (24 h, single use, one live link per student) to the profile email.
+→ data `{ sent: boolean; email: string | null; alreadyVerified: boolean }`. Errors 422 `EMAIL_MISSING`,
+`EMAIL_VERIFICATION_LIMIT`. Setting or changing `email` (ME-02, AUTH-02/03, ADM-STU edit) resets `emailVerified` and sends a
+link automatically. Only a confirmed email receives receipts, subscription and support emails. Used by: U Profile.
+
+#### AUTH-30 · `POST /auth/email/verify`
+Auth public · rl:auth. Body `{ token: string }`. Confirms the email the link was sent to (must still be the account's email).
+→ data `{ verified: true; email: string }`. Errors 422 `EMAIL_TOKEN_INVALID` (unknown, used, expired or email changed since).
+Used by: U `/verify-email` page.
 
 ---
 
@@ -1275,6 +1299,14 @@ interface TutorMessage {                 // app TutorMessage ∪ web ChatMessage
   status: 'pending' | 'streaming' | 'complete' | 'failed' | 'blocked';
   rating: 'up' | 'down' | null;
   date: ISODate; at: ISODate;            // both names kept (app `date`, web `at`)
+  citations: TutorCitation[];            // knowledge-base sources the answer was grounded on (tutor messages; [] otherwise, max 3)
+}
+interface TutorCitation {                // RAG source (label = title in the answer language)
+  type: 'lesson' | 'unit' | 'topic' | 'question_explanation' | 'faq';
+  id: ID;                                // source id (lesson / unit / topic / question / FAQ item)
+  lessonId: ID | null;                   // lesson to open (lesson chunks, question explanations linked to a lesson)
+  subjectId: ID | null;                  // null for FAQs
+  title: string;                         // e.g. lesson title "المشتقات", "الفصل: المشتقات", "سؤال شائع: …"
 }
 interface ConversationSummary { id: ID; subjectId: ID; subjectSlug: SubjectSlug; title: string; lastMessagePreview: string; messageCount: number; updatedAt: ISODate; createdAt: ISODate }
 interface ConversationDto extends ConversationSummary { messages: TutorMessage[] }   // newest page, chronological
@@ -1304,7 +1336,7 @@ Auth student. Body `{ subjectId?: ID | SubjectSlug; title?: string }` (subject c
 Auth student. → `OkDto`. Used by: A HistorySheet delete.
 
 #### AIT-08 · `POST /ai-tutor/conversations/:id/messages` — **streaming**
-Auth student · ent:ai · rl:ai. Body `{ text: string /*0..1200 — may be '' when attachmentFileKey is sent*/; attachmentFileKey?: FileKey /*purpose ai_attachment; requires feature flag ai_tutor_attachments*/; lang: Lang; clientMessageId?: string /*idempotent offline retries: same id → the stored pair is replayed, never asked twice*/ }`
+Auth student · ent:ai · rl:ai. Body `{ text: string /*0..1200 — may be '' when attachmentFileKey is sent*/; attachmentFileKey?: FileKey /*purpose ai_attachment; requires feature flag ai_tutor_attachments*/; lang: Lang; clientMessageId?: string /*idempotent offline retries: same id → the stored pair is replayed, never asked twice*/; lessonId?: ID /*lesson the student is viewing: its knowledge-base chunks are preferred*/ }`
 (`text` may be empty when an attachment is sent; server substitutes the localized "explain this image" prompt).
 Checks in order: global kill switch → per-user disable → package includes AI → allowance → rate limits → blocked keywords.
 Decrements allowance only on successful completion.
@@ -1315,8 +1347,11 @@ Decrements allowance only on successful completion.
   * `event: error` `data: { code: string; reason?: string; message: string; allowance?: AiAllowance }`
 * **otherwise** (polling fallback, app when SSE unavailable) → JSON `data: { studentMessage: TutorMessage; tutorMessage: TutorMessage /*status pending*/; allowance: AiAllowance; pollAfterMs: 800 }`, then poll AIT-09.
 Errors (both modes, before stream opens): 402 `AI_NOT_INCLUDED`, 403 `AI_DISABLED` / `AI_GLOBALLY_DISABLED`, 422 `AI_ALLOWANCE_EXHAUSTED` /
-`AI_BLOCKED_CONTENT`, 429 `AI_RATE_LIMITED`. Retrieval: lesson transcripts / question explanations / lesson notes per `ai_settings.retrieval`
-(pgvector), never explanations of questions in a live exam attempt. Safety rules prepended; flagged conversations create `ai_flags`.
+`AI_BLOCKED_CONTENT`, 429 `AI_RATE_LIMITED`. Retrieval (RAG): the question is embedded (cached) and a top-k cosine search over the
+knowledge base (published lessons incl. transcripts, units, chapters, question explanations, FAQs — `ai_settings.retrieval` toggles; lesson notes
+from the student's own notes) restricted to the conversation subject and subjects the student is entitled to (FAQs always), boosted for
+`lessonId`; never explanations of questions in a live exam attempt. The sources come back in `message.citations` (`done` event / AIT-09).
+Answers default to Arabic (`lang`), math in `$…$` / `$$…$$`. Safety rules prepended; flagged conversations create `ai_flags`.
 Used by: U AiTutor/TutorChat/Composer/StreamingAnswer, A tutor tab/Composer.
 
 #### AIT-09 · `GET /ai-tutor/messages/:messageId`
@@ -1613,7 +1648,7 @@ interface MeAdminDto {
   role: RoleDto;                         // UI reads role.permissions[module][action]
   permissions: PermissionKey[];          // flat form (ENGINEERING §3)
   roles: string[];                       // [role.key] (one role per admin)
-  preferences: { language: Lang; theme: 'light' | 'dark' | 'system' };
+  preferences: { language: Lang; theme: 'light' | 'dark' | 'system'; emailAlerts: boolean /* default true */ };
   unreadNotifications: number;
 }
 interface AdminInboxNotification {
@@ -1635,7 +1670,9 @@ Auth admin. Body `{ currentPassword: string; newPassword: string }` (policy ≥1
 Revokes the admin's other sessions. → `OkDto`. Errors 401 wrong current, 422 `PASSWORD_POLICY`. `audit:admin.change_password`. Used by: AD Profile.
 
 #### ADM-ME-04 · `PATCH /admin/me/preferences`
-Auth admin. Body `{ language?: Lang; theme?: 'light' | 'dark' | 'system' }`. → data `MeAdminDto['preferences']`. Used by: AD Profile preferences, LanguageSwitcher, theme toggle.
+Auth admin. Body `{ language?: Lang; theme?: 'light' | 'dark' | 'system'; emailAlerts?: boolean }`. → data `MeAdminDto['preferences']`.
+`emailAlerts=false` stops admin-alert emails (new support ticket, export ready, reconciliation issues); security emails are
+always sent. Used by: AD Profile preferences, LanguageSwitcher, theme toggle.
 
 #### ADM-ME-05 · `GET /admin/me/sessions`
 Auth admin. → data `AdminSessionDto[]` (own; §32). Used by: AD Profile (optional own sessions list).
@@ -2856,6 +2893,37 @@ Auth `admin:aitutor.export`. Body `ExportRequest`.
 #### ADM-AI-15 · `GET /admin/ai/models`
 Auth `admin:aitutor.view`. → data `Record<'openai' | 'anthropic' | 'azure', { value: string; label: string }[]>` (server-configured catalog). Used by: AD AiSettings provider/model selects.
 
+```ts
+interface KbRunDto {
+  id: ID; trigger: 'manual' | 'content' | 'cron' | 'script';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'skipped';
+  full: boolean; progressPct: number /*0..100*/; model: string;
+  sourcesTotal: number; chunksTotal: number; chunksEmbedded: number; chunksUnchanged: number; chunksDeleted: number;
+  tokens: number; costUsd: number; error: string | null;
+  requestedBy: { id: ID; name: Localized } | null;
+  startedAt: ISODate | null; finishedAt: ISODate | null; createdAt: ISODate;
+}
+interface KbStatusDto {
+  available: boolean;                    // pgvector + eduway_platform_embeddings present
+  embeddingModel: string; realEmbeddings: boolean;   // false = offline mock embeddings (no OPENAI_API_KEY)
+  totals: { sources: number; chunks: number; tokens: number;
+            byType: Record<'lesson' | 'unit' | 'topic' | 'question_explanation' | 'faq', { sources: number; chunks: number }> };
+  lastIndexedAt: ISODate | null;
+  running: boolean;                      // a run is queued/running → poll every ~2 s
+  lastRun: KbRunDto | null; recentRuns: KbRunDto[] /*≤ 5, newest first*/;
+}
+```
+
+#### ADM-AI-16 · `GET /admin/ai/knowledge-base`
+Auth `admin:aitutor.view`. → data `KbStatusDto`. Used by: AD AiSettings "Knowledge base (RAG)" card (polls while `running`).
+
+#### ADM-AI-17 · `POST /admin/ai/knowledge-base/reindex`
+Auth `admin:aitutor.edit`. Body `{ force?: boolean /*default false: incremental, only changed chunks are embedded; true re-embeds all*/ }`.
+→ **202** data `KbRunDto` (queued; executed by the pg-boss job `eduway.kb-index`). When a run is already queued/running it is returned instead.
+Content is also re-indexed automatically after admin create/update/delete/publish of lessons, units, chapters, subjects, questions and FAQs
+(debounced, scoped, `trigger: 'content'`) and nightly (`eduway.embeddings-generate`, `trigger: 'cron'`). Audited as `ai.kb_reindex`.
+Used by: AD AiSettings "Reindex knowledge base" / "Re-embed everything".
+
 ---
 
 ## 29. Admin — analytics & exports (`analytics` module)
@@ -3115,6 +3183,38 @@ Auth `admin:settings.view|edit`. Body `{ q: Localized; a: Localized; placements:
 
 #### ADM-CMS-09 · `PUT /admin/cms/order`
 Auth `admin:settings.edit`. Body `{ kind: 'testimonials' | 'faq'; ids: ID[] }`. → `OkDto`.
+
+### 31a. Admin — linked WhatsApp number (`whatsapp` module) — `/admin/whatsapp`
+WhatsApp Web session (Baileys, unofficial; docs/PROVIDERS.md) that sends student OTPs when `WHATSAPP_PROVIDER=baileys`.
+```ts
+type WhatsAppStatus = 'disconnected' | 'qr_pending' | 'connecting' | 'connected';
+interface WhatsAppStatusDto { status: WhatsAppStatus; since: ISODate; phone: string | null /*E.164 of the linked number*/; displayName: string | null;
+  connectedAt: ISODate | null; lastError: string | null /*'logged_out' | 'qr_expired' | 'replaced_by_another_client' | 'forbidden' | 'logged_out_by_admin' | …*/;
+  qrAvailable: boolean; qrUpdatedAt: ISODate | null; owner: 'this' | 'other' | null /*API instance holding the socket*/;
+  provider: { selected: boolean /*WHATSAPP_PROVIDER=baileys*/; configured: boolean /*WHATSAPP_SESSION_SECRET set*/; active: string; smsFallback: string };
+  otpPreview: { en: string; ar: string /*full bilingual text, that language first*/; expirySeconds: number; codeLength: number } }
+interface WhatsAppQrDto { status: WhatsAppStatus; qr: string | null /*PNG data URL*/; updatedAt: ISODate | null }
+```
+
+#### ADM-WA-01 · `GET /admin/whatsapp/status`
+Auth `admin:settings.view`. → `WhatsAppStatusDto`. Poll about every 3 s while `qr_pending` / `connecting`. Used by: AD Settings → WhatsApp.
+
+#### ADM-WA-02 · `POST /admin/whatsapp/connect`
+Auth `admin:settings.edit`. Starts or restarts linking and waits up to 15 s for the first QR (or the open connection when a session is already stored).
+→ `WhatsAppStatusDto & { qr: string | null }`. 422 `WHATSAPP_NOT_CONFIGURED`. `audit:whatsapp.connect` (status only, never the QR).
+
+#### ADM-WA-03 · `GET /admin/whatsapp/qr`
+Auth `admin:settings.edit`. → `WhatsAppQrDto`. WhatsApp rotates the QR about every 20 s. Poll every 2–3 s while `status = 'qr_pending'`.
+After about 2 minutes without a scan the attempt ends with `status: 'disconnected'`, `lastError: 'qr_expired'`.
+
+#### ADM-WA-04 · `POST /admin/whatsapp/disconnect`
+Auth `admin:settings.edit`. Body `{ logout?: boolean /*default true: unlink the device + wipe the stored session*/ }`. → `WhatsAppStatusDto`.
+`audit:whatsapp.logout` / `whatsapp.disconnect`.
+
+#### ADM-WA-05 · `POST /admin/whatsapp/test-send`
+Auth `admin:settings.edit`. Body `{ phone: string /*any international format*/; text?: string /*≤1000; default: bilingual test text*/ }`.
+→ `{ messageId: string; to: string /*masked*/; channel: 'whatsapp' }`. 422 `WHATSAPP_NOT_CONNECTED` / `WHATSAPP_NOT_ON_WHATSAPP` / `WHATSAPP_NOT_CONFIGURED`;
+409 `WHATSAPP_OTHER_INSTANCE`; 502 `WHATSAPP_SEND_FAILED`. `audit:whatsapp.test_send`.
 
 ---
 
@@ -3480,6 +3580,8 @@ Aliases (documented once, not counted): PUB-12 → CAT-01, PUB-13 → PAY-01, PA
 | ME-09 | GET | `/me/notification-preferences` |
 | ME-10 | PATCH | `/me/notification-preferences` |
 | ME-11 | GET | `/me/entitlements` |
+| ME-12 | POST | `/me/email/verification` |
+| AUTH-30 | POST | `/auth/email/verify` |
 | CAT-01 | GET | `/subjects` |
 | CAT-02 | GET | `/subjects/:subjectId` |
 | CAT-03 | GET | `/subjects/:subjectId/question-stats` |
@@ -3846,6 +3948,11 @@ Aliases (documented once, not counted): PUB-12 → CAT-01, PUB-13 → PAY-01, PA
 | ADM-CMS-08 | DELETE | `/admin/cms/faq/:id` |
 | ADM-CMS-06 | POST | `/admin/cms/faq` |
 | ADM-CMS-09 | PUT | `/admin/cms/order` |
+| ADM-WA-01 | GET | `/admin/whatsapp/status` |
+| ADM-WA-02 | POST | `/admin/whatsapp/connect` |
+| ADM-WA-03 | GET | `/admin/whatsapp/qr` |
+| ADM-WA-04 | POST | `/admin/whatsapp/disconnect` |
+| ADM-WA-05 | POST | `/admin/whatsapp/test-send` |
 | ADM-ROL-01 | GET | `/admin/roles` |
 | ADM-ROL-02 | GET | `/admin/roles/:id` |
 | ADM-ROL-03 | POST | `/admin/roles` |

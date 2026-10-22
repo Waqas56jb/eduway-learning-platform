@@ -12,6 +12,7 @@ import { settingsStore, type SettingsKey, type SettingsValue } from '../../commo
 import { storage } from '../../common/services/storage.js';
 import { invalidateLookups } from '../admins/lookups.js';
 import { likeContains } from '../../common/utils/like.js';
+import { gatewayMode } from '../payments/providers.js';
 
 export const SECTIONS = ['general', 'otp', 'app', 'support', 'payments', 'learning', 'marketing', 'security'] as const;
 export type SettingsSection = (typeof SECTIONS)[number];
@@ -72,7 +73,9 @@ export async function getSection(section: SettingsSection): Promise<unknown> {
   if (section === 'payments') {
     const p = v as SettingsValue<'payments'>;
     const mockOn = devFlags.mockPayments ? p.mockGatewayEnabled : false;
-    return { ...p, mockGatewayEnabled: mockOn, gateways: p.gateways.filter((g) => g.id !== 'mock' || mockOn) };
+    const gateways = p.gateways.filter((g) => g.id !== 'mock' || mockOn);
+    // Read-only: how each gateway runs right now (live | sandbox | mock | disabled), from server env — not saved.
+    return { ...p, mockGatewayEnabled: mockOn, gateways, gatewayModes: Object.fromEntries(gateways.map((g) => [g.id, gatewayMode(g.id)])) };
   }
   return v;
 }

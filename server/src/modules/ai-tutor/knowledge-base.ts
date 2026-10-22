@@ -16,12 +16,13 @@
  * deleted sources (or surplus chunk indexes) are removed. Runs are serialized in-process.
  *
  * Triggers: admin "Reindex" (ADM-AI-16/17), admin content mutations (debounced, scoped — see `queueContentSync`),
- * the nightly `eduway.embeddings-generate` cron, and `npm run kb:index`.
+ * the nightly `eduway.embeddings-generate` cron, and `npm run kb:index`. Runs execute in the `eduway.kb-index` job.
  */
 import { T } from '../../config/constants.js';
 import { db } from '../../config/db.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
+import { onAdminMutation } from '../../common/middleware/audit.js';
 import { sha256 } from '../../common/utils/crypto.js';
 import { embeddingProvider, type KnowledgeSourceType } from './providers/index.js';
 
@@ -114,11 +115,12 @@ export function mergeScopes(a: KbScope | undefined, b: KbScope | undefined): KbS
  * descriptor when the route has one; otherwise the URL path decides. Returns null for unrelated mutations.
  */
 export function kbScopeForMutation(path: string, entity: string | null | undefined, entityId: string | null | undefined): KbScope | null {
-  const id = entityId && /^[0-9a-f-]{36}$/i.test(entityId) ? entityId : null;
   const p = path.toLowerCase();
   const ent = (entity ?? '').toLowerCase();
+  const pathId = /\/admin\/(?:lessons|questions)\/([0-9a-f-]{36})(?:\/|$)/.exec(p)?.[1] ?? null;
+  const id = entityId && /^[0-9a-f-]{36}$/i.test(entityId) && (ent === 'lesson' || ent === 'question' || entityId.toLowerCase() === pathId) ? entityId : null;
   if (ent === 'lesson' || (!ent && /\/admin\/lessons(\/|$)/.test(p))) return id ? { ids: { lesson: [id] } } : { types: ['lesson', 'unit', 'topic'] };
-  if (ent === 'question' || ent === 'question_import' || /\/admin\/questions(\/|$)/.test(p)) return id && ent === 'question' ? { ids: { question_explanation: [id] } } : { types: ['question_explanation'] };
+  if (ent === 'question' || ent === 'question_import' || (!ent && /\/admin\/questions(\/|$)/.test(p))) return id ? { ids: { question_explanation: [id] } } : { types: ['question_explanation'] };
   // Structure renames change the headers of every lesson below them → re-hash those types (unchanged chunks are free).
   if (['unit', 'topic', 'subject'].includes(ent) || /\/admin\/(subjects|units|topics)(\/|$)/.test(p)) return { types: ['lesson', 'unit', 'topic', 'question_explanation'] };
   if (ent === 'cms_faq' || /\/admin\/(cms|settings)\/.*faq/.test(p) || /\/admin\/faq/.test(p)) return { types: ['faq'] };
@@ -183,7 +185,7 @@ async function loadLessons(ids: string[] | null): Promise<KbDoc[]> {
         .filter(Boolean)
         .join(' · ');
       const body = [path, pick(lc, r.description_en, r.description_ar), pick(lc, r.transcript_en, r.transcript_ar)].filter(Boolean).join('\n\n');
-      return { sourceType: 'lesson' as const, sourceId: r.id!, subjectId: r.subject_id, unitId: r.unit_id, lessonId: r.id!, locale: lc, title: pick(lc, r.title_en, r.title_ar), body };
+      return { sourceType: 'lesson' as const, sourceId: r.id!, subjectId: r.subject_id ?? null, unitId: r.unit_id ?? null, lessonId: r.id!, locale: lc, title: pick(lc, r.title_en, r.title_ar), body };
     }),
   );
 }
@@ -202,7 +204,7 @@ async function loadUnits(ids: string[] | null): Promise<KbDoc[]> {
   return rows.flatMap((r) =>
     LOCALES.map((lc) => {
       const L = LABEL[lc];
-      const list = (xs: { en: string; ar: string }[] | null) => (xs ?? []).map((x) => pick(lc, x.en, x.ar)).join('، '.trim() === '،' && lc === 'ar' ? '، ' : ', ');
+      const list = (xs: { en: string; ar: string }[] | null) => (xs ?? []).map((x) => pick(lc, x.en, x.ar)).join(lc === 'ar' ? '، ' : ', ');
       const body = [`${L.subject}: ${pick(lc, r.s_en, r.s_ar)}`, r.topics?.length ? `${L.chapters}: ${list(r.topics)}` : '', r.lessons?.length ? `${L.lessons}: ${list(r.lessons)}` : ''].filter(Boolean).join('\n');
       return { sourceType: 'unit' as const, sourceId: r.id, subjectId: r.subject_id, unitId: r.id, lessonId: null, locale: lc, title: `${L.unit}: ${pick(lc, r.title_en, r.title_ar)}`, body };
     }),
@@ -253,7 +255,7 @@ async function loadQuestions(ids: string[] | null): Promise<KbDoc[]> {
         .filter(Boolean)
         .join('\n');
       const title = pick(lc, r.l_en, r.l_ar) || pick(lc, r.topic_label_en, r.topic_label_ar) || L.question;
-      return { sourceType: 'question_explanation' as const, sourceId: r.id!, subjectId: r.subject_id, unitId: r.unit_id, lessonId: r.lesson_id, locale: lc, title, body };
+      return { sourceType: 'question_explanation' as const, sourceId: r.id!, subjectId: r.subject_id ?? null, unitId: r.unit_id ?? null, lessonId: r.lesson_id ?? null, locale: lc, title, body };
     }),
   );
 }
@@ -343,10 +345,17 @@ async function doSync(scope: KbScope | undefined, opts: SyncOptions): Promise<Kb
   const sources = new Set(docs.map((d) => `${d.sourceType}:${d.sourceId}`)).size;
 
   // Existing rows of the scope (one query): full types + explicit ids.
-  const fullTypes = [...plan.entries()].filter(([, ids]) => ids === null).map(([t]) => t);
+  const fullTypes: string[] = [...plan.entries()].filter(([, ids]) => ids === null).map(([t]) => t);
+  // A full lesson sync also clears rows of the legacy pre-RAG type (`lesson_transcript`), which nothing produces now.
+  if (fullTypes.includes('lesson')) fullTypes.push('lesson_transcript');
   const idTypes: string[] = [];
   const idVals: string[] = [];
-  for (const [t, ids] of plan.entries()) for (const id of ids ?? []) (idTypes.push(t), idVals.push(id));
+  for (const [t, ids] of plan.entries()) {
+    for (const id of ids ?? []) {
+      idTypes.push(t);
+      idVals.push(id);
+    }
+  }
   const existing = await db.many<{ id: string; source_type: string; source_id: string; locale: string; chunk_index: number; content_hash: string }>(
     `SELECT e.id, e.source_type, e.source_id, e.locale, e.chunk_index, e.content_hash FROM ${T.embeddings} e
       WHERE e.source_type = ANY($1::text[])
@@ -594,8 +603,20 @@ export function queueContentSync(scope: KbScope, delayMs = 4000): void {
     void (async () => {
       const run = await createRun('content', s, null);
       const { enqueue } = await import('../../jobs/index.js');
-      await enqueue('eduway.embeddings-generate', { runId: run.id });
+      await enqueue('eduway.kb-index', { runId: run.id });
     })().catch((err: Error) => logger.warn({ err: err.message }, 'knowledge-base content sync not queued'));
   }, delayMs);
   timer.unref();
+}
+
+let hooked = false;
+
+/** Re-index changed content after successful admin mutations (debounced; off under NODE_ENV=test). */
+export function registerKnowledgeBaseHooks(): void {
+  if (hooked || env.NODE_ENV === 'test') return;
+  hooked = true;
+  onAdminMutation((e) => {
+    const scope = kbScopeForMutation(e.path, e.entity, e.entityId);
+    if (scope) queueContentSync(scope);
+  });
 }

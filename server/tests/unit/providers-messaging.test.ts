@@ -114,7 +114,7 @@ describe('email (SMTP via nodemailer)', () => {
       secure: true,
       auth: { user: 'u', pass: 'p' },
     });
-    expect(smtpOptions(dev({ SMTP_URL: undefined, SMTP_HOST: 'smtp.example.com', SMTP_PORT: undefined }))).toMatchObject({ port: 587, secure: false });
+    expect(smtpOptions(dev({ SMTP_URL: undefined, SMTP_HOST: 'smtp.example.com', SMTP_PORT: undefined, SMTP_SECURE: undefined }))).toMatchObject({ port: 587, secure: false });
   });
   it('selects smtp only when configured; mock otherwise', () => {
     expect(selectEmailProvider(dev({ EMAIL_PROVIDER: undefined, SMTP_URL: undefined, SMTP_HOST: undefined })).active).toBe('mock-email');

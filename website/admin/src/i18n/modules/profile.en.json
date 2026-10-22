@@ -66,6 +66,8 @@
     "theme": "Appearance",
     "themeSub": "Your choice is remembered on this device.",
     "light": "Light",
-    "dark": "Dark"
+    "dark": "Dark",
+    "emailAlerts": "Email alerts",
+    "emailAlertsSub": "Also email me admin alerts (new support tickets, ready exports, reconciliation issues). Security emails are always sent."
   }
 }

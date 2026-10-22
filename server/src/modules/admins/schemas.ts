@@ -24,7 +24,7 @@ export const meAdminDto = z
     role: z.record(z.unknown()),
     permissions: z.array(z.string()),
     roles: z.array(z.string()),
-    preferences: z.object({ language: z.enum(['en', 'ar']), theme: z.enum(['light', 'dark', 'system']) }),
+    preferences: z.object({ language: z.enum(['en', 'ar']), theme: z.enum(['light', 'dark', 'system']), emailAlerts: z.boolean() }),
     unreadNotifications: z.number(),
   })
   .openapi('MeAdminDto');
@@ -40,7 +40,7 @@ export const updateMeBody = z.object({
 });
 
 export const changePasswordBody = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(1).max(200) });
-export const preferencesBody = z.object({ language: z.enum(['en', 'ar']).optional(), theme: z.enum(['light', 'dark', 'system']).optional() });
+export const preferencesBody = z.object({ language: z.enum(['en', 'ar']).optional(), theme: z.enum(['light', 'dark', 'system']).optional(), emailAlerts: z.boolean().optional() });
 
 export const inboxQuery = z.object({
   unread: z.union([z.boolean(), z.enum(['true', 'false'])]).transform((v) => v === true || v === 'true').optional(),

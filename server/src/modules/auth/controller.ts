@@ -27,7 +27,7 @@ async function mfaActor(req: Request): Promise<{ userId: string; viaChallenge: b
 }
 
 export const authController = {
-  sendOtp: (req: Request, body: { phone: string; purpose: 'login' | 'register'; channel?: 'sms' | 'whatsapp' }) => auth.sendOtp(body, clientMeta(req)),
+  sendOtp: (req: Request, body: { phone: string; purpose: 'login' | 'register'; channel?: 'sms' | 'whatsapp' }) => auth.sendOtp({ ...body, locale: req.locale }, clientMeta(req)),
 
   verifyOtp(req: Request, body: z.infer<typeof verifyOtpBody>) {
     const deviceId = body.deviceId ?? req.deviceId;
@@ -83,8 +83,8 @@ export const authController = {
     await auth.forgotPassword(email, clientMeta(req));
     return OK;
   },
-  async resetPassword(token: string, newPassword: string) {
-    await auth.resetPassword(token, newPassword);
+  async resetPassword(req: Request, token: string, newPassword: string) {
+    await auth.resetPassword(token, newPassword, clientMeta(req));
     return OK;
   },
   inviteInfo: (token: string) => auth.inviteInfo(token),

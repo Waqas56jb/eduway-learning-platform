@@ -77,7 +77,7 @@ export function buildAudienceQuery(filters: CampaignFilters, channel: NotifChann
            CASE
              WHEN u.status <> 'active' THEN 'locked'
              ${optOut.length ? `WHEN ${optOut.join(' OR ')} THEN 'optedOut'` : ''}
-             ${channel === 'email' ? `WHEN u.email IS NULL OR u.email = '' THEN 'noEmail'` : ''}
+             ${channel === 'email' ? `WHEN u.email IS NULL OR u.email = '' OR u.email_verified_at IS NULL THEN 'noEmail'` : ''}
              ${channel === 'push' ? `WHEN NOT EXISTS (SELECT 1 FROM ${T.push_tokens} t WHERE t.user_id = u.id AND t.revoked_at IS NULL AND t.platform::text = ANY(${pushPh}::text[])) THEN 'noPushToken'` : ''}
              ${channel === 'sms' || channel === 'whatsapp' ? `WHEN u.phone IS NULL THEN 'optedOut'` : ''}
              ELSE NULL

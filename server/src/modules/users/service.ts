@@ -9,6 +9,7 @@ import { aiAllowance, currentSubscriptionRow, mySubscription, unreadNotification
 import { businessDate, daysRemaining, addDays } from '../../common/utils/dates.js';
 import type { StudentPrincipal } from '../../common/types/index.js';
 import { sessions, toSessionDto } from '../auth/sessions.js';
+import { onStudentEmailChanged } from './email-verification.js';
 import { usersRepo } from './repository.js';
 import { DEFAULT_NOTIFICATION_PREFS, type MeStudentDto, type NotificationPrefs, type StudentRow, type StudentUser } from './types.js';
 
@@ -47,6 +48,7 @@ async function toStudentUser(r: StudentRow, pre?: { sub: SubRow; ai: Promise<AiA
     firstName: { en: r.first_name_en || firstWord(r.name_en), ar: r.first_name_ar || firstWord(r.name_ar || r.name_en) },
     mobile: r.phone,
     email: r.email,
+    emailVerified: !!r.email && !!r.email_verified_at,
     gender: r.gender,
     governorate: r.governorate_code ?? '',
     governorateName: { en: r.governorate_name_en ?? '', ar: r.governorate_name_ar ?? '' },
@@ -152,8 +154,10 @@ export const usersService = {
         userPatch.avatar_url = storage.ref(up.bucket, up.path);
       }
     }
+    const emailBefore = input.email !== undefined ? await db.scalar<string | null>(`SELECT email FROM ${T.users} WHERE id = $1`, [userId]) : undefined;
     await usersRepo.updateUser(userId, userPatch);
     await usersRepo.updateProfile(userId, profilePatch);
+    if (input.email !== undefined && (emailBefore ?? null) !== (userPatch.email ?? null)) await onStudentEmailChanged(userId);
     return this.studentUser(userId);
   },
 

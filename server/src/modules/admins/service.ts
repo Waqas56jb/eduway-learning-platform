@@ -5,7 +5,6 @@ import { env } from '../../config/env.js';
 import { invalidatePrincipal, loadAdminAccess } from '../../common/auth/principal.js';
 import { BusinessRuleError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '../../common/errors/index.js';
 import type { Localized } from '../../common/i18n/index.js';
-import { mailer } from '../../common/providers/mail.js';
 import { settingsStore } from '../../common/services/settings-store.js';
 import { storage } from '../../common/services/storage.js';
 import { mirrorAuthUser } from '../../common/services/auth-mirror.js';
@@ -14,6 +13,7 @@ import { normalizeIraqiPhone } from '../../common/utils/phone.js';
 import type { AdminPrincipal } from '../../common/types/index.js';
 import { ADMIN_SESSION_SELECT, sessions, toAdminSessionDto, type AdminSessionRow } from '../auth/sessions.js';
 import { emptyMatrix, rolesService } from '../roles/service.js';
+import { emailAdmin } from '../notifications/email/recipients.js';
 import { adminsRepo, type AdminListFilter } from './repository.js';
 import type { AdminInboxNotification, AdminPreferences, AdminRow, AdminUserDto, MeAdminDto } from './types.js';
 
@@ -56,6 +56,8 @@ async function guardLastSuperAdmin(target: AdminRow): Promise<void> {
 
 /** Create an invite token (7 days by default) and email the acceptance link. */
 async function issueInvite(userId: string, roleId: string, email: string, by: string): Promise<void> {
+  const inviter = await db.maybeOne<{ name_en: string; name_ar: string }>(`SELECT name_en, name_ar FROM ${T.users} WHERE id = $1`, [by]);
+  const role = roleId ? await db.maybeOne<{ name_en: string; name_ar: string }>(`SELECT name_en, name_ar FROM ${T.roles} WHERE id = $1`, [roleId]) : null;
   const token = randomToken(32);
   const hours = (await settingsStore.get('auth')).inviteExpiryHours;
   await db.query(`UPDATE ${T.admin_invites} SET revoked_at = now() WHERE user_id = $1 AND accepted_at IS NULL AND revoked_at IS NULL`, [userId]);
@@ -63,11 +65,13 @@ async function issueInvite(userId: string, roleId: string, email: string, by: st
     `INSERT INTO ${T.admin_invites} (user_id, role_id, token_hash, expires_at, created_by) VALUES ($1, $2, $3, now() + make_interval(hours => $4), $5)`,
     [userId, roleId, hashToken(token, 'invite'), hours, by],
   );
-  const link = `${env.ADMIN_APP_URL}/accept-invite?token=${encodeURIComponent(token)}`;
-  await mailer.send({
-    to: email,
-    subject: 'You are invited to the EDUWAY admin portal',
-    text: `You have been invited to the EDUWAY admin portal.\n\nAccept the invitation and set your password:\n${link}\n\nThis link expires in ${hours} hours.`,
+  const link = `${env.ADMIN_APP_URL.replace(/\/$/, '')}/accept-invite?token=${encodeURIComponent(token)}`;
+  await emailAdmin(userId, 'admin_invite', {
+    link,
+    hours,
+    email,
+    roleName: role ? { en: role.name_en, ar: role.name_ar || role.name_en } : null,
+    inviter: inviter ? { en: inviter.name_en, ar: inviter.name_ar || inviter.name_en } : null,
   });
 }
 
@@ -102,7 +106,7 @@ export const adminsService = {
       },
       permissions,
       roles: row.role_key ? [row.role_key] : [],
-      preferences: { language: row.preferences.language ?? 'en', theme: row.preferences.theme ?? 'system' },
+      preferences: { language: row.preferences.language ?? 'en', theme: row.preferences.theme ?? 'system', emailAlerts: row.preferences.emailAlerts ?? true },
       unreadNotifications: await adminsRepo.unreadCount(userId),
     };
   },
@@ -140,9 +144,13 @@ export const adminsService = {
     return this.get(id);
   },
 
-  async resetMfa(id: string): Promise<AdminUserDto> {
-    await getRow(id);
+  async resetMfa(id: string, by?: AdminPrincipal): Promise<AdminUserDto> {
+    const row = await getRow(id);
     await adminsRepo.updateAdminUser(id, { mfa_enabled: false, mfa_secret: null, mfa_pending_secret: null, mfa_recovery_codes: [] });
+    if (row.mfa_enabled) {
+      const actor = by ? await adminsRepo.get(by.userId) : null;
+      void emailAdmin(id, 'admin_mfa_disabled', { at: new Date().toISOString(), byAdmin: actor && actor.id !== id ? { en: actor.name_en, ar: actor.name_ar || actor.name_en } : null });
+    }
     return this.get(id);
   },
 
@@ -186,18 +194,23 @@ export const adminsService = {
     return this.get(userId);
   },
 
-  async changePassword(principal: AdminPrincipal, current: string, next: string): Promise<void> {
+  async changePassword(principal: AdminPrincipal, current: string, next: string, ip?: string | null): Promise<void> {
     const row = await getRow(principal.userId);
     if (!row.password_hash || !(await bcrypt.compare(current, row.password_hash))) throw new UnauthorizedError('PASSWORD_INCORRECT');
     if (current === next) throw new BusinessRuleError('PASSWORD_REUSED');
     await passwordPolicyCheck(next);
     await adminsRepo.updateAdminUser(principal.userId, { password_hash: await hashPassword(next), password_changed_at: new Date() });
     await sessions.revokeAll(principal.userId, 'password_changed', { exceptSessionId: principal.sessionId, by: principal.userId });
+    void emailAdmin(principal.userId, 'admin_password_changed', { via: 'change', at: new Date().toISOString(), ip: ip ?? null });
   },
 
   async setPreferences(userId: string, prefs: Partial<AdminPreferences>): Promise<AdminPreferences> {
     const row = await getRow(userId);
-    const next: AdminPreferences = { language: prefs.language ?? row.preferences.language ?? 'en', theme: prefs.theme ?? row.preferences.theme ?? 'system' };
+    const next: AdminPreferences = {
+      language: prefs.language ?? row.preferences.language ?? 'en',
+      theme: prefs.theme ?? row.preferences.theme ?? 'system',
+      emailAlerts: prefs.emailAlerts ?? row.preferences.emailAlerts ?? true,
+    };
     await adminsRepo.updateAdminUser(userId, { preferences: JSON.stringify(next) });
     return next;
   },

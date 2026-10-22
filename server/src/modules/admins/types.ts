@@ -18,6 +18,8 @@ export interface AdminUserDto {
 export interface AdminPreferences {
   language: 'en' | 'ar';
   theme: 'light' | 'dark' | 'system';
+  /** Admin alerts (new support ticket, export ready, reconciliation issues, ...) also by email. Default true. */
+  emailAlerts: boolean;
 }
 
 export interface MeAdminDto {

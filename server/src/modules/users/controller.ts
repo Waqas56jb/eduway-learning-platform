@@ -1,6 +1,7 @@
 import { entitlements } from '../../common/entitlements.js';
 import { OK } from '../../common/dto/refs.js';
 import type { StudentPrincipal } from '../../common/types/index.js';
+import { confirmEmail, requestEmailVerification } from './email-verification.js';
 import { usersService, type UpdateMeInput } from './service.js';
 import type { NotificationPrefs } from './types.js';
 
@@ -25,4 +26,6 @@ export const usersController = {
   getPrefs: (s: StudentPrincipal) => usersService.getPrefs(s.userId),
   setPrefs: (s: StudentPrincipal, body: Partial<NotificationPrefs>) => usersService.setPrefs(s.userId, body),
   entitlements: (s: StudentPrincipal) => entitlements.dtos(s.userId),
+  requestEmailVerification: (s: StudentPrincipal, ip: string | null) => requestEmailVerification(s.userId, ip),
+  confirmEmail: (token: string) => confirmEmail(token),
 };

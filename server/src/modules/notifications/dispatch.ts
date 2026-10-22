@@ -6,8 +6,10 @@
  */
 import { T } from '../../config/constants.js';
 import { db } from '../../config/db.js';
+import { isDev } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { pushProvider, sendEmail, sendSms } from './channels.js';
+import { emailRateLimiter, SECRET_TEMPLATE_KEYS, type EmailPayload } from './email/send.js';
 
 export const MAX_ATTEMPTS = 3;
 
@@ -15,12 +17,14 @@ interface Claimed {
   id: string;
   channel: 'push' | 'in_app' | 'sms' | 'whatsapp' | 'email';
   recipient: string | null;
-  payload: { title?: string; body?: string; subject?: string; data?: Record<string, unknown> };
+  payload: { title?: string; body?: string; subject?: string; data?: Record<string, unknown> } & EmailPayload;
   attempts: number;
   campaign_id: string | null;
 }
 
-type Outcome = { id: string; ok: true; status: 'sent' | 'delivered'; provider: string; providerMessageId?: string | null } | { id: string; ok: false; error: string; permanent: boolean; provider: string; revokeToken?: string };
+type Outcome =
+  | { id: string; ok: true; status: 'sent' | 'delivered'; provider: string; providerMessageId?: string | null }
+  | { id: string; ok: false; error: string; permanent: boolean; provider: string; revokeToken?: string; deferred?: boolean };
 
 async function claim(opts: { campaignId?: string; ids?: string[] }, limit: number): Promise<Claimed[]> {
   return db.many<Claimed>(
@@ -59,8 +63,13 @@ async function sendBatch(rows: Claimed[]): Promise<Outcome[]> {
         out.push({ id: r.id, ok: true, status: s.provider.startsWith('mock') ? 'delivered' : 'sent', provider: s.provider, providerMessageId: s.id });
       } else if (r.channel === 'email') {
         if (!r.recipient) throw Object.assign(new Error('no email address'), { permanent: true });
-        const s = await sendEmail(r.recipient, r.payload.subject || r.payload.title || 'EDUWAY', r.payload.body ?? '');
-        out.push({ id: r.id, ok: true, status: s.provider === 'mock-email' ? 'delivered' : 'sent', provider: s.provider });
+        // Throttle (MAIL_RATE_PER_MINUTE): over the limit the row goes back to the queue without using an attempt.
+        if (!emailRateLimiter.tryAcquire()) {
+          out.push({ id: r.id, ok: false, error: 'rate limited — retrying in the next window', permanent: false, provider: 'email', deferred: true });
+          continue;
+        }
+        const s = await sendEmail(r.recipient, r.payload);
+        out.push({ id: r.id, ok: true, status: s.provider === 'mock-email' ? 'delivered' : 'sent', provider: s.provider, providerMessageId: s.id ?? null });
       }
     } catch (err) {
       out.push({ id: r.id, ok: false, error: (err as Error).message, permanent: !!(err as { permanent?: boolean }).permanent, provider: r.channel });
@@ -73,6 +82,19 @@ async function record(rows: Claimed[], outcomes: Outcome[]): Promise<void> {
   const byId = new Map(rows.map((r) => [r.id, r]));
   for (const o of outcomes) {
     const row = byId.get(o.id);
+    if (!o.ok && o.deferred) {
+      await db.query(
+        `UPDATE ${T.notification_deliveries} SET attempts = greatest(attempts - 1, 0), next_attempt_at = now() + interval '1 minute', updated_at = now() WHERE id = $1`,
+        [o.id],
+      );
+      continue;
+    }
+    const final = o.ok || o.permanent || (row?.attempts ?? MAX_ATTEMPTS) >= MAX_ATTEMPTS;
+    if (final && !isDev && row?.channel === 'email' && row.payload.template && SECRET_TEMPLATE_KEYS.includes(row.payload.template)) {
+      // One-time links (reset / invite / verification) never stay in the delivery log once the delivery is
+      // final (NODE_ENV=development keeps them so local testing can read the link from the row).
+      await db.query(`UPDATE ${T.notification_deliveries} SET payload = (payload #- '{vars,link}') || '{"scrubbed": true}'::jsonb WHERE id = $1`, [o.id]);
+    }
     if (o.ok) {
       await db.query(
         `UPDATE ${T.notification_deliveries} SET status = $2, provider = $3, provider_message_id = $4, error = NULL, sent_at = now(),

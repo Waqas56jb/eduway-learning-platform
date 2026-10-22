@@ -376,7 +376,14 @@ export const campaignsService = {
             )
           ).id;
         }
-        const payload = { title: title[lang], subject: title[lang], body: text[lang], data: { link: def.link, target: def.target, notificationId, campaignId: id } };
+        const payload = {
+          title: title[lang],
+          subject: title[lang],
+          body: text[lang],
+          lang,
+          ...(c.channel === 'email' ? { i18n: { title, body: text } } : {}),
+          data: { link: def.link, target: def.target, notificationId, campaignId: id },
+        };
         const ins = (recipient: string | null, platform: string | null, status: 'queued' | 'delivered') =>
           db.query(
             `INSERT INTO ${T.notification_deliveries} (notification_id, campaign_id, template_id, user_id, channel, provider, recipient, status, platform, payload, sent_at, delivered_at)

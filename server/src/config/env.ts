@@ -111,6 +111,9 @@ export const EnvSchema = z.object({
   MAIL_FROM: z.string().default('EDUWAY <no-reply@eduway.iq>'),
   /** Outgoing email throttle (messages per minute across the process); excess deliveries wait for the next window. */
   MAIL_RATE_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  /** Outside production, real SMTP only delivers to these addresses (comma-separated; default SMTP_USER); mail to
+   *  anyone else (seed admins, demo students) is redirected to the first one with a "[DEV → original]" subject. */
+  MAIL_DEV_ALLOWLIST: z.string().optional(),
 
   // ── AI tutor providers (Agent D). Without a key for the configured provider the offline MockAiProvider is used. ──
   OPENAI_API_KEY: z.string().optional(),
@@ -189,7 +192,13 @@ export const EnvSchema = z.object({
   ZAINCASH_ENV: z.enum(['test', 'live']).default('test'),
   ZAINCASH_LANG: z.enum(['ar', 'en', 'ku']).default('ar'),
   ZAINCASH_SERVICE_TYPE: z.string().default('EDUWAY subscription'),
+  /** v2 = current OAuth2 Payment Gateway API (pg-api; MERCHANT_ID = Client ID, SECRET = Client Secret); v1 = legacy JWT API. */
+  ZAINCASH_API_VERSION: z.enum(['v1', 'v2']).default('v2'),
+  /** Optional API host override (ZainCash issues the live v2 host at go-live). */
+  ZAINCASH_API_URL: z.string().url().optional(),
   FASTPAY_STORE_ID: z.string().optional(),
+  /** FastPay "refund secret key" (merchant panel → store details); refunds are refused without it. */
+  FASTPAY_REFUND_SECRET: z.string().optional(),
   /** FastPay store password (kept under the historical name FASTPAY_SECRET). */
   FASTPAY_SECRET: z.string().optional(),
   FASTPAY_ENV: z.enum(['staging', 'live']).default('staging'),

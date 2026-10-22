@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
-import { Check, LogOut, MessageSquareText, Monitor, PencilLine, RotateCw, ShieldCheck, Smartphone } from 'lucide-react';
+import { Check, LogOut, MessageCircle, MessageSquareText, Monitor, PencilLine, RotateCw, ShieldCheck, Smartphone } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -112,7 +112,7 @@ export default function VerifyOtp() {
       setDigits(empty(res.codeLength));
       setStatus('idle');
       otpRef.current?.focus(0);
-      toast.info(t('auth.verify.resentToast'), t('auth.verify.resentBody'));
+      toast.info(t('auth.verify.resentToast'), res.channel === 'whatsapp' ? t('auth.verify.resentBodyWhatsapp') : t('auth.verify.resentBody'));
     } catch (e) {
       if (isApiError(e) && e.retryAfterSeconds) setSeconds(e.retryAfterSeconds);
       setError(errorMessage(e));
@@ -168,7 +168,13 @@ export default function VerifyOtp() {
               <MessageSquareText className="h-6 w-6" aria-hidden />
             </span>
             <h1 className="mt-6 text-3xl font-bold text-primary sm:text-4xl">{t('auth.verify.title')}</h1>
-            <p className="mt-2 text-muted">{t('auth.verify.subtitle')}</p>
+            <p className="mt-2 text-muted">{pending?.channel === 'whatsapp' ? t('auth.verify.subtitleWhatsapp') : t('auth.verify.subtitle')}</p>
+            {pending?.channel === 'whatsapp' && (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#25D366]/10 px-3 py-1 text-xs font-semibold text-[#128C7E]" role="status">
+                <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                {t('auth.verify.sentViaWhatsapp')}
+              </p>
+            )}
             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
               <span dir="ltr" className="num font-bold tracking-wide text-primary">
                 {mobile}

@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { useQueryClient } from '@tanstack/react-query';
-import { Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, Field, FileUpload, Input, Segmented, SkeletonCard, useConfirm } from '@/components/ui';
+import { Avatar, Badge, Button, Card, CardBody, CardFooter, CardHeader, Field, FileUpload, Input, Segmented, SkeletonCard, Switch, useConfirm } from '@/components/ui';
 import { useLocalize } from '@/hooks/useLocale';
 import { useAuth, useCurrentAdmin, useCurrentRole } from '@/store/auth';
 import { useUi } from '@/store/ui';
@@ -50,6 +50,16 @@ export default function Profile() {
   const setTheme = (v: 'light' | 'dark') => {
     setUiTheme(v);
     adminMeApi.preferences({ theme: v }).catch(() => undefined);
+  };
+  const emailAlerts = me?.preferences.emailAlerts !== false;
+  const setEmailAlerts = (v: boolean) => {
+    if (me) setMe({ ...me, preferences: { ...me.preferences, emailAlerts: v } });
+    adminMeApi
+      .preferences({ emailAlerts: v })
+      .then(() => toast.success(t('toast.saved')))
+      .catch(() => {
+        if (me) setMe({ ...me, preferences: { ...me.preferences, emailAlerts: !v } });
+      });
   };
 
   // ── Profile form ────────────────────────────────────────────────────────────
@@ -425,6 +435,13 @@ export default function Profile() {
                     { value: 'dark', label: <span className="inline-flex items-center gap-1.5"><Moon className="h-3.5 w-3.5" />{t('profile.prefs.dark')}</span> },
                   ]}
                 />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-ink">{t('profile.prefs.emailAlerts')}</div>
+                  <div className="text-xs text-muted">{t('profile.prefs.emailAlertsSub')}</div>
+                </div>
+                <Switch checked={emailAlerts} onChange={setEmailAlerts} aria-label={t('profile.prefs.emailAlerts')} />
               </div>
             </CardBody>
           </Card>

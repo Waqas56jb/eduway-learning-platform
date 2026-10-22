@@ -6,8 +6,10 @@
  *   platform.ts       — subscription-expiry, exam-auto-submit, analytics-daily-rollup, settlement-calculation,
  *                       question-import, video-processing-callback, lesson-publish-scheduled, incentive-rule-activate
  *                       (domain functions resolved lazily from their modules — see hooks.ts)
+ *   whatsapp.ts       — whatsapp-send (throttled outbox of the linked WhatsApp number)
  */
 import './maintenance.js';
 import './notifications.js';
 import './ai.js';
 import './platform.js';
+import './whatsapp.js';

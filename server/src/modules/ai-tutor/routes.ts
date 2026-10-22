@@ -8,6 +8,7 @@ import { paged } from '../../common/utils/response.js';
 import { idParam, okDto, reasonBody } from '../../common/validation/schemas.js';
 import { z } from '../../common/validation/zod.js';
 import { aiAdminService, type AiFlagDto, type FlaggedUserDto } from './admin.service.js';
+import { createRun, knowledgeBaseStatus, toRunDto } from './knowledge-base.js';
 import * as s from './schemas.js';
 import { aiTutorService } from './service.js';
 import { wantsEventStream } from './sse.js';
@@ -146,3 +147,31 @@ defineRoute(router, { method: 'post', path: '/admin/ai/flagged-users/:studentId/
   return dto;
 });
 defineRoute(router, { method: 'get', path: '/admin/ai/models', tags: ADM, summary: 'Provider → model catalogue (ADM-AI-15)', auth: A, permission: 'aitutor.view', response: s.aiModelsDto }, () => aiAdminService.models());
+
+// ── knowledge base / RAG index (ADM-AI-16/17) ──
+defineRoute(router, { method: 'get', path: '/admin/ai/knowledge-base', tags: ADM, summary: 'Knowledge-base index status + recent runs (ADM-AI-16)', auth: A, permission: 'aitutor.view', response: s.kbStatusDto }, () => knowledgeBaseStatus());
+defineRoute(
+  router,
+  {
+    method: 'post',
+    path: '/admin/ai/knowledge-base/reindex',
+    tags: ADM,
+    summary: 'Reindex the knowledge base (ADM-AI-17)',
+    description: 'Queues a full, incremental (hash-based) reindex — `force: true` re-embeds every chunk. Returns the run (202); poll ADM-AI-16 for progress. If a run is already in progress it is returned instead.',
+    auth: A,
+    permission: 'aitutor.edit',
+    body: s.kbReindexBody,
+    response: s.kbRunDto,
+    status: 202,
+    audit: { action: 'ai.kb_reindex', entity: 'ai_settings', entityId: () => '1' },
+  },
+  async ({ admin, body }) => {
+    const status = await knowledgeBaseStatus();
+    if (status.running && status.lastRun && (status.lastRun.status === 'running' || status.lastRun.status === 'queued')) return status.lastRun;
+    const run = await createRun('manual', undefined, admin.userId, body.force);
+    const { enqueue } = await import('../../jobs/index.js');
+    // Fire-and-forget: without a running queue `enqueue` executes inline, which must not hold the request open.
+    void enqueue('eduway.kb-index', { runId: run.id }).catch(() => undefined);
+    return toRunDto(run);
+  },
+);

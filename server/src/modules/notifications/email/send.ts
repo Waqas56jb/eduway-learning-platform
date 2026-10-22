@@ -102,6 +102,8 @@ export interface EmailPayload {
   title?: string;
   subject?: string;
   body?: string;
+  /** Both languages of a notification (campaign / notify()) → a bilingual email. */
+  i18n?: { title?: { en?: string; ar?: string }; body?: { en?: string; ar?: string } };
   data?: { link?: unknown };
 }
 
@@ -129,7 +131,14 @@ export async function renderEmailPayload(p: EmailPayload): Promise<{ subject: st
   }
   const title = p.subject || p.title || 'EDUWAY';
   const body = p.body ?? '';
-  const r = renderTemplateEmail('notification', { title, body, link: absoluteUserLink(p.data?.link) }, { lang, siteUrl: site });
+  const t = p.i18n?.title;
+  const b = p.i18n?.body;
+  const vars: EmailVars = {
+    title: { en: t?.en || title, ar: t?.ar || title },
+    body: { en: b?.en ?? body, ar: b?.ar ?? body },
+    link: absoluteUserLink(p.data?.link),
+  };
+  const r = renderTemplateEmail('notification', vars, { lang, siteUrl: site });
   return { ...r, attachments: [] };
 }
 

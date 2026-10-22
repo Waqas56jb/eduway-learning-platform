@@ -154,7 +154,7 @@ export default function VerifyOtpScreen() {
   return (
     <AuthScaffold
       title={t('otp.title')}
-      subtitle={t('otp.subtitle', { count: OTP_LENGTH })}
+      subtitle={otpInfo?.channel === 'whatsapp' ? t('otp.subtitleWhatsapp', { count: OTP_LENGTH }) : t('otp.subtitle', { count: OTP_LENGTH })}
       onBack={editNumber}
       image={images.studyDesk}
       accessory={
@@ -191,7 +191,7 @@ export default function VerifyOtpScreen() {
         </View>
         <View style={styles.numberTexts}>
           <Text variant="caption" color="muted">
-            {t('otp.sentTo')}
+            {otpInfo?.channel === 'whatsapp' ? t('otp.sentToWhatsapp') : t('otp.sentTo')}
           </Text>
           <Text
             variant="bodyBold"

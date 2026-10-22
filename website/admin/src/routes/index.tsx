@@ -75,6 +75,7 @@ const DeliveryLog = p(() => import('@/pages/notifications/DeliveryLog'));
 // Settings
 const General = p(() => import('@/pages/settings/General'));
 const Otp = p(() => import('@/pages/settings/Otp'));
+const WhatsAppSettings = p(() => import('@/pages/settings/WhatsApp'));
 const FeatureFlags = p(() => import('@/pages/settings/FeatureFlags'));
 const LegalDocuments = p(() => import('@/pages/settings/LegalDocuments'));
 const SupportContacts = p(() => import('@/pages/settings/SupportContacts'));
@@ -196,6 +197,7 @@ export const router = createBrowserRouter([
           { path: '/settings', element: <Navigate to="/settings/general" replace /> },
           page('/settings/general', 'settings', General),
           page('/settings/otp', 'settings', Otp),
+          page('/settings/whatsapp', 'settings', WhatsAppSettings),
           page('/settings/feature-flags', 'settings', FeatureFlags),
           page('/settings/legal', 'settings', LegalDocuments),
           page('/settings/support', 'settings', SupportContacts),

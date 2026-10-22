@@ -5,7 +5,7 @@ import type { StudentRow } from './types.js';
 export const usersRepo = {
   getStudent(userId: string, ex?: Executor) {
     return db.maybeOne<StudentRow>(
-      `SELECT u.id, u.phone, u.email, u.name_en, u.name_ar, u.avatar_url, u.locale, u.status, u.notification_prefs, u.created_at,
+      `SELECT u.id, u.phone, u.email, u.email_verified_at, u.name_en, u.name_ar, u.avatar_url, u.locale, u.status, u.notification_prefs, u.created_at,
               sp.gender, sp.first_name_en, sp.first_name_ar, sp.school_id, sp.school_name, sp.profile_completed,
               sp.daily_goal_minutes,
               COALESCE(sp.last_lesson_id, (SELECT wp.lesson_id FROM ${T.watch_progress} wp WHERE wp.user_id = u.id ORDER BY wp.updated_at DESC LIMIT 1)) AS last_lesson_id,

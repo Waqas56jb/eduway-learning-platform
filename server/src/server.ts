@@ -9,6 +9,7 @@ import { closeDb, pingDb } from './config/db.js';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { startJobs, stopJobs } from './jobs/index.js';
+import { whatsappSession } from './common/services/whatsapp/index.js';
 
 let server: Server | undefined;
 let shuttingDown = false;
@@ -28,6 +29,10 @@ async function main(): Promise<void> {
   if (env.JOBS_ENABLED) {
     startJobs().catch((err: Error) => logger.warn({ err: err.message }, 'background jobs not started'));
   }
+  // Linked WhatsApp number (Baileys): resume a linked session / stand by for the single-socket lease.
+  if (env.WHATSAPP_PROVIDER === 'baileys' && env.NODE_ENV !== 'test') {
+    whatsappSession.boot().catch((err: Error) => logger.warn({ err: err.message }, 'whatsapp session not started'));
+  }
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -39,6 +44,8 @@ async function shutdown(signal: string): Promise<void> {
     process.exit(1);
   }, 10_000);
   force.unref();
+  // first: hand the WhatsApp lease over quickly (server.close can wait on keep-alive sockets)
+  await whatsappSession.shutdown().catch(() => undefined);
   await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
   await stopJobs().catch(() => undefined);
   await closeDb();

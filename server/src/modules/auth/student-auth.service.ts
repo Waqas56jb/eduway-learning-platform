@@ -17,6 +17,7 @@ import { maskPhone } from '../../common/utils/phone.js';
 import type { StudentPrincipal } from '../../common/types/index.js';
 import { firstWord, usersService } from '../users/service.js';
 import type { MeStudentDto, StudentUser } from '../users/types.js';
+import { onStudentEmailChanged } from '../users/email-verification.js';
 import { authRepo, type OtpRow } from './repository.js';
 import { sessions, toSessionDto, type AuthTokens } from './sessions.js';
 
@@ -82,9 +83,8 @@ export function evaluateResend(input: {
 }
 
 // ── AUTH-01 ─────────────────────────────────────────────────────────────────────────────────────────
-export async function sendOtp(input: { phone: string; purpose: 'login' | 'register'; channel?: 'sms' | 'whatsapp' }, meta: ClientMeta) {
+export async function sendOtp(input: { phone: string; purpose: 'login' | 'register'; channel?: 'sms' | 'whatsapp'; locale?: 'en' | 'ar' }, meta: ClientMeta) {
   const { phone, purpose } = input;
-  const channel = input.channel ?? 'sms';
   const user = await authRepo.findStudentByPhone(phone);
   const registered = !!user && user.profile_completed === true;
   if (purpose === 'login' && !user) throw new BusinessRuleError('ACCOUNT_NOT_FOUND');
@@ -109,6 +109,8 @@ export async function sendOtp(input: { phone: string; purpose: 'login' | 'regist
   const code = randomNumericCode(otp.codeLength);
   await authRepo.invalidateActive(phone);
   const provider = smsProvider();
+  // No explicit channel → WhatsApp when the linked WhatsApp number (Baileys) is connected, else SMS.
+  const channel = input.channel ?? (await provider.otpDefaultChannel());
   const row = await authRepo.insertOtp({
     phone,
     purpose,
@@ -117,7 +119,8 @@ export async function sendOtp(input: { phone: string; purpose: 'login' | 'regist
     expiresAt: new Date(Date.now() + otp.expirySeconds * 1000),
     ip: meta.ip,
     ua: meta.userAgent,
-    provider: provider.name,
+    provider: provider.nameFor(channel),
+    channel,
   });
   const minutes = Math.max(1, Math.round(otp.expirySeconds / 60));
   const tpl = await db.maybeOne<{ body_en: string; body_ar: string }>(
@@ -125,8 +128,15 @@ export async function sendOtp(input: { phone: string; purpose: 'login' | 'regist
     [channel],
   );
   const text = (tpl?.body_ar ?? 'إيدوواي: رمز التحقق الخاص بك هو {otp_code}. ينتهي خلال {minutes} دقائق.').replace('{otp_code}', code).replace('{minutes}', String(minutes));
+  const locale = user?.locale === 'en' || user?.locale === 'ar' ? user.locale : (input.locale ?? 'ar');
+  let sentChannel: 'sms' | 'whatsapp' = channel;
   try {
-    await provider.send({ to: phone, text, channel, devCode: code });
+    const res = await provider.send({ to: phone, text, channel, devCode: code, locale, ttlSeconds: otp.expirySeconds, otpId: row.id });
+    // A WhatsApp OTP may have fallen back to SMS (number not on WhatsApp / session disconnected): record + report it.
+    if (res.channel && res.channel !== channel) {
+      sentChannel = res.channel;
+      await authRepo.setOtpChannel(row.id, res.channel, res.provider ?? provider.nameFor(res.channel));
+    }
   } catch {
     await authRepo.deleteOtp(row.id);
     throw new AppError('INTERNAL', 502, { reason: 'OTP_SEND_FAILED' });
@@ -140,7 +150,7 @@ export async function sendOtp(input: { phone: string; purpose: 'login' | 'regist
     expiresInSeconds: otp.expirySeconds,
     resendInSeconds: otp.resendCooldownSeconds,
     resendsLeft: Math.max(0, otp.resendLimit - window.sends - 1),
-    channel,
+    channel: sentChannel,
   };
 }
 
@@ -311,6 +321,7 @@ export async function verifyOtp(input: VerifyOtpInput, meta: ClientMeta): Promis
   if (user) await enforceDeviceLimit(user.id, input.deviceId, input.revokeSessionId, meta.ip);
 
   let isNewUser = false;
+  const registersEmail = !!input.registration?.email && !user?.profile_completed;
   const userId = await tx(async (c) => {
     // SEC-04: single-use under concurrency (dev-bypass logins may proceed without a code row).
     if (otpRow && !(await authRepo.consumeOtp(otpRow.id, c)) && !isDevBypass(await settingsStore.get('otp'), phone, input.code)) {
@@ -331,6 +342,7 @@ export async function verifyOtp(input: VerifyOtpInput, meta: ClientMeta): Promis
   });
   await authRepo.clearLockout('otp', phone);
   if (isNewUser) void mirrorAuthUser({ userId, kind: 'student', phone });
+  if (registersEmail) void onStudentEmailChanged(userId, meta.ip);
   user = await authRepo.findStudentByPhone(phone);
 
   const tokens = await issueStudentSession(userId, input.platform, { ...clientMeta, deviceName: input.deviceName });
@@ -348,6 +360,7 @@ export async function completeRegistration(principal: StudentPrincipal, reg: Reg
   if (!profile) throw new NotFoundError('student');
   if (profile.profile_completed) throw new ConflictError('PROFILE_ALREADY_COMPLETE');
   await tx((c) => applyRegistration(c, principal.userId, profile.phone, reg, meta));
+  if (reg.email) void onStudentEmailChanged(principal.userId, meta.ip);
   invalidatePrincipal(principal.userId);
   return usersService.me(principal.userId);
 }

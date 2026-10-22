@@ -9,7 +9,9 @@ import { buildExport, type ExportColumn } from '../../common/services/exporter.j
 import type { AdminPrincipal } from '../../common/types/index.js';
 import { BUSINESS_TZ, dayjs } from '../../common/utils/dates.js';
 import { CONTENT_TYPES, iso, isoOrNull, L, pageOf, parseSort, sortRows, storeExport, type Row } from '../commerce/lib.js';
+import { adminInbox } from '../../common/services/admin-inbox.js';
 import { adminPayments } from '../payments/admin.service.js';
+import { adminUrl, emailAdmin } from '../notifications/email/recipients.js';
 import { schoolsService } from '../schools/service.js';
 import { studentsService } from '../students/index.js';
 import { analyticsService } from './service.js';
@@ -150,9 +152,11 @@ export const exportsService = {
       [body.report, body.format, body.from.slice(0, 10), body.to.slice(0, 10), JSON.stringify({ from: body.from, to: body.to }), rows.length, columns.map((c) => c.key), req.admin?.userId ?? null, req.admin?.name ?? '', CONTENT_TYPES[body.format]],
     )) as string;
     req.audit = { action: 'export.create', entity: 'export', entityId: id, summary: `Exported ${rows.length} ${body.report} rows (${body.format.toUpperCase()}, ${body.from.slice(0, 10)} – ${body.to.slice(0, 10)})`, after: { report: body.report, rows: rows.length } };
+    const actorId = req.admin?.userId ?? null;
     setImmediate(() => {
       buildExport(body.format, columns, rows, body.report)
         .then((buf) => db.query(`UPDATE ${T.exports_log} SET status = 'ready', file_data = $2, file_name = $3, completed_at = now(), expires_at = now() + interval '30 days' WHERE id = $1`, [id, buf, `${body.report}-${new Date().toISOString().slice(0, 10)}.${body.format}`]))
+        .then(() => (actorId ? notifyExportReady(actorId, { id, report: body.report, format: body.format, rows: rows.length }) : undefined))
         .catch((err: Error) => {
           logger.error({ err: err.message, id }, 'background export failed');
           return db.query(`UPDATE ${T.exports_log} SET status = 'failed', error = $2 WHERE id = $1`, [id, err.message.slice(0, 500)]);
@@ -189,3 +193,26 @@ export const exportsService = {
     return { buf: r.file_data, fileName: r.file_name ?? `${r.report}.${r.format}`, contentType: CONTENT_TYPES[r.format] };
   },
 };
+
+/** Background export finished: bell item + "export ready" email (download link) for the admin who asked for it. */
+async function notifyExportReady(adminId: string, e: { id: string; report: string; format: string; rows: number }): Promise<void> {
+  const label = e.report.replace(/[_-]+/g, ' ');
+  const href = `/analytics/exports?download=${encodeURIComponent(e.id)}&report=${encodeURIComponent(e.report)}&format=${e.format}`;
+  await adminInbox.notify({
+    permission: 'analytics.view',
+    userIds: [adminId],
+    kind: 'success',
+    category: 'export',
+    title: { en: `Export ready: ${label}`, ar: `ملف التصدير جاهز: ${label}` },
+    body: { en: `${e.rows.toLocaleString('en-US')} rows · ${e.format.toUpperCase()}`, ar: `${e.rows.toLocaleString('en-US')} صف · ${e.format.toUpperCase()}` },
+    href,
+    dedupeKey: `export:${e.id}`,
+    email: false,
+  });
+  await emailAdmin(
+    adminId,
+    'admin_export_ready',
+    { report: { en: label, ar: label }, format: e.format, rows: e.rows, link: adminUrl(href), expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString() },
+    { alert: true },
+  );
+}

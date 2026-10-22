@@ -54,6 +54,7 @@ export const qk = {
   campaigns: mod('campaigns'),
   deliveries: mod('deliveries'),
   settings: mod('settings'),
+  whatsapp: mod('whatsapp'),
   featureFlags: mod('featureFlags'),
   legal: mod('legal'),
   cms: mod('cms'),

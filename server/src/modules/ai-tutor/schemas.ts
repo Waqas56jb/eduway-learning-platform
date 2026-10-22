@@ -27,6 +27,16 @@ export const aiAllowanceDto = z
   })
   .openapi('AiAllowance');
 
+export const tutorCitationDto = z
+  .object({
+    type: z.enum(['lesson', 'unit', 'topic', 'question_explanation', 'faq', 'lesson_transcript', 'lesson_notes', 'lesson_description']),
+    id: uuid,
+    lessonId: uuid.nullable(),
+    subjectId: uuid.nullable(),
+    title: z.string(),
+  })
+  .openapi('TutorCitation');
+
 export const tutorMessageDto = z
   .object({
     id: uuid,
@@ -40,6 +50,7 @@ export const tutorMessageDto = z
     rating: z.enum(['up', 'down']).nullable(),
     date: z.string(),
     at: z.string(),
+    citations: z.array(tutorCitationDto),
   })
   .openapi('TutorMessage');
 
@@ -136,6 +147,49 @@ export const aiUsageDto = z.object({
 
 export const aiModelsDto = z.record(z.array(z.object({ value: z.string(), label: z.string() })));
 
+// ── knowledge base (RAG index) — ADM-AI-16/17 ──
+export const kbRunDto = z
+  .object({
+    id: uuid,
+    trigger: z.enum(['manual', 'content', 'cron', 'script']),
+    status: z.enum(['queued', 'running', 'completed', 'failed', 'skipped']),
+    full: z.boolean(),
+    progressPct: z.number().int(),
+    model: z.string(),
+    sourcesTotal: z.number().int(),
+    chunksTotal: z.number().int(),
+    chunksEmbedded: z.number().int(),
+    chunksUnchanged: z.number().int(),
+    chunksDeleted: z.number().int(),
+    tokens: z.number().int(),
+    costUsd: z.number(),
+    error: z.string().nullable(),
+    requestedBy: z.object({ id: uuid, name: localized }).nullable(),
+    startedAt: z.string().nullable(),
+    finishedAt: z.string().nullable(),
+    createdAt: z.string(),
+  })
+  .openapi('KbIndexRun');
+const kbTypeCount = z.object({ sources: z.number().int(), chunks: z.number().int() });
+export const kbStatusDto = z
+  .object({
+    available: z.boolean(),
+    embeddingModel: z.string(),
+    realEmbeddings: z.boolean(),
+    totals: z.object({
+      sources: z.number().int(),
+      chunks: z.number().int(),
+      tokens: z.number().int(),
+      byType: z.object({ lesson: kbTypeCount, unit: kbTypeCount, topic: kbTypeCount, question_explanation: kbTypeCount, faq: kbTypeCount }),
+    }),
+    lastIndexedAt: z.string().nullable(),
+    running: z.boolean(),
+    lastRun: kbRunDto.nullable(),
+    recentRuns: z.array(kbRunDto),
+  })
+  .openapi('KbStatus');
+export const kbReindexBody = z.object({ force: z.boolean().default(false) });
+
 // ── student requests ──
 export const conversationsQuery = z.object({
   subjectId: idOrSlug.optional(),
@@ -153,6 +207,8 @@ export const sendMessageBody = z.object({
   attachmentFileKey: fileKey.optional(),
   lang: lang.default('ar'),
   clientMessageId: z.string().trim().max(100).optional(),
+  /** Lesson the student is currently viewing (optional): its knowledge-base chunks are preferred in retrieval. */
+  lessonId: uuid.optional(),
 });
 export const feedbackBody = z.object({ rating: z.enum(['up', 'down']).nullable(), comment: z.string().trim().max(1000).optional() });
 export const messageIdParam = z.object({ messageId: uuid });

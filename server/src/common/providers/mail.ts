@@ -75,6 +75,22 @@ export function resolveFrom(e: Pick<Env, 'MAIL_FROM' | 'SMTP_HOST' | 'SMTP_URL' 
   return `"${display.replace(/"/g, '')}" <${addr}>`;
 }
 
+/**
+ * Development safety net: outside production a real SMTP account must never mail seed / demo addresses that belong
+ * to someone else. Returns the recipient to use and whether it was redirected.
+ */
+export function devRecipient(to: string, e: Pick<Env, 'NODE_ENV' | 'MAIL_DEV_ALLOWLIST' | 'SMTP_USER'>): { to: string; redirected: boolean } {
+  if (e.NODE_ENV === 'production') return { to, redirected: false };
+  const allow = (e.MAIL_DEV_ALLOWLIST ?? e.SMTP_USER ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.includes('@'));
+  if (!allow.length) return { to, redirected: false };
+  const norm = (a: string) => a.trim().toLowerCase().replace(/\+[^@]*@/, '@');
+  if (allow.some((a) => norm(a) === norm(to))) return { to, redirected: false };
+  return { to: allow[0] as string, redirected: true };
+}
+
 let transporter: Transporter | null = null;
 /** Test hook: replace the transport (null restores env selection). */
 export function setMailTransport(t: Transporter | null): void {
@@ -101,7 +117,15 @@ export const mailer = {
     }
   },
   async sendOrThrow(msg: MailMessage): Promise<{ messageId: string | null }> {
-    const info = (await getTransport().sendMail({ from: resolveFrom(env), ...msg })) as { messageId?: string };
+    let out = msg;
+    if (emailProviderName() === 'smtp') {
+      const d = devRecipient(msg.to, env);
+      if (d.redirected) {
+        logger.info({ to: msg.to, redirectedTo: d.to }, '[Mail:dev] recipient not in MAIL_DEV_ALLOWLIST — redirected');
+        out = { ...msg, to: d.to, subject: `[DEV → ${msg.to}] ${msg.subject}` };
+      }
+    }
+    const info = (await getTransport().sendMail({ from: resolveFrom(env), ...out })) as { messageId?: string };
     if (emailProviderName() === 'mock-email') {
       if (isProd) logger.warn({ to: msg.to, subject: msg.subject }, 'email provider is mock — email NOT delivered');
       else logger.info({ to: msg.to, subject: msg.subject, text: msg.text, attachments: msg.attachments?.map((a) => a.filename) }, '[Mail:dev] email logged instead of sent');

@@ -1,5 +1,5 @@
 /**
- * npm run migrate [-- --dry-run] [-- --reapply-changed] [-- --list-objects]
+ * npm run migrate [-- --dry-run] [-- --reapply-changed] [-- --list-objects] [-- --only=012,405]
  * Applies src/db/migrations in order (see src/db/migrator.ts). Only prefixed objects are ever touched.
  */
 import { closeDb, pool } from '../src/config/db.js';
@@ -15,6 +15,7 @@ async function main() {
   const results = await runMigrations(pool, {
     dryRun: args.has('--dry-run'),
     reapplyChanged: args.has('--reapply-changed'),
+    only: [...args].find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',').filter(Boolean),
     log: (m) => console.log('  ' + m),
   });
   const applied = results.filter((r) => r.status === 'applied' || r.status === 'reapplied').length;

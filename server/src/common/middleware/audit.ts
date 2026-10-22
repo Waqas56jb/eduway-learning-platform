@@ -51,9 +51,45 @@ export function audit(opts: AuditOptions) {
   };
 }
 
+/** A successful admin mutation (after the response). Listeners must be fast and never throw. */
+export interface AdminMutationEvent {
+  method: string;
+  path: string;
+  entity: string | null;
+  entityId: string | null;
+  action: string | null;
+}
+const mutationListeners = new Set<(e: AdminMutationEvent) => void>();
+
+/** Subscribe to successful admin mutations (e.g. the AI knowledge base re-indexes changed content). */
+export function onAdminMutation(fn: (e: AdminMutationEvent) => void): () => void {
+  mutationListeners.add(fn);
+  return () => mutationListeners.delete(fn);
+}
+
+function emitMutation(req: Request): void {
+  if (!mutationListeners.size) return;
+  const a = req.audit;
+  const e: AdminMutationEvent = {
+    method: req.method,
+    path: req.originalUrl.split('?')[0] ?? req.path,
+    entity: a?.entity ?? null,
+    entityId: a?.entityId ?? (req.params as Record<string, string | undefined>).id ?? null,
+    action: a?.action ?? null,
+  };
+  for (const fn of mutationListeners) {
+    try {
+      fn(e);
+    } catch {
+      /* listeners never break the request */
+    }
+  }
+}
+
 export function adminAuditTrail(req: Request, res: Response, next: NextFunction): void {
   if (!MUTATING.has(req.method)) return next();
   res.on('finish', () => {
+    if (req.admin && res.statusCode < 400) emitMutation(req);
     if (!req.admin || req.auditWritten || res.statusCode >= 400) return;
     req.auditWritten = true;
     const routePath = (req.route as { path?: string } | undefined)?.path ?? req.path;

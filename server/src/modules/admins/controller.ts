@@ -38,12 +38,12 @@ export const adminsController = {
   },
 
   async changePassword(req: Request, admin: AdminPrincipal, body: { currentPassword: string; newPassword: string }) {
-    await adminsService.changePassword(admin, body.currentPassword, body.newPassword);
+    await adminsService.changePassword(admin, body.currentPassword, body.newPassword, req.ip ?? null);
     req.audit = { action: 'admin.change_password', entity: 'admin_user', entityId: admin.userId, summary: 'Changed own password', before: null, after: null };
     return OK;
   },
 
-  setPreferences: (admin: AdminPrincipal, body: { language?: 'en' | 'ar'; theme?: 'light' | 'dark' | 'system' }) => adminsService.setPreferences(admin.userId, body),
+  setPreferences: (admin: AdminPrincipal, body: { language?: 'en' | 'ar'; theme?: 'light' | 'dark' | 'system'; emailAlerts?: boolean }) => adminsService.setPreferences(admin.userId, body),
   mySessions: (admin: AdminPrincipal) => adminsService.mySessions(admin),
 
   async inbox(admin: AdminPrincipal, q: { unread?: boolean; limit: number; cursor?: string }) {
@@ -80,7 +80,7 @@ export const adminsController = {
   },
 
   async resetMfa(req: Request, id: string) {
-    const after = await adminsService.resetMfa(id);
+    const after = await adminsService.resetMfa(id, req.admin);
     req.audit = { action: 'admin.reset_mfa', entity: 'admin_user', entityId: id, summary: `Reset 2FA for ${after.email}`, before: { mfaEnabled: true }, after: { mfaEnabled: false } };
     return after;
   },

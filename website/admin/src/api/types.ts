@@ -276,7 +276,7 @@ export interface MeAdminDto {
   role: RoleDto;
   permissions: PermissionKey[];
   roles: string[];
-  preferences: { language: Lang; theme: 'light' | 'dark' | 'system' };
+  preferences: { language: Lang; theme: 'light' | 'dark' | 'system'; emailAlerts?: boolean };
   unreadNotifications: number;
 }
 export interface AdminInboxNotification {

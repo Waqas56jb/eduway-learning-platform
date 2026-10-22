@@ -32,6 +32,8 @@ export interface StudentUser {
   firstName: Localized;
   mobile: string;
   email: string | null;
+  /** The email was confirmed through the link we sent (receipts / support replies are emailed only then). */
+  emailVerified: boolean;
   gender: 'male' | 'female' | null;
   governorate: string;
   governorateName: Localized;
@@ -67,6 +69,7 @@ export interface StudentRow {
   id: string;
   phone: string;
   email: string | null;
+  email_verified_at: Date | null;
   name_en: string;
   name_ar: string;
   avatar_url: string | null;

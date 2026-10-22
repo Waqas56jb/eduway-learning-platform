@@ -162,5 +162,48 @@
     "web": "Web",
     "ios": "iOS app",
     "android": "Android app"
+  },
+  "kb": {
+    "title": "Knowledge base (RAG)",
+    "subtitle": "Course content the tutor searches before answering: published lessons, units, chapters, question explanations and FAQs",
+    "reindex": "Reindex knowledge base",
+    "forceReindex": "Re-embed everything",
+    "reindexing": "Indexing…",
+    "queuedToast": "Reindex started",
+    "confirmForceTitle": "Re-embed the whole knowledge base?",
+    "confirmForceBody": "Every chunk is embedded again, even unchanged ones. A normal reindex only embeds content that changed.",
+    "unavailable": "Vector search is not available (pgvector extension or embeddings table missing). The tutor uses keyword search.",
+    "mockEmbeddings": "No OpenAI key: offline mock embeddings are used (development only).",
+    "model": "Embedding model",
+    "sources": "Sources",
+    "chunks": "Chunks",
+    "tokens": "Tokens",
+    "lastIndexed": "Last indexed",
+    "never": "Never",
+    "autoNote": "Publishing, editing or deleting content re-indexes it automatically (only changed content is embedded).",
+    "types": {
+      "lesson": "Lessons",
+      "unit": "Units",
+      "topic": "Chapters",
+      "question_explanation": "Question explanations",
+      "faq": "FAQs"
+    },
+    "lastRun": "Last run",
+    "runStatus": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "trigger": {
+      "manual": "Manual",
+      "content": "Content change",
+      "cron": "Nightly",
+      "script": "Script"
+    },
+    "runSummary": "{{embedded}} embedded · {{unchanged}} unchanged · {{deleted}} removed",
+    "cost": "Cost",
+    "by": "by {{name}}"
   }
 }

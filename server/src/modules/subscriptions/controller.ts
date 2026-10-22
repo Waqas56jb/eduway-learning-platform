@@ -4,7 +4,7 @@ import type { AdminPrincipal } from '../../common/types/index.js';
 import { toPagination } from '../../common/utils/pagination.js';
 import { paged } from '../../common/utils/response.js';
 import { sendTableExport } from '../commerce/lib.js';
-import { subscriptionEngine } from './engine.js';
+import { emailSubscriptionActivated, subscriptionEngine } from './engine.js';
 import type { SubscriptionListQuery } from './schemas.js';
 import { subscriptionsService, type AdminSubscriptionDto } from './service.js';
 
@@ -30,6 +30,7 @@ export const subscriptionsController = {
   },
   async grant(req: Request, admin: AdminPrincipal, body: { studentId: string; packageId: string; days?: number; startsAt?: string; reason: string }) {
     const id = await subscriptionEngine.grantManual({ ...body, actor: actorOf(admin) });
+    void emailSubscriptionActivated(id);
     const dto = await subscriptionsService.get(id);
     req.audit = { action: 'subscription.grant', entity: 'subscription', entityId: id, summary: `Granted ${dto.package.name.en} to ${dto.student.name.en} until ${dto.endsAt.slice(0, 10)}: ${body.reason}`, after: dto };
     return dto;

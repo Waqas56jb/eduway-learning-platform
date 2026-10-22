@@ -1,6 +1,11 @@
 /**
- * Retrieval for the AI tutor (AIT-08): lesson transcripts/descriptions, question explanations and the student's own
- * lesson notes, per the `ai_settings.retrieval_*` toggles.
+ * Retrieval for the AI tutor (AIT-08): the knowledge base (lessons, units, chapters, question explanations, FAQs —
+ * see knowledge-base.ts) and the student's own lesson notes, per the `ai_settings.retrieval_*` toggles.
+ *
+ * Vector path (fast): the question embedding is cached (LRU, 1 h), then ONE SQL statement does top-k cosine search
+ * (HNSW) restricted to the conversation subject + subjects the student is currently entitled to (FAQs are global),
+ * excludes questions of a live exam attempt, re-ranks with a boost for the current lesson and keeps ≤ 2 chunks per
+ * source.
  *
  * pgvector is used only when `eduway_platform_embeddings` exists (it is created by migration 012 only if the
  * shared `vector` extension is enabled) AND it holds rows; this is detected at runtime and cached. Otherwise —
@@ -11,6 +16,8 @@ import { T } from '../../config/constants.js';
 import { db } from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { TtlCache } from '../../common/utils/cache.js';
+import { sha256 } from '../../common/utils/crypto.js';
+import { vectorSql } from './knowledge-base.js';
 import { embeddingProvider, type RetrievedChunk } from './providers/index.js';
 import { normalizeText } from './safety.js';
 import { likeContains } from '../../common/utils/like.js';
@@ -158,50 +165,100 @@ async function keywordSearch(userId: string, subjectId: string | null, question:
     .slice(0, limit);
 }
 
-async function vectorSearch(userId: string, subjectId: string | null, question: string, lang: 'en' | 'ar', toggles: RetrievalToggles, limit: number): Promise<RetrievedChunk[]> {
-  const types = [toggles.transcripts ? 'lesson_transcript' : null, toggles.explanations ? 'question_explanation' : null].filter((x): x is string => !!x);
-  if (!types.length) return [];
+/** Question embeddings (same question asked again / by many students → no extra embedding call). */
+const questionVectors = new TtlCache<number[]>(60 * 60_000, 2000);
+
+export async function embedQuestion(question: string): Promise<number[] | null> {
   const { provider, model } = embeddingProvider();
-  if (!provider.embed) return [];
-  const [vec] = await provider.embed([question], model);
+  if (!provider.embed) return null;
+  const key = sha256(`${model}|${normalizeText(question).replace(/\s+/g, ' ').trim()}`);
+  const hit = questionVectors.get(key);
+  if (hit) return hit;
+  const { vectors } = await provider.embed([question], model);
+  const vec = vectors[0];
+  if (vec) questionVectors.set(key, vec);
+  return vec ?? null;
+}
+
+/**
+ * Minimum cosine similarity for a chunk to be used (text-embedding-3-small; unrelated Arabic/English pairs score
+ * ≈ 0.15–0.3), plus a relative cut: chunks far below the best hit are noise. The offline mock uses 0.
+ */
+const MIN_SIMILARITY = 0.25;
+const RELATIVE_CUT = 0.12;
+const LESSON_BOOST = 0.08;
+
+async function vectorSearch(input: { userId: string; subjectId: string | null; lessonId: string | null; question: string; lang: 'en' | 'ar'; toggles: RetrievalToggles; limit: number }): Promise<RetrievedChunk[]> {
+  const types = [
+    ...(input.toggles.transcripts ? ['lesson', 'unit', 'topic'] : []),
+    ...(input.toggles.explanations ? ['question_explanation'] : []),
+    'faq',
+  ];
+  const vec = await vectorSql();
   if (!vec) return [];
-  const rows = await db.many<{ source_type: RetrievedChunk['sourceType']; source_id: string; lesson_id: string | null; content: string; distance: number; title_en: string | null; title_ar: string | null }>(
-    `SELECT e.source_type, e.source_id, e.lesson_id, e.content, (e.embedding <=> $1::text::vector) AS distance, l.title_en, l.title_ar
-       FROM ${T.embeddings} e
-       LEFT JOIN ${T.lessons} l ON l.id = e.lesson_id
-      WHERE e.source_type = ANY($2::text[]) AND ($3::uuid IS NULL OR e.subject_id = $3) AND e.locale = $4 AND e.embedding IS NOT NULL
-        AND NOT (e.source_type = 'question_explanation' AND EXISTS (
-              SELECT 1 FROM ${T.exam_attempts} a WHERE a.user_id = $5 AND a.status = 'in_progress' AND e.source_id = ANY(a.question_ids)))
-      ORDER BY e.embedding <=> $1::text::vector
-      LIMIT $6`,
-    [`[${vec.join(',')}]`, types, subjectId, lang, userId, limit],
+  const qv = await embedQuestion(input.question);
+  if (!qv) return [];
+  const minSim = embeddingProvider().real ? MIN_SIMILARITY : 0;
+  const rows = await db.many<{ source_type: RetrievedChunk['sourceType']; source_id: string; subject_id: string | null; lesson_id: string | null; title: string; content: string; similarity: number; score: number }>(
+    `WITH q AS (SELECT $1::text::${vec.type} AS v),
+     cand AS (
+       SELECT e.source_type, e.source_id, e.subject_id, e.lesson_id, e.title, e.content, e.chunk_index,
+              1 - (e.embedding ${vec.cosine} q.v) AS similarity
+         FROM ${T.embeddings} e, q
+        WHERE e.locale = $2 AND e.source_type = ANY($3::text[]) AND e.embedding IS NOT NULL
+          AND (e.subject_id IS NULL OR (
+                ($4::uuid IS NULL OR e.subject_id = $4)
+                AND EXISTS (SELECT 1 FROM ${T.entitlements} en WHERE en.user_id = $5 AND en.subject_id = e.subject_id
+                               AND en.revoked_at IS NULL AND en.starts_at <= now() AND en.ends_at > now())))
+          AND NOT (e.source_type = 'question_explanation' AND EXISTS (
+                SELECT 1 FROM ${T.exam_attempts} a WHERE a.user_id = $5 AND a.status = 'in_progress' AND e.source_id = ANY(a.question_ids)))
+        ORDER BY e.embedding ${vec.cosine} q.v
+        LIMIT $6
+     ),
+     ranked AS (
+       SELECT c.*, c.similarity + CASE WHEN $7::uuid IS NOT NULL AND c.lesson_id = $7 THEN ${LESSON_BOOST} ELSE 0 END AS score,
+              row_number() OVER (PARTITION BY c.source_type, c.source_id ORDER BY c.similarity DESC) AS rn
+         FROM cand c WHERE c.similarity >= $8
+     )
+     SELECT source_type, source_id, subject_id, lesson_id, title, content, similarity, score
+       FROM ranked WHERE rn <= 2 ORDER BY score DESC LIMIT $9`,
+    [`[${qv.join(',')}]`, input.lang, types, input.subjectId, input.userId, input.limit * 5, input.lessonId, minSim, input.limit],
   );
-  return rows.map((r) => ({
+  const best = rows.length ? Number(rows[0]?.score) : 0;
+  return rows.filter((r) => minSim === 0 || Number(r.score) >= best - RELATIVE_CUT).map((r) => ({
     sourceType: r.source_type,
     sourceId: r.source_id,
     lessonId: r.lesson_id,
-    title: (lang === 'ar' ? r.title_ar : r.title_en) ?? '',
+    subjectId: r.subject_id,
+    title: r.title,
     content: r.content,
-    score: 1 - Number(r.distance),
+    score: Number(r.score),
   }));
 }
 
 /** Retrieve up to `limit` context chunks. Never throws (retrieval failures degrade to no context). */
-export async function retrieveContext(input: { userId: string; subjectId: string | null; question: string; lang: 'en' | 'ar'; toggles: RetrievalToggles; limit?: number }): Promise<RetrievedChunk[]> {
-  const limit = input.limit ?? 4;
+export async function retrieveContext(input: { userId: string; subjectId: string | null; lessonId?: string | null; question: string; lang: 'en' | 'ar'; toggles: RetrievalToggles; limit?: number }): Promise<RetrievedChunk[]> {
+  const limit = input.limit ?? 5;
+  let notes: RetrievedChunk[] = [];
   try {
     if (await vectorStoreReady()) {
-      const hits = await vectorSearch(input.userId, input.subjectId, input.question, input.lang, input.toggles, limit);
-      if (hits.length) return hits;
+      const [hits, own] = await Promise.all([
+        vectorSearch({ ...input, lessonId: input.lessonId ?? null, limit }),
+        input.toggles.lessonNotes ? keywordSearch(input.userId, input.subjectId, input.question, input.lang, { transcripts: false, explanations: false, lessonNotes: true }, 2).catch(() => []) : Promise.resolve([]),
+      ]);
+      notes = own;
+      // The vector index answered: no relevant hit means "no context", not "try keywords" (keyword matches on
+      // generic words like "law"/"قانون" would inject unrelated lessons).
+      return [...hits, ...notes];
     }
   } catch (err) {
     logger.warn({ err: (err as Error).message }, 'vector retrieval failed — falling back to keyword search');
-    cache.set('vector', false);
+    cache.set('vector', false, 60_000);
   }
   try {
     return await keywordSearch(input.userId, input.subjectId, input.question, input.lang, input.toggles, limit);
   } catch (err) {
     logger.warn({ err: (err as Error).message }, 'keyword retrieval failed');
-    return [];
+    return notes;
   }
 }

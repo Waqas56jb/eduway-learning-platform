@@ -79,11 +79,13 @@ export interface RunOptions {
   reapplyChanged?: boolean;
   dryRun?: boolean;
   log?: (msg: string) => void;
+  /** Only run migrations whose file name starts with one of these (e.g. ['012', '405']). Default: all. */
+  only?: string[];
 }
 
 export async function runMigrations(pool: pg.Pool, opts: RunOptions = {}): Promise<MigrationResult[]> {
   const log = opts.log ?? (() => undefined);
-  const files = listMigrations();
+  const files = listMigrations().filter((f) => !opts.only?.length || opts.only.some((o) => f.name.startsWith(o)));
   for (const f of files) assertSafeSql(f.name, f.sql);
   if (!PROD_PREFIX.startsWith('eduway_platform_')) throw new Error('prefix misconfigured');
 

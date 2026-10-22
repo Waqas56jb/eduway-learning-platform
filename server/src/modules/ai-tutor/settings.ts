@@ -7,6 +7,9 @@ const cache = new TtlCache<AiSettingsRow>(10_000);
 
 export const DEFAULT_MODELS: Record<'openai' | 'anthropic' | 'azure', { value: string; label: string }[]> = {
   openai: [
+    { value: 'gpt-6-luna', label: 'GPT-6 Luna (default, cost-effective)' },
+    { value: 'gpt-6-sol', label: 'GPT-6 Sol' },
+    { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
     { value: 'gpt-4o', label: 'GPT-4o' },
     { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
   ],

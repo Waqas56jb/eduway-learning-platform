@@ -60,8 +60,9 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 }
 
 export async function notifyOrThrow(input: NotifyInput): Promise<NotifyResult> {
-  const user = await db.maybeOne<{ id: string; locale: 'en' | 'ar'; name_en: string; name_ar: string; phone: string | null; email: string | null; prefs: Record<string, boolean> }>(
-    `SELECT id, locale, name_en, name_ar, phone, email, notification_prefs AS prefs FROM ${T.users} WHERE id = $1 AND deleted_at IS NULL`,
+  const user = await db.maybeOne<{ id: string; locale: 'en' | 'ar'; name_en: string; name_ar: string; phone: string | null; email: string | null; email_verified: boolean; prefs: Record<string, boolean> }>(
+    `SELECT id, locale, name_en, name_ar, phone, email, (email_verified_at IS NOT NULL OR kind = 'admin') AS email_verified, notification_prefs AS prefs
+       FROM ${T.users} WHERE id = $1 AND deleted_at IS NULL`,
     [input.userId],
   );
   if (!user) return { notificationId: null, deliveryIds: [] };
@@ -125,12 +126,15 @@ export async function notifyOrThrow(input: NotifyInput): Promise<NotifyResult> {
     if (category && categoryOff) continue;
     const channelOn = prefs[ch] ?? CHANNEL_PREF_DEFAULT[ch];
     if (!channelOn && input.templateType !== 'otp' && input.templateType !== 'support_message') continue;
-    const payload = { title: content.title, subject: content.title, body: content.body, data: { link, target, notificationId } };
+    const other = ch === 'email' ? text(ch, lang === 'ar' ? 'en' : 'ar') : null;
+    const i18n = other ? { title: { [lang]: content.title, [lang === 'ar' ? 'en' : 'ar']: other.title }, body: { [lang]: content.body, [lang === 'ar' ? 'en' : 'ar']: other.body } } : undefined;
+    const payload = { title: content.title, subject: content.title, body: content.body, lang, ...(i18n ? { i18n } : {}), data: { link, target, notificationId } };
     if (ch === 'push') {
       const tokens = await db.many<{ token: string; platform: string }>(`SELECT token, platform::text AS platform FROM ${T.push_tokens} WHERE user_id = $1 AND revoked_at IS NULL`, [user.id]);
       for (const t of tokens) await insertDelivery('push', t.token, t.platform, payload, content.templateId);
     } else if (ch === 'email') {
-      if (user.email) await insertDelivery('email', user.email, null, payload, content.templateId);
+      // Only a confirmed address receives email (nobody can point someone else's mailbox at an account).
+      if (user.email && user.email_verified) await insertDelivery('email', user.email, null, payload, content.templateId);
     } else if (user.phone) await insertDelivery(ch, user.phone, null, payload, content.templateId);
   }
 

@@ -11,6 +11,7 @@ import type { AdminPrincipal } from '../../common/types/index.js';
 import { sessions, toSessionDto } from '../auth/sessions.js';
 import { studentsRepo, type StudentFilter, type StudentListRow } from './repository.js';
 import type { AdminStudentDetail, AdminStudentRow, EntitlementLogDto, NoteDto, SubscriptionStatus, TransactionRow } from './types.js';
+import { onStudentEmailChanged } from '../users/email-verification.js';
 
 export async function toRows(rows: StudentListRow[]): Promise<AdminStudentRow[]> {
   const avatars = await storage.resolveMany(rows.map((r) => r.avatar_url));
@@ -223,7 +224,7 @@ export const studentsService = {
   },
 
   async update(id: string, input: { name?: { en: string; ar: string }; email?: string | null; gender?: 'male' | 'female' | null; governorateId?: string; schoolName?: string | null }) {
-    await getRow(id);
+    const current = await getRow(id);
     const userPatch: Record<string, unknown> = {};
     const profilePatch: Record<string, unknown> = {};
     if (input.name) {
@@ -240,6 +241,8 @@ export const studentsService = {
     }
     await studentsRepo.updateUser(id, userPatch);
     await studentsRepo.updateProfile(id, profilePatch);
+    // A new address must be confirmed by the student before it receives receipts / support replies.
+    if (input.email !== undefined && (current.email ?? null) !== (userPatch.email ?? null)) await onStudentEmailChanged(id);
     return this.detail(id);
   },
 

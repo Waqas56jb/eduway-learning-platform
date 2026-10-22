@@ -5,6 +5,8 @@
  *   HttpSmsProvider        — generic JSON gateway (POST { to, text, channel } with a bearer token)
  *   TwilioSmsProvider      — Twilio Programmable Messaging (SMS, and WhatsApp via the `whatsapp:` address prefix)
  *   WhatsAppCloudProvider  — Meta WhatsApp Cloud API (approved authentication template for OTPs)
+ *   BaileysWhatsAppProvider — WhatsApp Web session of a number linked by QR in the admin portal (unofficial client;
+ *                            `whatsapp` channel only, OTPs fall back to the SMS provider — see docs/PROVIDERS.md)
  *
  * Selection: SMS_PROVIDER handles the `sms` channel, WHATSAPP_PROVIDER (default SMS_PROVIDER) the `whatsapp`
  * channel. A provider whose credentials are missing falls back to the mock (with a warning at startup) so the
@@ -14,6 +16,8 @@ import axios, { type AxiosInstance } from 'axios';
 import { env, isProd, type Env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { maskPhone } from '../utils/phone.js';
+import type { BaileysPort } from '../services/whatsapp/index.js';
+import { buildWhatsAppOtpText, type OtpLocale } from './otp-message.js';
 
 export interface SmsMessage {
   to: string; // E.164
@@ -21,14 +25,30 @@ export interface SmsMessage {
   channel: 'sms' | 'whatsapp';
   /** The OTP code when the message is an OTP. Used as the template parameter by WhatsApp templates; logged only by the mock outside production. */
   devCode?: string;
+  /** OTP only: recipient language and code validity (Baileys builds its own bilingual text from them). */
+  locale?: OtpLocale;
+  ttlSeconds?: number;
+  /** OTP only: the otp_codes row, so a later fallback can record the channel actually used. */
+  otpId?: string;
+}
+
+export interface SmsSendResult {
+  providerMessageId: string;
+  /** Channel actually used when it differs from the requested one (e.g. WhatsApp → SMS fallback). */
+  channel?: 'sms' | 'whatsapp';
+  /** Provider actually used (when a fallback happened). */
+  provider?: string;
 }
 
 export interface SmsProvider {
   readonly name: string;
-  send(msg: SmsMessage): Promise<{ providerMessageId: string }>;
+  send(msg: SmsMessage): Promise<SmsSendResult>;
+  /** Optional: true when OTPs without an explicit channel should go through this (WhatsApp) provider. */
+  prefersOtp?(): Promise<boolean>;
 }
 
 export type SmsProviderId = 'mock' | 'http' | 'twilio' | 'whatsapp_cloud';
+export type WhatsAppProviderId = SmsProviderId | 'baileys';
 
 /** Raised for non-retryable provider errors (bad number, template rejected…) so deliveries are not retried. */
 export class SmsSendError extends Error {
@@ -236,6 +256,69 @@ export class WhatsAppCloudProvider implements SmsProvider {
   }
 }
 
+/**
+ * Linked WhatsApp number (Baileys). Pre-checks: session connected (this or another instance) and — when the socket
+ * is local — that the number is on WhatsApp. Then the message is queued (pg-boss, throttled). OTPs use the
+ * bilingual text from otp-message.ts and fall back to the SMS provider when WhatsApp cannot deliver; other
+ * messages (campaigns) fail permanently instead of silently switching to paid SMS.
+ */
+export class BaileysWhatsAppProvider implements SmsProvider {
+  readonly name = 'baileys';
+  private port: BaileysPort | null = null;
+  constructor(
+    private readonly fallback: SmsProvider,
+    private readonly loadPort: () => Promise<BaileysPort> = async () => (await import('../services/whatsapp/index.js')).baileysPort,
+  ) {}
+
+  private async getPort(): Promise<BaileysPort> {
+    return (this.port ??= await this.loadPort());
+  }
+
+  async prefersOtp(): Promise<boolean> {
+    try {
+      return await (await this.getPort()).remoteConnected();
+    } catch {
+      return false;
+    }
+  }
+
+  private async viaFallback(msg: SmsMessage, reason: string): Promise<SmsSendResult> {
+    if (!msg.devCode) throw new SmsSendError(`baileys: ${reason}`, true);
+    logger.info({ to: maskPhone(msg.to), reason, provider: this.fallback.name }, 'whatsapp (baileys): OTP sent by SMS instead');
+    const res = await this.fallback.send({ ...msg, channel: 'sms' });
+    return { providerMessageId: res.providerMessageId, channel: 'sms', provider: this.fallback.name };
+  }
+
+  async send(msg: SmsMessage): Promise<SmsSendResult> {
+    const port = await this.getPort();
+    if (!port.configured() || !(await port.remoteConnected().catch(() => false))) return this.viaFallback(msg, 'not_connected');
+    let jid: string | null = null;
+    if (port.isLive()) {
+      const check = await port.checkNumber(msg.to).catch(() => null);
+      if (check && !check.exists) return this.viaFallback(msg, 'not_on_whatsapp');
+      jid = check?.jid ?? null;
+    }
+    const ttl = msg.ttlSeconds ?? 300;
+    const isOtp = !!msg.devCode;
+    const text = isOtp ? buildWhatsAppOtpText(msg.devCode as string, ttl, msg.locale ?? 'ar') : msg.text;
+    const fallback = this.fallback;
+    const { jobId, outcome } = await port.queue(
+      {
+        to: msg.to,
+        jid,
+        text,
+        ...(isOtp ? { fallback: { text: msg.text, devCode: msg.devCode }, otpId: msg.otpId, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() } : {}),
+      },
+      () => ({ name: fallback.name, send: (m) => fallback.send(m) }),
+    );
+    if (outcome) {
+      if (outcome.channel === 'dropped') throw new SmsSendError('baileys: message expired before sending', true);
+      return { providerMessageId: outcome.providerMessageId ?? `baileys_${Date.now()}`, channel: outcome.channel, provider: outcome.provider };
+    }
+    return { providerMessageId: `baileys_job_${jobId ?? Date.now()}`, channel: 'whatsapp', provider: 'baileys' };
+  }
+}
+
 /** Routes each message to the SMS or WhatsApp provider by channel. `name` is the SMS-side provider. */
 export class ChannelRouterSmsProvider implements SmsProvider {
   constructor(
@@ -248,8 +331,12 @@ export class ChannelRouterSmsProvider implements SmsProvider {
   nameFor(channel: 'sms' | 'whatsapp'): string {
     return channel === 'whatsapp' ? this.whatsapp.name : this.sms.name;
   }
-  send(msg: SmsMessage): Promise<{ providerMessageId: string }> {
+  send(msg: SmsMessage): Promise<SmsSendResult> {
     return (msg.channel === 'whatsapp' ? this.whatsapp : this.sms).send(msg);
+  }
+  /** Channel for an OTP request that did not name one: WhatsApp when the WhatsApp provider asks for it (linked number connected), else SMS. */
+  async otpDefaultChannel(): Promise<'sms' | 'whatsapp'> {
+    return (await this.whatsapp.prefersOtp?.()) ? 'whatsapp' : 'sms';
   }
 }
 
@@ -272,7 +359,7 @@ export function buildSmsProvider(id: SmsProviderId, e: Env): SmsProvider | null 
 export interface SmsSelection {
   provider: ChannelRouterSmsProvider;
   sms: { requested: SmsProviderId; active: string };
-  whatsapp: { requested: SmsProviderId; active: string };
+  whatsapp: { requested: WhatsAppProviderId; active: string };
 }
 
 /** Pure selection (unit-tested): requested provider → real adapter, or the mock when credentials are missing. */
@@ -281,7 +368,7 @@ export function selectSmsProviders(e: Env): SmsSelection {
   const waId = e.WHATSAPP_PROVIDER ?? e.SMS_PROVIDER;
   const test = e.NODE_ENV === 'test';
   const sms = test ? mockSms : (buildSmsProvider(smsId, e) ?? mockSms);
-  const wa = test ? mockSms : (buildSmsProvider(waId, e) ?? mockSms);
+  const wa = test ? mockSms : waId === 'baileys' ? (e.WHATSAPP_SESSION_SECRET ? new BaileysWhatsAppProvider(sms) : mockSms) : (buildSmsProvider(waId, e) ?? mockSms);
   return { provider: new ChannelRouterSmsProvider(sms, wa), sms: { requested: smsId, active: sms.name }, whatsapp: { requested: waId, active: wa.name } };
 }
 

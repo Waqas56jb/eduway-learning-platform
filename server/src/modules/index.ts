@@ -34,6 +34,7 @@ import { incentivesModule } from './incentives/index.js'; // Agent C
 import { settlementsModule } from './settlements/index.js'; // Agent C
 import { marketersModule } from './marketers/index.js'; // Agent C
 import { analyticsModule } from './analytics/index.js'; // Agent C
+import { whatsappModule } from './whatsapp/index.js'; // linked WhatsApp number (Baileys)
 
 export interface ModuleDefinition {
   /** Folder name, used in logs. */
@@ -78,4 +79,6 @@ export const modules: ModuleDefinition[] = [
   settlementsModule,
   marketersModule,
   analyticsModule,
+  // ── linked WhatsApp number (Settings → WhatsApp) ──
+  whatsappModule,
 ];

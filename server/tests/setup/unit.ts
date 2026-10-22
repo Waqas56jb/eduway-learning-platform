@@ -16,3 +16,7 @@ const defaults: Record<string, string> = {
   SUPABASE_AUTH_MIRROR: 'false',
 };
 for (const [k, v] of Object.entries(defaults)) if (!process.env[k]) process.env[k] = v;
+
+// Tests never call real payment gateways (docs/PROVIDERS.md): blank the gateway credentials so a developer's
+// sandbox credentials in server/.env (dotenv never overrides an already-set variable) keep the gateways as dev stubs.
+for (const k of ['ZAINCASH_MERCHANT_ID', 'ZAINCASH_SECRET', 'ZAINCASH_MSISDN', 'FASTPAY_STORE_ID', 'FASTPAY_SECRET', 'QICARD_TERMINAL_ID', 'QICARD_USERNAME', 'QICARD_SECRET']) process.env[k] = '';

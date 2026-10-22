@@ -10,8 +10,11 @@ export interface SessionCipher {
   decrypt(blob: string, aad: string): string;
 }
 
+const HKDF_SALT = 'eduway-platform-whatsapp-session';
+const HKDF_INFO = 'aes-256-gcm v1';
+
 export function deriveSessionKey(secret: string): Buffer {
-  return Buffer.from(hkdfSync('sha256', Buffer.from(secret, 'utf8'), Buffer.from('eduway-platform-whatsapp-session'), Buffer.from('aes-256-gcm v1'), 32));
+  return Buffer.from(hkdfSync('sha256', Buffer.from(secret, 'utf8'), Buffer.from(HKDF_SALT, 'utf8'), Buffer.from(HKDF_INFO, 'utf8'), 32));
 }
 
 export function createSessionCipher(secret: string): SessionCipher {

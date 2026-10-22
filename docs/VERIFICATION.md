@@ -72,6 +72,24 @@ writes a known OTP hash for its random phone straight to the DB, because the moc
 - The Supabase session pooler allows about 15 clients across all processes. Each API process uses `DB_POOL_MAX` + 3
   (pg-boss), so `server/.env` uses `DB_POOL_MAX=4`.
 
+### AI tutor — live OpenAI + knowledge base (RAG), 2026-10-23
+Provider `AI_PROVIDER=openai`, chat model **`gpt-6-luna`** (admin AI settings: provider `openai`, model `gpt-6-luna`, cost per 1k
+in/out `0.0001` / `0.0005` USD), embeddings `text-embedding-3-small`. pgvector `vector` 0.8.2 lives in schema `extensions`.
+
+| Check | Result |
+|---|---|
+| `npm run migrate -- --only=012,405` | ✅ `012_embeddings` re-applied (was `skipped`; type/opclass qualified as `"extensions".vector`), `405_knowledge_base` applied. (`--only` added so other agents' pending 404/406 were not applied.) |
+| `npm run kb:index` (initial full index) | ✅ 176 sources → **352 chunks** (lessons 69, units 17, chapters 32, question explanations 52, FAQs 6; × en/ar), **39,954 tokens ≈ $0.0008**, 34 s. Re-run with no changes: 0 embedded, 352 unchanged, 2.9 s, $0. |
+| Admin ADM-AI-16/17 (super admin, live API) | ✅ status 200; reindex 202 → `queued` → `running` (progress 0→70→99 %) → `completed` in 8.4 s; unauthenticated 401. |
+| Retrieval latency (demo student, cached question embedding) | ~175 ms (one SQL round-trip to the Seoul pooler); first ask of a new question +0.5–1 s for the embedding call. Off-curriculum question (Newton's 2nd law) → no context injected (similarity cut). |
+| Live tutor, SSE, demo student `+9647701234567` | ✅ 3 questions: AR math "مشتقة حاصل ضرب دالتين" (cited: المشتقات العليا, المشتقات, الفصل: المشتقات; 1,014 in / 123 out tokens, $0.000163), EN physics "Lenz's law" (cited: Lenz's Law question + lesson; 642 / 45, $0.000087), AR chemistry "ثابت الاتزان Kc" (cited: ثابت الاتزان Kc و Kp; 898 / 270, $0.000225). Arabic answers, `$…$`/`$$…$$` LaTeX, first delta 2.9–5.1 s, total 5.6–8.3 s. Allowance 56 → 55 → 54 → 53 remaining. Test conversations hard-deleted and the demo student's usage counters restored afterwards. |
+| Unit tests | ✅ `tests/unit/ai-knowledge-base.test.ts` (11) + existing AI tests (mock providers, no network). |
+
+Note: a process running an older build (not the :4100 dev server) also consumes the shared pg-boss queue; it picked up one
+reindex job and wrote legacy `lesson_transcript` rows. Runs now use their own queue `eduway.kb-index` (old builds don't
+know it), legacy rows are purged by every full sync and are never retrieved. Restart/stop stale API instances to avoid the
+nightly `eduway.embeddings-generate` being taken by old code.
+
 ## Student website
 
 Verified 2026-10-22 against `http://localhost:4100/api/v1` (single API, `DB_POOL_MAX=4`).

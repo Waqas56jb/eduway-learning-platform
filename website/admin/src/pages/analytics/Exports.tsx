@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   Bot,
@@ -79,6 +80,22 @@ export default function Exports() {
   const dl = useDownloadExport();
   const loading = history.isLoading;
   const rowsCount = preview.data?.rows ?? 0;
+
+  // "Your export is ready" email link: /analytics/exports?download=<id>&report=<key>&format=<csv|xlsx>.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get('download');
+    if (!id) return;
+    const fmt = params.get('format') === 'xlsx' ? 'xlsx' : 'csv';
+    const rep = (params.get('report') ?? 'transactions') as ReportKey;
+    setParams({}, { replace: true });
+    if (!allowed) {
+      toast.error(t('common.noPermission'));
+      return;
+    }
+    dl.mutate({ id, report: rep, format: fmt }, { onSuccess: () => toast.success(t('toast.exported')) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A job-based export (> 50k rows) finishes asynchronously: poll the history until it is ready, then download.
   useEffect(() => {

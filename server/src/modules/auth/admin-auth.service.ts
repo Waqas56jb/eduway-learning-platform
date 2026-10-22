@@ -11,12 +11,12 @@ import { env } from '../../config/env.js';
 import { invalidatePrincipal } from '../../common/auth/principal.js';
 import { signMfaChallengeToken, verifyMfaChallengeToken } from '../../common/auth/tokens.js';
 import { BusinessRuleError, ForbiddenError, RateLimitError, UnauthorizedError } from '../../common/errors/index.js';
-import { mailer } from '../../common/providers/mail.js';
 import { auditService } from '../../common/services/audit.js';
 import { securityEvents } from '../../common/services/security-events.js';
 import { settingsStore } from '../../common/services/settings-store.js';
 import { hashToken, randomCode, randomToken } from '../../common/utils/crypto.js';
 import { adminsRepo } from '../admins/repository.js';
+import { adminUrl, emailAdmin } from '../notifications/email/recipients.js';
 import { adminsService, hashPassword, passwordPolicyCheck } from '../admins/service.js';
 import type { AdminRow, MeAdminDto } from '../admins/types.js';
 import type { ClientMeta } from './student-auth.service.js';
@@ -33,8 +33,35 @@ export type AdminLoginResult =
   | { mfaRequired: true; mfaToken: string; mfaEnrollmentRequired: boolean }
   | { mfaRequired: false; tokens: AuthTokens; me: MeAdminDto };
 
+/**
+ * New-device sign-in alert: the admin has signed in before, but never from this device id (or, without a device
+ * id, this browser user agent). Checked before the new session row exists. Never throws.
+ */
+async function isNewAdminDevice(userId: string, meta: ClientMeta): Promise<boolean> {
+  try {
+    const r = await db.maybeOne<{ total: number; known: number }>(
+      `SELECT count(*)::int AS total,
+              count(*) FILTER (WHERE ($2::text IS NOT NULL AND device_id = $2) OR ($2::text IS NULL AND $3::text IS NOT NULL AND user_agent = $3))::int AS known
+         FROM ${T.sessions} WHERE user_id = $1 AND audience = 'admin'`,
+      [userId, meta.deviceId ?? null, meta.userAgent ?? null],
+    );
+    return !!r && r.total > 0 && r.known === 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Short device label from a user agent ("Chrome on Windows"). */
+export function deviceLabel(ua: string | null | undefined): string {
+  if (!ua) return '';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+  const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad|iOS/.test(ua) ? 'iOS' : /Mac OS X|Macintosh/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : '';
+  return browser && os ? `${browser} on ${os}` : browser || os || ua.slice(0, 80);
+}
+
 async function issueAdminSession(row: AdminRow, meta: ClientMeta, remember: boolean): Promise<{ tokens: AuthTokens; me: MeAdminDto }> {
   const sec = await settingsStore.get('auth');
+  const newDevice = await isNewAdminDevice(row.id, meta);
   const { tokens } = await sessions.create({
     userId: row.id,
     audience: 'admin',
@@ -48,6 +75,9 @@ async function issueAdminSession(row: AdminRow, meta: ClientMeta, remember: bool
   await adminsRepo.updateAdminUser(row.id, { last_login_at: new Date(), last_login_ip: meta.ip, failed_login_count: 0 });
   await authRepo.clearLockout('admin_login', row.email.toLowerCase());
   invalidatePrincipal(row.id);
+  if (newDevice) {
+    void emailAdmin(row.id, 'admin_new_device_login', { at: new Date().toISOString(), ip: meta.ip, device: deviceLabel(meta.userAgent), sessionsLink: adminUrl('/profile') });
+  }
   return { tokens, me: await adminsService.me(row.id) };
 }
 
@@ -231,6 +261,7 @@ export async function mfaEnable(userId: string, code: string, meta?: ClientMeta,
     mfa_last_used_step: null, // fresh factor; the finish-sign-in step may use the code currently shown
     mfa_recovery_codes: recoveryCodes.map((c) => recoveryCodeHash(c)),
   });
+  void emailAdmin(userId, 'admin_mfa_enabled', { at: new Date().toISOString() });
   const result: { mfaEnabled: true; recoveryCodes: string[]; tokens?: AuthTokens; me?: MeAdminDto } = { mfaEnabled: true, recoveryCodes };
   if (viaChallenge && meta) {
     const fresh = await adminsService.getRow(userId);
@@ -247,6 +278,7 @@ export async function mfaDisable(userId: string, input: { code?: string; passwor
   const okPw = input.password && row.password_hash ? await bcrypt.compare(input.password, row.password_hash) : false;
   if (!okCode && !okPw) throw new UnauthorizedError(input.code ? 'MFA_INVALID' : 'PASSWORD_INCORRECT');
   await adminsRepo.updateAdminUser(userId, { mfa_enabled: false, mfa_secret: null, mfa_pending_secret: null, mfa_recovery_codes: [], mfa_last_used_step: null });
+  if (row.mfa_enabled) void emailAdmin(userId, 'admin_mfa_disabled', { at: new Date().toISOString() });
   return { mfaEnabled: false as const };
 }
 
@@ -255,22 +287,22 @@ export async function forgotPassword(email: string, meta: ClientMeta): Promise<v
   if (!row || row.status !== 'active') return; // enumeration-safe
   const token = randomToken(32);
   const minutes = (await settingsStore.get('auth')).passwordResetExpiryMinutes;
+  // Only the newest link works: earlier unused links are retired before the new one is issued.
+  await authRepo.retireResets(row.id);
   await authRepo.insertReset(row.id, hashToken(token, 'reset'), minutes, meta.ip);
-  const link = `${env.ADMIN_APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
-  await mailer.send({
-    to: row.email,
-    subject: 'Reset your EDUWAY admin password',
-    text: `A password reset was requested for your EDUWAY admin account.\n\nReset it here (valid ${minutes} minutes):\n${link}\n\nIf you did not request this, ignore this email.`,
-  });
+  const link = `${env.ADMIN_APP_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+  await emailAdmin(row.id, 'admin_password_reset', { link, minutes });
 }
 
-export async function resetPassword(token: string, newPassword: string): Promise<void> {
+export async function resetPassword(token: string, newPassword: string, meta?: ClientMeta): Promise<void> {
   const reset = await authRepo.findReset(hashToken(token, 'reset'));
   if (!reset) throw new BusinessRuleError('RESET_TOKEN_INVALID');
   await passwordPolicyCheck(newPassword);
   if (!(await authRepo.useReset(reset.id))) throw new BusinessRuleError('RESET_TOKEN_INVALID');
   await adminsRepo.updateAdminUser(reset.user_id, { password_hash: await hashPassword(newPassword), password_changed_at: new Date(), failed_login_count: 0 });
   await sessions.revokeAll(reset.user_id, 'password_reset');
+  await authRepo.retireResets(reset.user_id);
+  void emailAdmin(reset.user_id, 'admin_password_changed', { via: 'reset', at: new Date().toISOString(), ip: meta?.ip ?? null });
 }
 
 export async function inviteInfo(token: string) {

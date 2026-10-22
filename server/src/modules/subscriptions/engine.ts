@@ -9,6 +9,7 @@ import { entitlements } from '../../common/entitlements.js';
 import { BusinessRuleError, NotFoundError } from '../../common/errors/index.js';
 import { addDays, daysRemaining } from '../../common/utils/dates.js';
 import { notifyStudent } from '../commerce/lib.js';
+import { emailStudent, userUrl } from '../notifications/email/recipients.js';
 import { cycleDays, type PriceQuote } from '../payments/pricing.js';
 import { loadQuotePackage } from '../payments/quote.service.js';
 
@@ -190,6 +191,7 @@ export const subscriptionEngine = {
    * sends 7/3/1-day reminders (template `expiry_wa`, once per threshold) and retires expired school code aliases.
    */
   async expireSubscriptionsAndRemind(now = new Date()): Promise<{ expired: number; reminded: number; aliasesCleared: number }> {
+    const expiredRows: { id: string; user_id: string }[] = [];
     const expired = await tx(async (c) => {
       const rows = await db.many<{ id: string; user_id: string }>(
         `UPDATE ${T.subscriptions} SET status = 'expired' WHERE status IN ('active', 'trial') AND ends_at <= $1 RETURNING id, user_id`,
@@ -206,8 +208,10 @@ export const subscriptionEngine = {
         );
         entitlements.invalidate(r.user_id);
       }
+      expiredRows.push(...rows);
       return rows.length;
     });
+    await emailExpired(expiredRows);
 
     let reminded = 0;
     for (const d of [7, 3, 1]) {
@@ -232,6 +236,12 @@ export const subscriptionEngine = {
           },
           link: '/subscription',
         });
+        await emailStudent(
+          s.user_id,
+          'subscription_expiring',
+          { package: { en: s.pkg_en, ar: s.pkg_ar || s.pkg_en }, days: left, until: s.ends_at.toISOString(), link: userUrl('/student/subscription') },
+          { category: 'payments', dedupeKey: `sub-expiring:${s.id}:${d}` },
+        );
         await db.query(`UPDATE ${T.subscriptions} SET reminders_sent = reminders_sent || to_jsonb($2::int) WHERE id = $1`, [s.id, d]);
         reminded++;
       }
@@ -246,3 +256,27 @@ export const subscriptionEngine = {
 };
 
 export const expireSubscriptionsAndRemind = (now?: Date) => subscriptionEngine.expireSubscriptionsAndRemind(now);
+
+/** "Subscription expired" email — skipped when the student already has another active subscription. */
+async function emailExpired(rows: { id: string; user_id: string }[]): Promise<void> {
+  for (const r of rows) {
+    const s = await db.maybeOne<{ pkg_en: string; pkg_ar: string; renewed: boolean }>(
+      `SELECT p.name_en AS pkg_en, p.name_ar AS pkg_ar,
+              EXISTS (SELECT 1 FROM ${T.subscriptions} n WHERE n.user_id = s.user_id AND n.id <> s.id AND n.status IN ('active', 'trial') AND n.ends_at > now()) AS renewed
+         FROM ${T.subscriptions} s JOIN ${T.packages} p ON p.id = s.package_id WHERE s.id = $1`,
+      [r.id],
+    ).catch(() => null);
+    if (!s || s.renewed) continue;
+    await emailStudent(r.user_id, 'subscription_expired', { package: { en: s.pkg_en, ar: s.pkg_ar || s.pkg_en }, link: userUrl('/student/subscription') }, { category: 'payments', dedupeKey: `sub-expired:${r.id}` });
+  }
+}
+
+/** "Subscription active" email after a manual grant (payments send the receipt email instead). */
+export async function emailSubscriptionActivated(subscriptionId: string): Promise<void> {
+  const s = await db.maybeOne<{ user_id: string; ends_at: Date; pkg_en: string; pkg_ar: string }>(
+    `SELECT s.user_id, s.ends_at, p.name_en AS pkg_en, p.name_ar AS pkg_ar FROM ${T.subscriptions} s JOIN ${T.packages} p ON p.id = s.package_id WHERE s.id = $1`,
+    [subscriptionId],
+  ).catch(() => null);
+  if (!s) return;
+  await emailStudent(s.user_id, 'subscription_activated', { package: { en: s.pkg_en, ar: s.pkg_ar || s.pkg_en }, until: s.ends_at.toISOString(), link: userUrl('/student/dashboard') }, { dedupeKey: `sub-activated:${subscriptionId}` });
+}

@@ -65,7 +65,7 @@ export const adminMeApi = {
     api.patch<AdminUserDto>('/admin/me', body),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post<OkDto>('/admin/me/password', { currentPassword, newPassword }),
-  preferences: (body: { language?: Lang; theme?: 'light' | 'dark' | 'system' }) =>
+  preferences: (body: { language?: Lang; theme?: 'light' | 'dark' | 'system'; emailAlerts?: boolean }) =>
     api.patch<MeAdminDto['preferences']>('/admin/me/preferences', body),
   sessions: () => api.get<AdminSessionDto[]>('/admin/me/sessions'),
   inbox: async (params: { unread?: boolean; limit?: number } = {}) => {

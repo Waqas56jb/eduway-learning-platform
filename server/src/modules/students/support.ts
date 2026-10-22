@@ -7,6 +7,8 @@ import { adminInbox } from '../../common/services/admin-inbox.js';
 import type { AdminPrincipal } from '../../common/types/index.js';
 import { orderBy } from '../../common/utils/pagination.js';
 import { notify } from '../notifications/notify.js';
+import { emailStudent, userUrl } from '../notifications/email/recipients.js';
+import { isEmailAddress, queueEmail } from '../notifications/email/send.js';
 import type { SupportTicketDetailDto, SupportTicketDto, SupportTicketMessageDto } from './types.js';
 import { likeContains } from '../../common/utils/like.js';
 
@@ -165,8 +167,9 @@ export const supportService = {
   /**
    * Admin reply (ADM-SUP-04): appends an `admin` message, moves the ticket to `status` (default: `pending` =
    * waiting for the student, unless it is already resolved and no status is given) and notifies a registered
-   * student in-app + push. Contact-form tickets have no account: the reply is recorded for the team, and the
-   * agent answers through the contact channel shown on the ticket.
+   * student in-app + push + email (confirmed address only). Contact-form tickets have no account: when the contact
+   * on the ticket is an email address the reply is emailed to it; otherwise the agent answers through the contact
+   * channel shown on the ticket (phone).
    */
   async reply(idOrNumber: string, admin: AdminPrincipal, input: { body: string; status?: TicketStatus }) {
     const row = await resolveRowId(idOrNumber);
@@ -197,6 +200,21 @@ export const supportService = {
         target: { kind: 'support_ticket', id: row.number },
       });
       notified = !!r.notificationId || r.deliveryIds.length > 0;
+      const emailed = await emailStudent(
+        row.user_id,
+        'support_reply',
+        { ticket: row.number, subject: before.subject, message: input.body, link: userUrl('/student/notifications') },
+      );
+      notified = notified || !!emailed;
+    } else if (before.contact && isEmailAddress(before.contact.contact)) {
+      const name = before.contact.name || '';
+      const emailed = await queueEmail({
+        to: before.contact.contact,
+        template: 'support_reply',
+        vars: { name: { en: name, ar: name }, ticket: row.number, subject: before.subject, message: input.body },
+        lang: before.locale,
+      });
+      notified = !!emailed;
     }
     const after = await this.detail(row.number);
     return { before, after, notified };

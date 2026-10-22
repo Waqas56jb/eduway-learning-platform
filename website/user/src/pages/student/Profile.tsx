@@ -40,6 +40,7 @@ import {
 import { authApi } from '@/api/auth';
 import { errorMessage } from '@/api/client';
 import {
+  meApi,
   useNotificationPrefs,
   useRevokeOtherSessions,
   useRevokeSession,
@@ -56,13 +57,14 @@ import { cn } from '@/lib/utils';
 import type { Lang, Session } from '@/types';
 
 /** The web profile shows these 6 of the 9 NotificationPrefs toggles (ME-09/10). */
-const PREF_KEYS = ['lessons', 'exams', 'payments', 'weekly', 'sms', 'whatsapp'] as const;
+const PREF_KEYS = ['lessons', 'exams', 'payments', 'weekly', 'sms', 'whatsapp', 'email'] as const;
 type PrefKey = (typeof PREF_KEYS)[number];
 
 interface FormValues {
   name: string;
   governorate: string;
   school: string;
+  email: string;
 }
 
 type Confirm = { kind: 'session'; session: Session } | { kind: 'others' } | { kind: 'reset' } | null;
@@ -109,6 +111,7 @@ export default function Profile() {
   const [uploading, setUploading] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
   const ask = (c: NonNullable<Confirm>) => {
     setConfirm(c);
     setConfirmOpen(true);
@@ -125,6 +128,7 @@ export default function Profile() {
       name: user ? user.name[lang] || user.name.en : '',
       governorate: user?.governorate ?? '',
       school: user?.school ? user.school[lang] || user.school.en : '',
+      email: user?.email ?? '',
     },
   });
   const governorate = watch('governorate');
@@ -137,15 +141,18 @@ export default function Profile() {
       name: user.name[lang] || user.name.en,
       governorate: user.governorate,
       school: user.school ? user.school[lang] || user.school.en : '',
+      email: user.email ?? '',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.name.en, user?.governorate, user?.school?.en, lang]);
+  }, [user?.name.en, user?.governorate, user?.school?.en, user?.email, lang]);
 
   if (!user) return null;
 
   const onSave = async (v: FormValues) => {
     const name = v.name.trim().replace(/\s+/g, ' ');
     const school = v.school.trim();
+    const email = v.email.trim().toLowerCase();
+    const emailChanged = email !== (user.email ?? '');
     const match = schools.find((s) => s.name.en.toLowerCase() === school.toLowerCase() || s.name.ar === school);
     try {
       await updateMe.mutateAsync({
@@ -153,9 +160,10 @@ export default function Profile() {
         governorateId: v.governorate,
         schoolId: match ? match.id : null,
         schoolName: match ? null : school || null,
+        ...(emailChanged ? { email: email || null } : {}),
       });
-      reset({ name, governorate: v.governorate, school });
-      toast.success(t('toast.saved'));
+      reset({ name, governorate: v.governorate, school, email });
+      toast.success(emailChanged && email ? t('account.profile.emailLinkSent', { email }) : t('toast.saved'));
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -166,6 +174,19 @@ export default function Profile() {
     setLang(next);
     updateMe.mutate({ language: next });
     toast.success(i18n.getFixedT(next)('account.profile.languageChanged'));
+  };
+
+  const sendEmailLink = async () => {
+    setSendingLink(true);
+    try {
+      const r = await meApi.requestEmailVerification();
+      if (r.alreadyVerified) toast.info(t('account.profile.emailAlready'));
+      else toast.success(t('account.profile.emailLinkSent', { email: r.email ?? '' }));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setSendingLink(false);
+    }
   };
 
   const togglePref = (k: PrefKey, v: boolean) => {
@@ -337,6 +358,42 @@ export default function Profile() {
                     hint={t('account.profile.mobileLocked')}
                     className="cursor-not-allowed bg-primary/[0.03] text-muted num [unicode-bidi:plaintext]"
                   />
+                  <div className="sm:col-span-2">
+                    <Input
+                      type="email"
+                      dir="ltr"
+                      label={t('account.profile.email')}
+                      placeholder={t('account.profile.emailPlaceholder')}
+                      optional={t('common.optional')}
+                      autoComplete="email"
+                      error={errors.email?.message}
+                      hint={
+                        user.email
+                          ? user.emailVerified
+                            ? t('account.profile.emailHint')
+                            : t('account.profile.emailUnverified')
+                          : t('account.profile.emailHint')
+                      }
+                      {...register('email', {
+                        maxLength: { value: 200, message: t('validation.maxLength', { count: 200 }) },
+                        validate: (v) => !v.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) || t('account.profile.emailInvalid'),
+                      })}
+                    />
+                    {user.email && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {user.emailVerified ? (
+                          <Badge tone="success">
+                            <Check className="h-3.5 w-3.5" aria-hidden />
+                            {t('account.profile.emailVerified')}
+                          </Badge>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" loading={sendingLink} onClick={() => void sendEmailLink()}>
+                            {t('account.profile.emailSendLink')}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <Select label={t('account.profile.governorate')} {...register('governorate', { required: t('validation.required') })} error={errors.governorate?.message}>
                     {governorates.map((g) => (
                       <option key={g.id} value={g.id}>

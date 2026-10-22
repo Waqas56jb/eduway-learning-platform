@@ -244,7 +244,9 @@
       "sms": "SMS messages",
       "smsHint": "Important alerts by text message",
       "whatsapp": "WhatsApp",
-      "whatsappHint": "Reminders and receipts on WhatsApp"
+      "whatsappHint": "Reminders and receipts on WhatsApp",
+      "email": "Email",
+      "emailHint": "Updates and reminders by email (confirmed address only)"
     },
     "notifSaved": "Notification preferences saved",
     "sessionsTitle": "Active sessions",
@@ -270,7 +272,16 @@
     "resetConfirmTitle": "Sign out of all devices?",
     "resetConfirmBody": "You will be signed out on every phone and browser, including this one, and will need a new code to sign in.",
     "resetDone": "Signed out of all devices",
-    "activeNow": "Active now"
+    "activeNow": "Active now",
+    "email": "Email address",
+    "emailPlaceholder": "name@example.com",
+    "emailHint": "Used for payment receipts, subscription updates and support replies.",
+    "emailVerified": "Confirmed",
+    "emailUnverified": "Not confirmed yet — check your inbox for the confirmation link.",
+    "emailSendLink": "Send confirmation link",
+    "emailLinkSent": "Confirmation link sent to {{email}}",
+    "emailAlready": "Your email is already confirmed",
+    "emailInvalid": "Enter a valid email address"
   },
   "notifications": {
     "seoTitle": "Notifications",
@@ -302,5 +313,16 @@
     "emptyUnreadTitle": "No unread notifications",
     "emptyUnreadBody": "You've read everything. Nice work!",
     "delete": "Delete notification"
+  },
+  "verifyEmail": {
+    "seoTitle": "Confirm your email",
+    "checking": "Confirming your email…",
+    "successTitle": "Email confirmed",
+    "successBody": "{{email}} is confirmed. Receipts, subscription updates and support replies will arrive there.",
+    "failTitle": "This link can’t be used",
+    "failBody": "The confirmation link is invalid, was already used or has expired. Request a new one from your profile.",
+    "missing": "No confirmation token was found in this link.",
+    "toProfile": "Go to my profile",
+    "toHome": "Back to home"
   }
 }

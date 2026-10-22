@@ -25,6 +25,7 @@ const SMS_REQUIRED: Record<string, (keyof Env)[]> = {
   http: ['SMS_HTTP_URL'],
   twilio: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN'],
   whatsapp_cloud: ['WHATSAPP_CLOUD_TOKEN', 'WHATSAPP_CLOUD_PHONE_NUMBER_ID'],
+  baileys: ['WHATSAPP_SESSION_SECRET'],
 };
 const missingOf = (e: Env, keys: (keyof Env)[]) => keys.filter((k) => !e[k]) as string[];
 
