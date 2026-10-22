@@ -64,7 +64,10 @@ export interface PaymentSettingsDto {
   mockGatewayEnabled: boolean;
   receiptCompany: { name: Localized; address: Localized; email: string };
   taxNote: Localized;
+  /** Read-only (server env): how each gateway runs now — live | sandbox (gateway test env) | mock | disabled. */
+  gatewayModes?: Partial<Record<GatewayId, GatewayMode>>;
 }
+export type GatewayMode = 'live' | 'sandbox' | 'mock' | 'disabled';
 export interface LearningSettingsDto {
   quizQuestionCount: number;
   quizPassMark: number;
@@ -150,6 +153,8 @@ export interface PaymentSettings {
   companyEmail: string;
   taxNote_en: string;
   taxNote_ar: string;
+  /** Read-only, never sent back on save. */
+  gatewayModes?: Partial<Record<GatewayId, GatewayMode>>;
 }
 export type LearningSettings = LearningSettingsDto;
 export type MarketingSettings = MarketingSettingsDto;
@@ -257,6 +262,7 @@ const adapters: { [S in SettingsSection]: { toUi: (d: Dto<S>) => Ui<S>; toDto: (
       ...flatLoc('companyAddress', d.receiptCompany?.address),
       companyEmail: d.receiptCompany?.email ?? '',
       ...flatLoc('taxNote', d.taxNote),
+      gatewayModes: d.gatewayModes ?? {},
     }),
     toDto: (u) => ({
       gateways: u.gateways.map((g, i) => ({ id: g.id, enabled: g.enabled, feeRatePct: g.feeRatePct, name: toLoc(g, 'name'), color: g.color, displayOrder: i + 1 })),

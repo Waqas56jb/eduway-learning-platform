@@ -73,7 +73,9 @@
     "mastercard": "Mastercard",
     "visaMastercard": "Visa / Mastercard",
     "walletHint": "Pay from your mobile wallet",
-    "cardHint": "Debit or credit card"
+    "cardHint": "Debit or credit card",
+    "sandbox": "Sandbox / test mode",
+    "sandboxHint": "Test environment — no real money will be charged."
   },
   "checkout": {
     "title": "Checkout",

@@ -70,6 +70,11 @@ export default function PaymentsSettings() {
           <div className="space-y-6 xl:col-span-2">
             <Section title={t('settings.payments.gateways')} subtitle={t('settings.payments.gatewaysHint')} icon={<Wallet className="h-4 w-4" />}>
               {noneEnabled && <p className="rounded-lg border border-warning/30 bg-warning/[0.07] px-3 py-2 text-xs text-ink/80">{t('settings.payments.noneEnabled')}</p>}
+              {Object.values(value.gatewayModes ?? {}).includes('sandbox') && (
+                <p className="rounded-lg border border-info/30 bg-info/[0.07] px-3 py-2 text-xs text-ink/80">
+                  <span className="font-semibold">{t('settings.payments.sandbox')}</span> — {t('settings.payments.sandboxHint')}
+                </p>
+              )}
               <ul className="divide-y divide-line rounded-xl border border-line">
                 {draft.gateways.map((g, i) => (
                   <li key={g.id} className={cn('grid gap-3 p-4 md:grid-cols-[auto_1fr_1fr_8rem_auto] md:items-end', !g.enabled && 'opacity-80')}>
@@ -106,6 +111,13 @@ export default function PaymentsSettings() {
                     </Field>
                     <div className="flex items-center gap-2 md:pb-2">
                       {g.id === 'mock' && <Badge tone="warning">{t('settings.payments.devOnly')}</Badge>}
+                      {value.gatewayModes?.[g.id] === 'sandbox' && (
+                        <span title={t('settings.payments.sandboxHint')}>
+                          <Badge tone="info" dot>
+                            {t('settings.payments.sandbox')}
+                          </Badge>
+                        </span>
+                      )}
                       <Switch checked={g.enabled} onChange={(v) => setGateway(g.id, { enabled: v })} disabled={!editable} aria-label={L(g, 'name')} />
                     </div>
                   </li>

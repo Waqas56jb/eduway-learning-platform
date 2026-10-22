@@ -1172,6 +1172,9 @@ export interface PaymentMethodDto {
   enabled: boolean;
   requiresPhone: boolean;
   flow: 'redirect' | 'deeplink' | 'mock';
+  /** live | sandbox (gateway test environment, no real money) | mock (dev) | disabled. */
+  mode?: 'live' | 'sandbox' | 'mock' | 'disabled';
+  sandbox?: boolean;
 }
 
 export interface PriceQuote {

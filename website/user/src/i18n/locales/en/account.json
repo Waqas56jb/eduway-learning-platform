@@ -180,6 +180,8 @@
       "cvcError": "Enter the 3 or 4 digits on the back",
       "walletPhone": "Wallet mobile number",
       "walletNotice": "We'll send a confirmation request to your {{method}} wallet. Approve it in the app to finish.",
+      "sandbox": "Sandbox / test mode",
+      "sandboxHint": "Test environment — no real money will be charged.",
       "payNow": "Pay {{amount}} {{currency}}",
       "processing": "Contacting gateway…",
       "processingSub": "Please don't close this window.",

@@ -90,6 +90,22 @@ reindex job and wrote legacy `lesson_transcript` rows. Runs now use their own qu
 know it), legacy rows are purged by every full sync and are never retrieved. Restart/stop stale API instances to avoid the
 nightly `eduway.embeddings-generate` being taken by old code.
 
+### Transactional email — live Gmail SMTP, 2026-10-23
+`EMAIL_PROVIDER=smtp` (smtp.gmail.com:465, app password), `MAIL_FROM="EDUWAY <account@gmail.com>"`. Migration
+`406_transactional_email` (users.email_verified_at, `eduway_platform_email_verifications`, dedupe index) — applied, prefixed.
+
+| Check | Result |
+|---|---|
+| Every template sent once to the owner's inbox (`sendTemplateNow`, Arabic first) | ✅ 15/15 accepted by Gmail with a `messageId`: admin_password_reset, admin_invite, admin_password_changed, admin_mfa_enabled, admin_mfa_disabled, admin_new_device_login, admin_alert, admin_export_ready, email_verification, payment_receipt (+ receipt PDF of a real paid payment), subscription_activated, subscription_expiring, subscription_expired, support_reply, notification. |
+| Queue path (`queueEmail` → delivery row → `eduway.notification-dispatch`) | ✅ row `sent`, provider `smtp`, `provider_message_id` recorded. |
+| Admin reset E2E against the running API (:4100) | ✅ forgot-password 200 → reset email delivery `sent` (dev guard redirected the seed address to the owner inbox) → link token from the delivery row (development keeps it) → reset-password 200 → same token again 422 `RESET_TOKEN_INVALID` (single use) → "password changed" alert `sent` → admin login with the new password 200; new-device sign-in alert `sent`. Super-admin password then restored to `SEED_SUPER_ADMIN_PASSWORD` through the same flow and login re-checked (200). |
+| Student email confirmation + receipt (demo payer, email temporarily set to an owner `+alias`) | ✅ unconfirmed email → no student email; ME-12 link `sent` → `POST /auth/email/verify` 200 (`verified: true`), replay 422; receipt email with PDF attachment `sent` with messageId. Student email restored afterwards. |
+| Unit tests | ✅ `tests/unit/email.test.ts` (31: every template bilingual/RTL/escaping, Gmail From alignment, dev recipient guard, mocked transport incl. receipt attachment, permanent vs retryable SMTP errors, throttle). Server `typecheck` ✅ · `lint` ✅ · `npm test` ✅ · `check-prefix` ✅. Admin + student web `typecheck` / `lint` / `build` ✅. |
+
+Note: as in the AI section, an older build outside the :4100 dev server also consumes the shared pg-boss queue. Three of
+the E2E deliveries were taken by it (status `sent`, no `provider_message_id`; old code sends text-only with an empty body).
+Stop stale API instances so every email goes through the new renderer.
+
 ## Student website
 
 Verified 2026-10-22 against `http://localhost:4100/api/v1` (single API, `DB_POOL_MAX=4`).

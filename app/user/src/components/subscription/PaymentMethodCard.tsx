@@ -73,6 +73,13 @@ export const PaymentMethodCard = memo(function PaymentMethodCard({ method, selec
         <Text variant="caption" color="muted" numberOfLines={1}>
           {hint || (method.kind === 'wallet' ? t('methods.walletHint') : t('methods.cardHint'))}
         </Text>
+        {method.sandbox ? (
+          <View style={styles.sandbox} accessibilityLabel={t('methods.sandboxHint')}>
+            <Text variant="overline" color="#92400E" numberOfLines={1}>
+              {t('methods.sandbox')}
+            </Text>
+          </View>
+        ) : null}
       </View>
       <View style={[styles.radio, { borderColor: selected ? colors.accent : colors.border }]}>
         <Animated.View style={[styles.radioDot, { backgroundColor: colors.accent }, dot]} />

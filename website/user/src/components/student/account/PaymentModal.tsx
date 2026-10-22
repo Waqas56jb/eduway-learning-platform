@@ -44,6 +44,20 @@ export function MethodLogo({ id, size = 40 }: { id: PaymentMethod; size?: number
   );
 }
 
+/** "Sandbox / test mode" pill — the gateway runs in its official test environment (no real money). */
+function SandboxBadge({ withHint = false }: { withHint?: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <span className="mt-1 inline-flex flex-wrap items-center gap-1.5" title={t('account.subscription.pay.sandboxHint')}>
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 ring-1 ring-amber-300/60">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+        {t('account.subscription.pay.sandbox')}
+      </span>
+      {withHint && <span className="text-[11px] text-muted">{t('account.subscription.pay.sandboxHint')}</span>}
+    </span>
+  );
+}
+
 /**
  * Checkout: summary (PAY-04 quote, PAY-05 promo) → method (PUB-09) → gateway details → PAY-06 initiate
  * (Idempotency-Key) → real gateway redirect, or in non-production the MockGateway (PAY-07 confirm →
@@ -417,6 +431,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-semibold text-primary">{l(m.name)}</span>
                           <span className="block truncate text-xs text-muted">{l(m.hint)}</span>
+                          {m.sandbox && <SandboxBadge />}
                         </span>
                         <span
                           className={cn(
@@ -469,6 +484,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                   <p className="text-xs text-muted">
                     {l(pkg.name)} · {t(`account.subscription.periods.${period}`)}
                   </p>
+                  {selected?.sandbox && <SandboxBadge withHint />}
                 </div>
                 <span className="text-sm font-bold text-primary num">{money(total)}</span>
               </div>

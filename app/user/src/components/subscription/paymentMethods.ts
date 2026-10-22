@@ -20,6 +20,8 @@ export interface PaymentMethod {
   /** Wallet MSISDN is collected by our UI (never PINs or card numbers). */
   requiresPhone?: boolean;
   flow?: PaymentMethodDto['flow'];
+  /** Gateway runs in its official test environment (no real money) — shows the "Sandbox / test mode" badge. */
+  sandbox?: boolean;
 }
 
 /** Brand presentation per gateway id (visual only — the list itself comes from the server). */
@@ -48,6 +50,7 @@ export function toPaymentMethod(dto: PaymentMethodDto): PaymentMethod {
     hint: dto.hint,
     requiresPhone: dto.requiresPhone,
     flow: dto.flow,
+    sandbox: dto.sandbox === true,
   };
 }
 

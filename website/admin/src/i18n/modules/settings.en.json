@@ -223,6 +223,8 @@
     "moveUp": "Move up",
     "moveDown": "Move down",
     "devOnly": "Dev only",
+    "sandbox": "Sandbox / test mode",
+    "sandboxHint": "Real gateway test environment — no real money is charged.",
     "noneEnabled": "No real gateway is enabled — students will not be able to pay.",
     "noGateways": "No gateways are configured on the server.",
     "receipt": "Receipts",
