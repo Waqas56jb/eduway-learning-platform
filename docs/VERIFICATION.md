@@ -378,3 +378,10 @@ the server zod schemas and sort allow-lists) found 3 UI sort mismatches; all are
   `packages`, after 47 steps had passed, including the new effective-rule step. Every later step failed with `fetch failed`, not an assertion. The run's
   artefacts were removed by the SQL purge in both runs. Re-run the full script once the API is stable.
 
+
+### Browser E2E (Playwright, 2026-10-23)
+
+- Real headless-browser run of both web apps against the live API (`e2e/`, see `docs/E2E.md`): every student route and every admin route × EN/AR
+  (desktop + 390×844 phone for the student site and the newest admin pages) plus 26 click-through flows. Final preview run **322/322 passed**
+  (0 flaky), dev-server pass **228/228**. 9 bugs fixed (double quiz start, AI-tutor new-chat race, admin logout not revoking, refresh rate limit
+  per IP + sign-out on transient refresh failures in both apps, blueprint availability 400, export re-download 422, duplicate formula).

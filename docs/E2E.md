@@ -52,7 +52,7 @@ For each route × language × viewport (`e2e/tests/support/guards.ts`, `sweep.ts
 | App | Routes | Languages | Viewports | Tests |
 | --- | --- | --- | --- | --- |
 | Student site | 25 (every route in `AppRoutes.tsx`: 7 public, login/register/verify-otp as guest, landing signed-in, `/student` redirect + 13 student pages incl. subject, lesson and exam-result detail) | EN, AR | 1440×900 and 390×844 | 100 |
-| Admin portal | 81 (parsed at run time from `routes/index.tsx`: 66 module pages incl. `:id` details and `new` editors, 7 section redirects, 5 auth/token pages, profile, 404 — includes the new `/content/teachers` and `/support`) | EN, AR | 1440×900 | 162 |
+| Admin portal | 88 (parsed at run time from `routes/index.tsx`: 74 module pages incl. `:id` details and `new` editors, 7 section redirects, 5 auth/token pages, profile, 404 — includes the new `/content/teachers`, `/support`, incentive-rule / settlement / campaign detail pages) | EN, AR | 1440×900 | 176 |
 | Admin portal (phone) | dashboard, students list + detail, teachers, support, marketers list + detail, delivery log, login | EN, AR | 390×844 | 18 |
 | Student flows | 12 serial steps | EN (+ AR switch) | 1440×900 | 12 |
 | Admin flows | 14 serial steps | EN | 1440×900 | 14 |
@@ -109,6 +109,11 @@ server `typecheck` ✅ `lint` ✅ `npm test` 213/213 ✅.
 - **Slow quiz start**: `POST /quizzes/:lessonId/start` takes 4–11 s against the remote dev database
   (≈25 sequential queries: rule resolution twice, per-set upserts, attempt insert + update). The quiz shows a
   skeleton for that long; the test allows 30 s. Worth batching on the server.
+- **Slow admin dashboard**: `GET /admin/dashboard` took 5 s idle and >20 s under load (the skeleton stayed
+  past 10 s in two runs); the dashboard route gets a documented 30 s render budget, every other page 10 s.
+- The shared dev API runs under `tsx watch` and restarts whenever server code changes (other agents were
+  editing it during this pass; once two dev servers ran at the same time). Each page check therefore first
+  waits for two consecutive `/health` answers, and Playwright retries a failed test once (reported as flaky).
 - The admin client relies on the reactive `401 TOKEN_EXPIRED` → refresh → replay path after a reload with a
   stale access token (one 401 per page load in the network tab); harmless, a proactive expiry check would
   avoid it.
@@ -119,4 +124,18 @@ server `typecheck` ✅ `lint` ✅ `npm test` 213/213 ✅.
 
 ## Results
 
-RESULTS_PLACEHOLDER
+Final runs (2026-10-23, API on :4100, after all fixes):
+
+| Run | Mode | Projects | Result |
+| --- | --- | --- | --- |
+| Full suite | `vite preview` of fresh production builds (`npm run test:full`) | all 8 (setup ×2, user-routes desktop + mobile, admin-routes, admin-routes-mobile, user-flows, admin-flows) | **322 passed, 0 failed, 0 flaky** (32.8 min) |
+| Dev pass | Vite dev servers (`E2E_MODE=dev`) | setup ×2, user-routes-desktop, admin-routes | **228 passed, 0 failed** (21.9 min) |
+
+Per project (preview run): user-routes-desktop 50, user-routes-mobile 50, admin-routes 176, admin-routes-mobile 18,
+user-flows 12, admin-flows 14, setup 2. Screenshots: `e2e/screenshots/{user,user-mobile,admin,admin-mobile}/{en,ar}/`
+(344 page shots) plus `flows-user/` and `flows-admin/` (incl. the student maintenance screen). Logs of the two
+runs: `e2e/final-preview-run.log`, `e2e/dev-run.log` (git-ignored).
+
+No page is left failing. Earlier runs were disturbed by the shared environment (API restarts while other agents
+edited the server, the refresh rate limit before fix #7, the OTP resend window) — which is what led to fixes
+#7–#9 and to the API-readiness wait; with those in place the final runs were clean without retries.
