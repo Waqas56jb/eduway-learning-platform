@@ -1,5 +1,16 @@
+import { createRequire } from 'node:module';
 import { pino, type Logger } from 'pino';
 import { env, isDev } from './env.js';
+
+/** pino-pretty is a devDependency: never assume it exists (production images omit dev deps). */
+function prettyAvailable(): boolean {
+  try {
+    createRequire(import.meta.url).resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Paths redacted from every log line (auth headers, tokens, passwords, OTP codes, secrets). */
 export const REDACT_PATHS = [
@@ -38,7 +49,7 @@ export const logger: Logger = pino({
   base: { service: 'eduway-server' },
   redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
   timestamp: pino.stdTimeFunctions.isoTime,
-  ...(isDev
+  ...(isDev && prettyAvailable()
     ? { transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:HH:MM:ss', ignore: 'pid,hostname,service' } } }
     : {}),
 });

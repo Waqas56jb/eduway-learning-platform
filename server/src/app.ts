@@ -92,6 +92,9 @@ export function createApp(): Express {
     res.json({ success: true, data: { name: 'EDUWAY API', version: '1.0.0', docs: devFlags.apiDocs ? '/api/docs' : null, api: env.API_PREFIX } });
   });
 
+  // Convenience alias for uptime monitors / people typing the un-versioned path.
+  if (env.API_PREFIX !== '/api') app.get('/api/health', (_req, res) => res.redirect(307, `${env.API_PREFIX}/health`));
+
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;
