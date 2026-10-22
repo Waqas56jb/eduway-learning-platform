@@ -7,7 +7,7 @@
 import tutorData from '../../../db/seed/data/student-extras.json' with { type: 'json' };
 import { estimateTokens } from '../allowance.js';
 import { normalizeText } from '../safety.js';
-import type { AiGenerateRequest, AiGenerateResult, AiProvider } from './types.js';
+import type { AiGenerateRequest, AiGenerateResult, AiProvider, EmbedResult } from './types.js';
 
 interface Localized {
   en: string;
@@ -82,8 +82,8 @@ export class MockAiProvider implements AiProvider {
   }
 
   /** Deterministic pseudo-embeddings (hash buckets) so the vector path can be exercised offline. */
-  async embed(texts: string[]): Promise<number[][]> {
-    return texts.map((t) => {
+  async embed(texts: string[]): Promise<EmbedResult> {
+    const vectors = texts.map((t) => {
       const v = new Array<number>(1536).fill(0);
       for (const w of normalizeText(t).split(/\W+/u).filter(Boolean)) {
         let h = 0;
@@ -93,5 +93,6 @@ export class MockAiProvider implements AiProvider {
       const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
       return v.map((x) => x / norm);
     });
+    return { vectors, tokens: texts.reduce((n, t) => n + estimateTokens(t), 0) };
   }
 }

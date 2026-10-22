@@ -39,7 +39,7 @@ export const TABLES = [
   'schools', 'school_students', 'marketers', 'marketer_schools', 'incentive_rules', 'incentive_rule_tiers',
   'milestone_sets', 'milestone_items', 'marketer_milestone_awards', 'settlements', 'settlement_items',
   // AI tutor
-  'ai_settings', 'ai_conversations', 'ai_messages', 'ai_usage', 'ai_flags', 'ai_warnings', 'embeddings',
+  'ai_settings', 'ai_conversations', 'ai_messages', 'ai_usage', 'ai_flags', 'ai_warnings', 'embeddings', 'kb_index_runs',
   // learning activity
   'watch_progress', 'lesson_completions', 'streaks', 'daily_activity', 'achievements', 'user_achievements',
   'lesson_notes', 'today_plan_items',
@@ -48,7 +48,7 @@ export const TABLES = [
   // platform
   'settings', 'feature_flags', 'app_settings', 'audit_logs', 'suspicious_events', 'exports_log',
   'analytics_daily_rollups', 'cms_testimonials', 'cms_faq', 'uploads', 'support_tickets', 'support_ticket_messages',
-  'rate_limits',
+  'rate_limits', 'whatsapp_auth', 'whatsapp_sessions', 'email_verifications',
   // infrastructure (migration ledger)
   'schema_migrations',
 ] as const;

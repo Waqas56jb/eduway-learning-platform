@@ -70,8 +70,10 @@ export const EnvSchema = z.object({
 
   // ── SMS / WhatsApp (OTP + notifications). A real provider without its credentials falls back to the mock. ──
   SMS_PROVIDER: z.enum(['mock', 'http', 'twilio', 'whatsapp_cloud']).default('mock'),
-  /** Provider for the `whatsapp` channel; defaults to SMS_PROVIDER. */
-  WHATSAPP_PROVIDER: z.enum(['mock', 'http', 'twilio', 'whatsapp_cloud']).optional(),
+  /** Provider for the `whatsapp` channel; defaults to SMS_PROVIDER. `baileys` = number linked by QR in the admin portal. */
+  WHATSAPP_PROVIDER: z.enum(['mock', 'http', 'twilio', 'whatsapp_cloud', 'baileys']).optional(),
+  /** Secret for the AES-256-GCM encryption of the Baileys WhatsApp session stored in the database (≥ 32 chars). */
+  WHATSAPP_SESSION_SECRET: z.string().min(32).optional(),
   SMS_HTTP_URL: z.string().url().optional(),
   SMS_HTTP_TOKEN: z.string().optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),
@@ -107,6 +109,8 @@ export const EnvSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().default('EDUWAY <no-reply@eduway.iq>'),
+  /** Outgoing email throttle (messages per minute across the process); excess deliveries wait for the next window. */
+  MAIL_RATE_PER_MINUTE: z.coerce.number().int().positive().default(20),
 
   // ── AI tutor providers (Agent D). Without a key for the configured provider the offline MockAiProvider is used. ──
   OPENAI_API_KEY: z.string().optional(),
@@ -120,13 +124,17 @@ export const EnvSchema = z.object({
   AI_PROVIDER: z.enum(['mock', 'anthropic', 'openai', 'azure']).optional(),
   /** Model used when the configured model belongs to another provider family. */
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-5-5'),
-  OPENAI_MODEL: z.string().default('gpt-4o'),
+  OPENAI_MODEL: z.string().default('gpt-6-luna'),
+  /** `reasoning_effort` sent to OpenAI reasoning models (gpt-5+/gpt-6/o-series); ignored for gpt-4o-style models. */
+  OPENAI_REASONING_EFFORT: z.enum(['none', 'minimal', 'low', 'medium', 'high']).default('low'),
   /** Anthropic server-side refusal fallback (`fallbacks: "default"`); disable for proxies that reject betas. */
   ANTHROPIC_SERVER_FALLBACK: bool(true),
   /** Force the offline mock tutor even when an API key is present (demos / CI). */
   AI_FORCE_MOCK: bool(false),
   /** Embedding model for pgvector retrieval (OpenAI-compatible /embeddings). */
   AI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  /** Embedding price (USD per 1M tokens) used only for the knowledge-base index cost estimate. */
+  AI_EMBEDDING_COST_PER_1M_USD: z.coerce.number().min(0).default(0.02),
 
   // ── Notification channels (Agent D) ──
   /** `auto` = Expo in production, mock elsewhere. */

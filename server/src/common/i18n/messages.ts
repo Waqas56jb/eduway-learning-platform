@@ -54,6 +54,12 @@ export const REASON_MESSAGES = {
   OTP_RESEND_COOLDOWN: { en: 'Please wait {seconds} seconds before requesting a new code.', ar: 'يرجى الانتظار {seconds} ثانية قبل طلب رمز جديد.' },
   OTP_RESEND_LIMIT: { en: 'You have reached the resend limit. Try again later.', ar: 'وصلت إلى الحد الأقصى لإعادة الإرسال. حاول لاحقاً.' },
   OTP_SEND_FAILED: { en: 'We could not send the code. Please try again.', ar: 'تعذّر إرسال الرمز. يرجى المحاولة مرة أخرى.' },
+  // ── WhatsApp session (Baileys, admin Settings → WhatsApp) ──
+  WHATSAPP_NOT_CONFIGURED: { en: 'WhatsApp linking is not configured on the server (WHATSAPP_PROVIDER=baileys and WHATSAPP_SESSION_SECRET are required).', ar: 'ربط واتساب غير مهيأ على الخادم (يلزم WHATSAPP_PROVIDER=baileys و WHATSAPP_SESSION_SECRET).' },
+  WHATSAPP_NOT_CONNECTED: { en: 'WhatsApp is not connected. Link a number first.', ar: 'واتساب غير متصل. اربط رقماً أولاً.' },
+  WHATSAPP_NOT_ON_WHATSAPP: { en: 'This number is not registered on WhatsApp.', ar: 'هذا الرقم غير مسجل على واتساب.' },
+  WHATSAPP_SEND_FAILED: { en: 'The WhatsApp message could not be sent.', ar: 'تعذّر إرسال رسالة واتساب.' },
+  WHATSAPP_OTHER_INSTANCE: { en: 'The WhatsApp session is held by another server instance. Try again in a minute.', ar: 'جلسة واتساب مستخدمة من نسخة خادم أخرى. حاول مجدداً بعد دقيقة.' },
   DEVICE_LIMIT_REACHED: { en: 'You are signed in on the maximum of {limit} devices. Sign out from another device first.', ar: 'أنت مسجّل الدخول على الحد الأقصى ({limit}) من الأجهزة. سجّل الخروج من جهاز آخر أولاً.' },
   PROFILE_INCOMPLETE: { en: 'Please complete your profile to continue.', ar: 'يرجى إكمال ملفك الشخصي للمتابعة.' },
   PROFILE_ALREADY_COMPLETE: { en: 'Your profile is already complete.', ar: 'ملفك الشخصي مكتمل بالفعل.' },

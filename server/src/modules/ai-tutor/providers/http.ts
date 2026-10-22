@@ -7,9 +7,29 @@ import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import type { Readable } from 'node:stream';
 import { estimateTokens } from '../allowance.js';
 import { parseSse } from '../sse.js';
-import { AiProviderError, type AiChatMessage, type AiGenerateRequest, type AiGenerateResult, type AiProvider, type RetrievedChunk } from './types.js';
+import { AiProviderError, type AiChatMessage, type AiGenerateRequest, type AiGenerateResult, type AiProvider, type EmbedResult, type RetrievedChunk } from './types.js';
 
 const TIMEOUT_MS = 120_000;
+
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high';
+
+/**
+ * OpenAI reasoning-model families (o-series, gpt-5*, gpt-6*, …). They reject `max_tokens` (→ `max_completion_tokens`,
+ * which also covers the hidden reasoning tokens) and any non-default `temperature`; they accept `reasoning_effort`.
+ * gpt-4o / gpt-4.1 / gpt-3.5 (and Azure deployment names that look like them) keep the classic parameters.
+ */
+export function isOpenAiReasoningModel(model: string): boolean {
+  return /^(o\d|gpt-(?:[5-9]|\d{2,}))/i.test(model.trim());
+}
+
+/** Extra completion budget for hidden reasoning tokens, so `maxTokens` still bounds the visible answer. */
+const REASONING_HEADROOM: Record<ReasoningEffort, number> = { none: 0, minimal: 256, low: 1024, medium: 4096, high: 8192 };
+
+/** Chat-completions sampling/length parameters for a model (pure; unit-tested). */
+export function openAiSamplingParams(model: string, req: Pick<AiGenerateRequest, 'temperature' | 'maxTokens'>, effort: ReasoningEffort = 'low'): Record<string, unknown> {
+  if (isOpenAiReasoningModel(model)) return { max_completion_tokens: req.maxTokens + REASONING_HEADROOM[effort], reasoning_effort: effort };
+  return { max_tokens: req.maxTokens, temperature: req.temperature };
+}
 
 export function contextBlock(context: RetrievedChunk[], lang: 'en' | 'ar'): string {
   if (!context.length) return '';
@@ -54,6 +74,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     private readonly apiKey: string,
     private readonly azure = false,
     private readonly http: AxiosInstance = axios,
+    private readonly reasoningEffort: ReasoningEffort = 'low',
   ) {}
 
   private headers(): Record<string, string> {
@@ -85,7 +106,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     try {
       const res = await this.http.post<Readable>(
         this.url('/chat/completions'),
-        { model: req.model, messages: this.toMessages(req), temperature: req.temperature, max_tokens: req.maxTokens, stream: true, stream_options: { include_usage: true } },
+        { model: req.model, messages: this.toMessages(req), ...openAiSamplingParams(req.model, req, this.reasoningEffort), stream: true, stream_options: { include_usage: true } },
         { headers: { ...this.headers(), 'Content-Type': 'application/json' }, responseType: 'stream', timeout: TIMEOUT_MS, signal: req.signal },
       );
       await consumeSse(res.data, (_event, data) => {
@@ -109,12 +130,25 @@ export class OpenAiCompatibleProvider implements AiProvider {
     return { text, tokensIn: tokensIn || estimateTokens(req.messages.map((m) => m.content).join('\n')), tokensOut: tokensOut || estimateTokens(text), model, provider: this.name };
   }
 
-  async embed(texts: string[], model: string): Promise<number[][]> {
-    const res = await this.http.post<{ data: { embedding: number[]; index: number }[] }>(
-      this.url('/embeddings'),
-      { model, input: texts },
-      { headers: { ...this.headers(), 'Content-Type': 'application/json' }, timeout: 60_000 },
-    );
-    return [...res.data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+  /** Batch embeddings (one request per call; retried on 429/5xx with backoff). Vectors come back in input order. */
+  async embed(texts: string[], model: string): Promise<EmbedResult> {
+    if (!texts.length) return { vectors: [], tokens: 0 };
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const res = await this.http.post<{ data: { embedding: number[]; index: number }[]; usage?: { prompt_tokens?: number; total_tokens?: number } }>(
+          this.url('/embeddings'),
+          { model, input: texts },
+          { headers: { ...this.headers(), 'Content-Type': 'application/json' }, timeout: 60_000 },
+        );
+        const vectors = [...res.data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+        const tokens = res.data.usage?.total_tokens ?? res.data.usage?.prompt_tokens ?? texts.reduce((n, t) => n + estimateTokens(t), 0);
+        return { vectors, tokens };
+      } catch (err) {
+        const status = (err as AxiosError).response?.status;
+        const retryable = status === undefined || status === 429 || status >= 500;
+        if (!retryable || attempt >= 3) throw new AiProviderError(`embedding request failed: ${(err as AxiosError).message}`, status);
+        await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+      }
+    }
   }
 }

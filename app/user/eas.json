@@ -13,7 +13,7 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api-staging.eduway.iq/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://eduway-learning-platform-production.up.railway.app/api/v1"
       }
     },
     "preview": {
@@ -24,7 +24,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api-staging.eduway.iq/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://eduway-learning-platform-production.up.railway.app/api/v1"
       }
     },
     "production": {
@@ -35,7 +35,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.eduway.iq/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://eduway-learning-platform-production.up.railway.app/api/v1"
       }
     }
   },

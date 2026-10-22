@@ -38,7 +38,7 @@ function build(name: ProviderName): AiProvider {
   const hit = cache.get(name);
   if (hit) return hit;
   let p: AiProvider;
-  if (name === 'openai') p = new OpenAiCompatibleProvider('openai', env.OPENAI_BASE_URL, env.OPENAI_API_KEY ?? '');
+  if (name === 'openai') p = new OpenAiCompatibleProvider('openai', env.OPENAI_BASE_URL, env.OPENAI_API_KEY ?? '', false, undefined, env.OPENAI_REASONING_EFFORT);
   else if (name === 'azure') p = new OpenAiCompatibleProvider('azure', env.AZURE_OPENAI_BASE_URL ?? '', env.AZURE_OPENAI_API_KEY ?? '', true);
   else if (name === 'anthropic') p = new AnthropicSdkProvider({ apiKey: env.ANTHROPIC_API_KEY ?? '', baseURL: env.ANTHROPIC_BASE_URL, serverFallback: env.ANTHROPIC_SERVER_FALLBACK });
   else p = mockProvider();
@@ -59,7 +59,7 @@ export function providerFor(name: ProviderName): AiProvider {
 export function resolveModel(providerName: string, configured: string, e: Pick<Env, 'ANTHROPIC_MODEL' | 'OPENAI_MODEL'> = env): string {
   const isClaude = /^claude/i.test(configured);
   if (providerName === 'anthropic') return isClaude ? configured : e.ANTHROPIC_MODEL;
-  if (providerName === 'openai') return isClaude || !configured ? e.OPENAI_MODEL : configured;
+  if (providerName === 'openai') return isClaude || !configured || /-azure$/i.test(configured) ? e.OPENAI_MODEL : configured;
   return configured;
 }
 

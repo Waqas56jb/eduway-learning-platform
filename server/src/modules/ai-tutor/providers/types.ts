@@ -7,13 +7,25 @@ export interface AiChatMessage {
   imageUrl?: string | null;
 }
 
+export type KnowledgeSourceType = 'lesson' | 'unit' | 'topic' | 'question_explanation' | 'faq';
+
 export interface RetrievedChunk {
-  sourceType: 'lesson_transcript' | 'question_explanation' | 'lesson_notes' | 'lesson_description';
+  sourceType: KnowledgeSourceType | 'lesson_transcript' | 'lesson_notes' | 'lesson_description';
   sourceId: string;
   lessonId: string | null;
+  /** Title in the answer language (shown to the model and used as the citation label). */
   title: string;
+  /** Bilingual citation label when known (lesson / unit / topic / FAQ title). */
+  titles?: { en: string; ar: string };
+  subjectId?: string | null;
   content: string;
   score: number;
+}
+
+/** Embeddings + the provider-reported token usage (for the knowledge-base cost estimate). */
+export interface EmbedResult {
+  vectors: number[][];
+  tokens: number;
 }
 
 export interface AiGenerateRequest {
@@ -40,8 +52,8 @@ export interface AiProvider {
   readonly name: string;
   /** Streams the answer; `onDelta` receives appended text chunks in order. Resolves with the full text + usage. */
   stream(req: AiGenerateRequest, onDelta: (text: string) => void): Promise<AiGenerateResult>;
-  /** Optional embeddings (pgvector retrieval). */
-  embed?(texts: string[], model: string): Promise<number[][]>;
+  /** Optional embeddings (pgvector retrieval). Vectors are returned in input order. */
+  embed?(texts: string[], model: string): Promise<EmbedResult>;
 }
 
 export class AiProviderError extends Error {
