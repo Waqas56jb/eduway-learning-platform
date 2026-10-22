@@ -297,85 +297,93 @@ course excerpts.
   - ZainCash tokens are verified with the merchant secret **and** cross-checked against the status API.
   - FastPay IPNs and Qi notifications are re-read from the gateway API before they are applied.
 
+### Sandbox / test mode (current dev setup, 2026-10-23)
+
+`server/.env` runs the gateways in their **official test environments**, using only credentials the gateways publish
+for testing. No real money moves. Prices still come from the database. A gateway in a test environment reports
+`mode: "sandbox"` (`GET /public/payment-methods` → `mode`/`sandbox`, admin `GET /admin/settings/payments` →
+`gatewayModes`). The admin payment settings and the student checkout (web + app) then show a **"Sandbox / test mode"**
+badge (EN/AR).
+
+| Gateway | Mode | Test credentials (published by the gateway) | Live-tested end to end |
+|---|---|---|---|
+| ZainCash | **sandbox** (v2 UAT `pg-api-uat.zaincash.iq`) | docs.zaincash.iq → *Test Credentials*: merchant Client ID/Secret; customer wallets `9647802999569`, `9647829744432`, `9647829744464`, `9647829744474` (PIN `1111`, OTP `111111`) | Checkout → real UAT transaction + pay page ✅. The UAT pay page accepted the OTP, then refused every wallet on 2026-10-23 ("Locked balance", "monthly limit exceeded", "invalid OTP"). That gave a real **failed** payment: ZainCash-signed callback → token verified → inquiry re-check → `payment.failed` applied once. The success path is covered by unit tests and by signed-token checks against the live API (see VERIFICATION.md). |
+| Qi Card | **sandbox** (UAT `uat-sandbox-3ds-api.qi.iq`) | developers-gate.qi.iq → *Sandbox Environment*: terminal `237984`, Basic-auth user `paymentgatewaytest`; web test card `5213720304238582` CVV `642` exp `01/32`, 3DS OTP `123123` | ✅ Full success: checkout → Qi form (test card) → finish callback → status re-check → **paid**, receipt, subscription, entitlement |
+| FastPay | **mock** (dev stub) | none for the web PGW. The test store on developer.fast-pay.iq (`1000007066_485`) is for the **QR/vending** API, and staging PGW answers "Unable to find your store". | — |
+
+**Callbacks.** Locally `PUBLIC_API_URL=http://localhost:4100`. Browser redirects (ZainCash success/failure URL, Qi
+finish URL) work on the same machine. Gateway server-to-server calls (Qi `notificationUrl`, FastPay IPN, ZainCash
+webhook) cannot reach localhost. To receive them, set `PUBLIC_API_URL=https://eduway-learning-platform-production.up.railway.app`
+on the deployed API. Notifications are optional for correctness because every redirect is re-checked with the gateway.
+
+**What to ask each gateway for.**
+- **FastPay:** staging **PGW** store credentials (store id, store password, refund secret key), a staging payer
+  wallet (msisdn + password/OTP), and confirmation that the per-request `success_url` / `cancel_url` / `callback_url`
+  are honoured (or set them in the staging panel). Also confirm `order_id` may contain `-` (our refs look like `EDW-XXXX-XXXX`).
+- **ZainCash:** live v2 Client ID/Secret and the live API host. Register the webhook URL
+  `{PUBLIC_API_URL}/api/v1/payments/webhook/zaincash` (ZainCash sets it during onboarding; it cannot be tested in UAT).
+  Ask for a UAT wallet with balance, since the public test wallets were exhausted on 2026-10-23.
+- **Qi:** live terminal + API user, and the gateway's webhook **public key** (`QICARD_WEBHOOK_PUBLIC_KEY`).
+
 ### ZainCash
 | Variable | Notes |
 |---|---|
-| `ZAINCASH_MERCHANT_ID`, `ZAINCASH_SECRET`, `ZAINCASH_MSISDN` | issued by ZainCash at merchant onboarding. ZainCash's public developer docs list shared **test** credentials for the test environment. |
-| `ZAINCASH_ENV` | `test` (https://test.zaincash.iq) or `live` (https://api.zaincash.iq) |
-| `ZAINCASH_LANG`, `ZAINCASH_SERVICE_TYPE` | page language (`ar`/`en`/`ku`) and the description shown to the payer |
+| `ZAINCASH_API_VERSION` | `v2` (default): the current OAuth2 "Payment Gateway API". `v1`: the legacy JWT API (`test.zaincash.iq`), kept for older merchant accounts. |
+| `ZAINCASH_MERCHANT_ID`, `ZAINCASH_SECRET` | v2: **Client ID** / **Client Secret**. The secret is also the HS256 key of the redirect and webhook tokens. v1: merchant id / secret. |
+| `ZAINCASH_MSISDN` | v1 only (merchant wallet) |
+| `ZAINCASH_ENV` | `test` (v2 `https://pg-api-uat.zaincash.iq`, v1 `https://test.zaincash.iq`) or `live` (v2 `https://pg-api.zaincash.iq`, v1 `https://api.zaincash.iq`) |
+| `ZAINCASH_API_URL` | optional host override. ZainCash issues the live v2 host at go-live. |
+| `ZAINCASH_LANG`, `ZAINCASH_SERVICE_TYPE` | page language (`ar`/`en`) and the label stored on the transaction (`+` and `,` are stripped) |
 
-Flow:
-1. `POST /transaction/init` with a HS256 JWT (`amount, serviceType, msisdn, orderId, redirectUrl`).
-2. The student pays on `/transaction/pay?id=…`.
-3. ZainCash redirects the browser to `/payments/callback/zaincash?token=<JWT>`.
-4. The server verifies the token, confirms with `/transaction/get` and applies the result. The minimum amount is 250 IQD.
+v2 flow (docs.zaincash.iq):
+1. `POST /oauth2/token` (client_credentials, scopes `payment:read payment:write reverse:read reverse:write`). The token is cached until shortly before `expires_in`.
+2. `POST /api/v2/payment-gateway/transaction/init` with `{ language, externalReferenceId (= our payment id), orderId (= our ref), serviceType, amount{value, currency:"IQD"}, customer{phone}?, redirectUrls{successUrl, failureUrl} }`.
+   It returns `transactionDetails.transactionId`, which we store as provider_ref, and `redirectUrl`. The student's wallet number (`walletPhone`) prefills the page.
+3. The student pays on the ZainCash page (wallet → OTP → PIN).
+4. ZainCash redirects to `/payments/callback/zaincash?token=<HS256 JWT>`, carrying `{ eventType, eventId, data{ transactionId, orderId, currentStatus, amount } }`.
+   - The token is verified with the Client Secret. The `iat`, when present, must be within 1 h.
+   - Then `GET /api/v2/payment-gateway/transaction/inquiry/{transactionId}` is called. **Only the inquiry result is applied:** SUCCESS/COMPLETED → paid (inquiry amount and currency must match), FAILED/EXPIRED → failed, everything else → no change.
+   - An `orderId` mismatch between the token and the inquiry is rejected.
+5. The production webhook `POST /payments/webhook/zaincash { webhook_token }` goes through the same check. The event id `zaincash:<txId>:<status>` makes the redirect and the webhook idempotent with each other.
 
-**Confirm with ZainCash before go-live** (also listed as TODOs in `gateways/zaincash.ts`):
-- that your account uses the v1 JWT API (newer merchants may get the v2 "pg-api" OAuth credentials instead)
-- the callback JWT field names
-- the `/transaction/get` response fields
-
-ZainCash has no public refund API. Approving a refund records a `zaincash_manual_…` reference, and you complete the reversal in the
-ZainCash merchant portal.
-
-**How to test**
-1. Set `ZAINCASH_ENV=test` with the test credentials, a public `PUBLIC_API_URL` (use a tunnel such as ngrok or Cloudflare Tunnel in
-   development) and enable ZainCash in admin settings.
-2. Start a checkout. `redirectUrl` should point at `test.zaincash.iq`.
-3. Pay with ZainCash's published test wallet.
-4. The payment should become `paid` and the browser should return to the app.
+Refunds use `POST /api/v2/payment-gateway/transaction/partial-reverse { transactionId, amount, reason ≤ 44 chars }`. A
+200 response with `status: FAILED` is treated as a failure. v1 has no refund API: approving a refund records a
+`zaincash_manual_…` reference, and you complete it in the merchant portal.
 
 ### FastPay
 | Variable | Notes |
 |---|---|
 | `FASTPAY_STORE_ID`, `FASTPAY_SECRET` (store password) | FastPay merchant panel → store credentials |
+| `FASTPAY_REFUND_SECRET` | merchant panel → store details → refund secret key. Refunds fail closed without it. |
 | `FASTPAY_ENV` | `staging` (https://staging-apigw-merchant.fast-pay.iq) or `live` (https://apigw-merchant.fast-pay.iq) |
 
-In the FastPay merchant panel, set:
-- **IPN URL** = `{PUBLIC_API_URL}/api/v1/payments/webhook/fastpay`
-- success / fail / cancel URLs = `{PUBLIC_API_URL}/api/v1/payments/callback/fastpay`
+The API comes from FastPay's "Payment APIs – Postman Collection" (linked from developer.fast-pay.iq):
+- **Initiation:** `POST /api/v1/public/pgw/payment/initiation` with `{ store_id, store_password, order_id (= our ref), bill_amount (min 1000), currency, cart (JSON string!), success_url, cancel_url, callback_url }` returns `redirect_uri`.
+- **Return URLs:** success and cancel point at `/payments/callback/fastpay?order_id=<ref>`. `callback_url` is the IPN, `/payments/webhook/fastpay`.
+- **Validation:** the IPN is unsigned and is sent on success only. Every IPN and every return is re-validated with `POST …/payment/validate` before it is applied.
+- **Refunds:** `POST …/payment/refund` with `{ order_id, amount, refund_secret_key, msisdn }`. The payer msisdn is read from the validate API.
 
-Flow: initiation returns a `redirect_uri`, and the order id is our payment ref. The IPN is unsigned, so every IPN and return is
-re-validated with `POST /payment/validate` before it is applied. Refunds call the refund API.
-
-**Confirm with FastPay before go-live:**
-- endpoint paths and hosts for your store
-- whether `cart` is required
-- the exact `status` values (assumed `Success` / `Failed` / `Cancelled`)
-- the refund request fields
-
-**How to test**
-1. Use staging credentials and the sandbox wallet from FastPay.
-2. Complete a checkout.
-3. In Admin → Payments → transaction detail, a verified webhook event appears in the timeline.
+**How to test (once FastPay issues staging PGW credentials):** set the three variables and restart. The startup log then shows
+`payments.fastpay: live` and the badge shows *Sandbox / test mode*. Pay with the FastPay staging payer wallet. Admin → Payments → transaction
+detail should show the verified event.
 
 ### Qi Card
 | Variable | Notes |
 |---|---|
-| `QICARD_TERMINAL_ID`, `QICARD_USERNAME`, `QICARD_SECRET` (API password) | issued by Qi at merchant onboarding |
+| `QICARD_TERMINAL_ID`, `QICARD_USERNAME`, `QICARD_SECRET` (API password) | issued by Qi at merchant onboarding. The public UAT sandbox values are on developers-gate.qi.iq → Sandbox Environment. |
 | `QICARD_ENV` | `uat` (https://uat-sandbox-3ds-api.qi.iq) or `live` (https://3ds-api.qi.iq) |
-| `QICARD_WEBHOOK_PUBLIC_KEY` | optional PEM public key for verifying notification signatures. Leave it unset until Qi confirms the signature scheme, because the status re-check is authoritative on its own. |
+| `QICARD_WEBHOOK_PUBLIC_KEY` | optional PEM public key requested from Qi support. It verifies `X-Signature`: RSA-SHA256, base64, over `paymentId\|amount.000\|currency\|creationDate\|status` (Qi docs → Webhook Verification). |
 
 Flow:
-1. `POST /api/v1/payment` (Basic auth + `X-Terminal-Id`) with `finishPaymentUrl` = our callback and `notificationUrl` = our webhook.
+1. `POST /api/v1/payment` (Basic auth + `X-Terminal-Id`) with `{ requestId (= our ref; Qi refuses long ids), amount, currency, locale, finishPaymentUrl, notificationUrl }` returns `{ paymentId, formUrl }`.
 2. The student pays on `formUrl`.
-3. Both the notification and the finish redirect re-read `GET /api/v1/payment/{id}/status`.
-4. `SUCCESS` → paid; `FAILED` / `AUTHENTICATION_FAILED` → failed; `CANCELED` → cancelled.
+3. The finish redirect `/payments/callback/qicard?ref=…&paymentId=…` and the notification both re-read `GET /api/v1/payment/{id}/status`.
+4. `SUCCESS` → paid. `FAILED` / `AUTHENTICATION_FAILED` → failed. `canceled: true` → cancelled. `CREATED` → pending.
 
-Refunds call `POST /api/v1/payment/{id}/refund`.
+Refunds call `POST /api/v1/payment/{id}/refund { requestId, amount, message }`. A `status: FAILED` response is treated as a failure.
 
-**Confirm with Qi before go-live:**
-- hosts and paths
-- the auth scheme
-- status values
-- the notification signature header, algorithm and signed content
-- amount units
-- refund fields
-
-**How to test**
-1. Use the UAT terminal and Qi's UAT test cards.
-2. Complete a 3DS checkout.
-3. You should land back in the app with `status=paid`, and Admin → Payments shows the verified event.
+**How to test:** this is already configured in dev. Choose Qi Card at checkout, pay with the test card above, and enter the 3DS OTP `123123` if asked.
+You land back with `status=paid`, and Admin → Payments shows the verified `qicard:<id>:SUCCESS` event.
 
 ### AsiaHawala / Visa-Mastercard
 These are still stubs: HMAC `X-Signature` webhooks with `*_SECRET`, and no hosted-page API calls. Add adapters in
@@ -389,4 +397,4 @@ These are still stubs: HMAC `X-Signature` webhooks with `*_SECRET`, and no hoste
 - `tests/unit/whatsapp-baileys.test.ts`: linked WhatsApp number with a fake Baileys socket: QR/connect/logged-out/backoff/lease, encrypted DB session, OTP text, SMS fallback, outbox
 - `tests/unit/providers-ai.test.ts`: Anthropic SDK streaming via a mocked `fetch`, OpenAI streaming, selection
 - `tests/unit/ai-knowledge-base.test.ts`: RAG chunking/hashing/scoping, OpenAI reasoning-model parameters, batch embeddings, tutor prompt / LaTeX / citations
-- `tests/unit/payments-gateways.test.ts`: ZainCash JWT init/callback, FastPay initiation/IPN validation/refund, Qi create/notify/RSA signature, open-redirect guard
+- `tests/unit/payments-gateways.test.ts`: ZainCash v1 JWT + **v2** OAuth init / signed callback + inquiry re-check / webhook / partial-reverse, FastPay initiation (cart string, return/IPN URLs) / IPN validation / refund (secret + msisdn), Qi create / notify (documented signature string) / canceled flag, gateway mode, open-redirect guard

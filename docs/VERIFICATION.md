@@ -419,3 +419,46 @@ the server zod schemas and sort allow-lists) found 3 UI sort mismatches; all are
   (desktop + 390×844 phone for the student site and the newest admin pages) plus 26 click-through flows. Final preview run **322/322 passed**
   (0 flaky), dev-server pass **228/228**. 9 bugs fixed (double quiz start, AI-tutor new-chat race, admin logout not revoking, refresh rate limit
   per IP + sign-out on transient refresh failures in both apps, blueprint availability 400, export re-download 422, duplicate formula).
+
+### Payment gateways in sandbox / test mode (2026-10-23)
+
+- **Config (`server/.env`)** uses only credentials the gateways publish for testing:
+  - **ZainCash:** v2 UAT (`ZAINCASH_API_VERSION=v2`, `ZAINCASH_ENV=test`, Client ID/Secret from docs.zaincash.iq → Test Credentials).
+  - **Qi Card:** UAT (`QICARD_ENV=uat`, terminal/user from developers-gate.qi.iq → Sandbox Environment).
+  - **FastPay:** stays **mock**. It has no public PGW sandbox store, and its portal's test store is QR-only and rejected by staging PGW.
+  - **Callbacks:** `PUBLIC_API_URL=http://localhost:4100`. Gateway server-to-server notifications need the deployed URL.
+  - **Admin settings:** ZainCash and Qi Card were already enabled. Prices still come from the DB.
+- **Adapter fixes against the real sandbox APIs:**
+  - **ZainCash v2 (new; v1 kept):** OAuth2 token, `transaction/init`, HS256 redirect/webhook token verified with the client secret, then a mandatory
+    `transaction/inquiry` re-check whose status and amount are the only things applied, plus an orderId cross-check and `partial-reverse` refunds.
+  - **FastPay:** `cart` must be a JSON *string* (the staging API rejects an array), `success_url`/`cancel_url`/`callback_url` are now sent, and refunds send
+    `refund_secret_key` + the payer `msisdn` (`FASTPAY_REFUND_SECRET`).
+  - **Qi:** the webhook signature is verified over the documented `paymentId|amount.000|currency|creationDate|status` (it used to be over the raw body),
+    `canceled: true` maps to cancelled, and `CREATED` means pending.
+  - **Unchanged security checks:** IQD only, amount/currency match, signature/JWT verification, gateway re-check, idempotent `<gw>:<tx>:<status>` events.
+- **Badge:**
+  - `GET /public/payment-methods` items carry `mode` and `sandbox`, and `GET /admin/settings/payments` carries the read-only `gatewayModes`.
+  - The admin Settings › Payments page, the web checkout (method list + details header) and the app checkout cards show **Sandbox / test mode** (EN/AR).
+- **Live run against the shared API on :4100** used a fresh OTP-registered test student and the DB price (15,000 IQD):
+  - **Qi Card ✅ end to end.** `POST /payments/initiate` returned a real Qi UAT `formUrl`. Playwright (real Chrome) paid with test card 5213…8582, and Qi
+    redirected to `/payments/callback/qicard`. The status re-check returned SUCCESS, so the payment became **paid**, receipt R-MXMC-VD7K was issued, and the
+    subscription and math entitlement were activated. Replaying the finish callback left the payment paid with entitlements unchanged (1→1).
+  - **ZainCash: real UAT transaction + pay page ✅. Success ✗ (sandbox side).**
+    - Initiation returned a real `pg-uat.zaincash.iq/transaction/pay?id=…` and transactionId. The pay page needs real Chrome (Cloudflare blocks headless).
+    - All four public test wallets were refused by UAT on 2026-10-23: `ZC-7354 Locked balance on T24`, `E4853` monthly wallet limit exceeded, or "invalid OTP".
+      This also happened directly against UAT with 1,000 IQD.
+    - A real ZainCash-signed failure callback was **verified** (HS256 with the client secret). The inquiry confirmed FAILED, `payment.failed` was applied once
+      with ZainCash's reason, and replaying it as a v2 webhook `{webhook_token}` returned `duplicate: true`.
+    - Signed-token checks against the live API: wrong secret → 401; correctly signed **SUCCESS** token for a FAILED tx → not granted; correctly signed SUCCESS
+      for a PENDING tx → stays pending; signed token with a mismatched orderId → 401.
+  - **Cleanup:** the test student, 6 payments, subscription/entitlement, OTP rows, the (marker-checked) Supabase auth mirror user and 5 orphan test events
+    were deleted. Transactions on the gateways' own sandboxes remain there.
+- **Checks:**
+  - server: typecheck ✅ · lint ✅ · `npm test` **29/29 files** ✅ (payments-gateways 29 tests, incl. 12 new ZainCash v2) · check-prefix ✅;
+  - admin + user web: typecheck ✅ · lint ✅ · build ✅;
+  - app: typecheck ✅.
+- **Still to obtain:**
+  - FastPay staging PGW credentials + payer wallet;
+  - a funded ZainCash UAT wallet (or ZainCash confirming the public wallets reset monthly);
+  - Qi's webhook public key;
+  - live credentials for all three.

@@ -1434,6 +1434,8 @@ interface PaymentMethodDto {
   color: string; logoUrl: string | null; enabled: boolean;
   requiresPhone: boolean;                // wallet MSISDN collected by OUR UI only for mock/redirect prefill — never PINs/cards
   flow: 'redirect' | 'deeplink' | 'mock';
+  mode: 'live' | 'sandbox' | 'mock' | 'disabled'; // server env: sandbox = gateway test/staging/UAT environment (no real money)
+  sandbox: boolean;                      // mode === 'sandbox' → clients show a "Sandbox / test mode" badge (EN/AR)
 }
 interface PriceQuote {
   packageId: ID; cycle: BillingCycle; currency: Currency;
@@ -3119,7 +3121,8 @@ interface AppSettingsDto { minVersionIos: string; minVersionAndroid: string /*se
 interface SupportContactsDto { phone: string; whatsapp: string; email: string; hours: Localized; address: Localized;
   facebook: string; instagram: string; telegram: string; youtube: string; tiktok: string }
 interface PaymentSettingsDto { gateways: { id: Gateway; enabled: boolean; feeRatePct: number; name: Localized; color: string; displayOrder: number }[];
-  mockGatewayEnabled: boolean /*forced false in production*/; receiptCompany: { name: Localized; address: Localized; email: string }; taxNote: Localized }
+  mockGatewayEnabled: boolean /*forced false in production*/; receiptCompany: { name: Localized; address: Localized; email: string }; taxNote: Localized;
+  gatewayModes: Partial<Record<Gateway, 'live' | 'sandbox' | 'mock' | 'disabled'>> /*read-only (server env), ignored on PUT*/ }
 interface LearningSettingsDto { quizQuestionCount: number; quizPassMark: number; examDefaultPassMark: number; practiceSessionSizes: number[]; practiceMaxSize: number;
   dailyGoalMinutes: number; watchHeartbeatSeconds: number; examAutosaveSeconds: number; examGraceSeconds: number;
   gradeBands: { key: string; min: number }[]; heatmapLevels: number[] /*minutes thresholds*/ }

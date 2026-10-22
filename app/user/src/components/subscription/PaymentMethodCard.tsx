@@ -100,4 +100,5 @@ const styles = StyleSheet.create({
   mark: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 12, height: 12, borderRadius: 6 },
+  sandbox: { alignSelf: 'flex-start', marginTop: 2, paddingHorizontal: 8, paddingVertical: 1, borderRadius: 999, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FCD34D' },
 });
