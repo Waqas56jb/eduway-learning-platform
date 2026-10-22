@@ -140,8 +140,8 @@
       "name": "Full name",
       "namePlaceholder": "Your name",
       "contact": "Mobile or email",
-      "contactPlaceholder": "0770 123 4567 or you@example.com",
-      "contactInvalid": "Enter a valid Iraqi mobile number or email address",
+      "contactPlaceholder": "0770 123 4567, +44 7911 123456 or you@example.com",
+      "contactInvalid": "Enter a valid phone number (with country code if outside Iraq) or email address",
       "subject": "Subject",
       "subjects": {
         "general": "General enquiry",

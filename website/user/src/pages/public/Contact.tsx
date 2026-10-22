@@ -21,7 +21,7 @@ import { useAppConfig } from '@/api/appSettings';
 import { errorMessage, isApiError } from '@/api/client';
 import { useContactMutation } from '@/api/public';
 import type { ContactSubject } from '@/api/types';
-import { isIraqiMobile } from '@/components/auth/mobile';
+import { isValidMobileText } from '@/components/auth/mobile';
 import { Button, Input, Reveal, Select, Seo, SmartImage, Textarea, useToast } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { IMAGES } from '@/lib/images';
@@ -192,7 +192,7 @@ export default function Contact() {
                       error={errors.contact?.message}
                       {...register('contact', {
                         required: t('validation.required'),
-                        validate: (v) => EMAIL.test(v.trim()) || isIraqiMobile(v) || t('pages.contact.form.contactInvalid'),
+                        validate: (v) => EMAIL.test(v.trim()) || isValidMobileText(v) || t('pages.contact.form.contactInvalid'),
                       })}
                     />
                     <Select

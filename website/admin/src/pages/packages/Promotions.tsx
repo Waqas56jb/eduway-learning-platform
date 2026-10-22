@@ -10,6 +10,7 @@ import { Copy, Gauge, History, Pencil, Plus, Sparkles, Tag, Ticket, Trash2, Wand
 import type { PromoType } from '@/types';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtDateTime, fmtMoney, fmtNumber } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { qk } from '@/api/keys';
@@ -622,7 +623,7 @@ function RedemptionsModal({ promo, onClose }: { promo: PromotionVM; onClose: () 
           <div>
             <div className="font-medium text-ink">{L(row.original, 'studentName')}</div>
             <div className="text-[11px] text-muted num" dir="ltr">
-              {row.original.student.mobile}
+              {formatPhone(row.original.student.mobile)}
             </div>
           </div>
         ),

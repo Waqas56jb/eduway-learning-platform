@@ -7,6 +7,7 @@ import type { SecurityAlert } from '@/types';
 import { useCan } from '@/store/auth';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtNumber, fmtRelative } from '@/utils/format';
+import { formatPhone, isolatePhone } from '@/utils/phone';
 import { useApiMutation, usePagedList } from '@/api/hooks';
 import { qk } from '@/api/keys';
 import { securityApi, type AlertsMeta, type SecurityAlertVM } from '@/api/security';
@@ -73,7 +74,7 @@ export default function SuspiciousActivity() {
 
   const block = async (a: SecurityAlertVM) => {
     const ok = await confirm({
-      title: t('security.alerts.blockTitle', { subject: a.subject }),
+      title: t('security.alerts.blockTitle', { subject: isolatePhone(a.subject) || a.subject }),
       body: isStudent(a) ? t('security.alerts.blockBodyStudent') : isAdmin(a) ? t('security.alerts.blockBodyAdmin') : t('security.alerts.blockBody'),
       confirmText: t('actions.block'),
       reason: { placeholder: t('security.alerts.reasonPlaceholder') },
@@ -146,7 +147,7 @@ export default function SuspiciousActivity() {
                         <StatusBadge status={a.status} />
                       </div>
                       <div className="mt-1 text-sm font-medium text-ink/90" dir="auto">
-                        {a.subject}
+                        {formatPhone(a.subject)}
                       </div>
                       <p className="mt-1.5 text-sm text-muted">{a.detail}</p>
                       {a.status !== 'open' && a.resolutionReason && (

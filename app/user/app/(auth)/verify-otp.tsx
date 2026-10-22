@@ -12,6 +12,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore } from '@/store';
 import { HIT_SLOP, radius, SCREEN_PADDING, shadows, space, useTheme } from '@/theme';
 import { formatDuration } from '@/utils/format';
+import { maskPhone } from '@/utils/phone';
 import { haptic } from '@/utils/haptics';
 
 const DEFAULT_OTP_LENGTH = 6;
@@ -22,12 +23,9 @@ const ltr = (s: string) => `⁦${s}⁩`;
 
 const enter = (i: number) => FadeInDown.duration(350).delay(Math.min(80 + i * 60, 300));
 
-/** "+964 770 123 4567" → "+964 770 ••• 4567" */
+/** "+9647701234567" → "+964 770 ••• 4567" (any country, formatted with libphonenumber). */
 function maskMobile(mobile: string): string {
-  const parts = mobile.trim().split(/\s+/);
-  if (parts.length === 4) return `${parts[0]} ${parts[1]} ••• ${parts[3]}`;
-  const digits = mobile.replace(/\D/g, '');
-  return digits.length > 4 ? `${mobile.slice(0, -4).replace(/\d/g, '•')}${mobile.slice(-4)}` : mobile;
+  return maskPhone(mobile) || mobile;
 }
 
 /** Six boxes sized from the window width: equal boxes, equal gaps, centered, fits 320pt screens. */

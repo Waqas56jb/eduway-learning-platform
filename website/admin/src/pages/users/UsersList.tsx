@@ -9,6 +9,7 @@ import { useLang } from '@/hooks/useLocale';
 import { useCan } from '@/store/auth';
 import { rangeFromPreset, type DateRange } from '@/store/ui';
 import { fmtDate, fmtNumber, fmtRelative } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { useApiMutation, useApiQuery, useExport, usePagedList, exportRequest } from '@/api/hooks';
 import { qk } from '@/api/keys';
 import { useLookups } from '@/api/lookups';
@@ -90,7 +91,7 @@ export default function UsersList() {
         meta: { label: t('users.cols.mobile') },
         cell: ({ getValue }) => (
           <span className="whitespace-nowrap num" dir="ltr">
-            {getValue<string>()}
+            {formatPhone(getValue<string>())}
           </span>
         ),
       },

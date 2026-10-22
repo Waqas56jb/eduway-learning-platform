@@ -10,6 +10,7 @@ import { isApiError, toastError } from '@/api/client';
 import { useLang, useLocalize } from '@/hooks/useLocale';
 import { useDebounce } from '@/hooks/useMisc';
 import { fmtDate, fmtDateTime, fmtNumber, fmtPercent } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { cn } from '@/utils/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BarChart } from '@/components/charts';
@@ -425,7 +426,7 @@ function AcceptancesModal({ version, docLabel, onClose }: { version: LegalVersio
                   <td className="px-3 py-2">
                     <div className="font-medium text-ink">{L(flatRef(r.student), 'name')}</div>
                     <div className="text-[11px] text-muted" dir="ltr">
-                      {r.student.mobile}
+                      {formatPhone(r.student.mobile)}
                     </div>
                   </td>
                   <td className="px-3 py-2 text-xs text-muted num">{fmtDateTime(r.acceptedAt)}</td>

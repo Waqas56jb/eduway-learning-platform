@@ -12,6 +12,7 @@ import type { BulkResult } from '@/api/types';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { MarketerForm } from '@/components/forms/MarketerForm';
 import { Avatar, Badge, Button, DataTable, FilterSelect, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
@@ -78,7 +79,7 @@ export default function Marketers() {
           </div>
         ),
       },
-      { id: 'mobile', accessorKey: 'mobile', header: t('marketers.fields.mobile'), enableSorting: false, cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{getValue<string>()}</span> },
+      { id: 'mobile', accessorKey: 'mobile', header: t('marketers.fields.mobile'), enableSorting: false, cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{formatPhone(getValue<string>())}</span> },
       { id: 'email', accessorKey: 'email', header: t('marketers.fields.email'), enableSorting: false, cell: ({ getValue }) => <span className="text-muted">{getValue<string>()}</span> },
       { id: 'schoolsCount', accessorFn: (r) => r.schoolsCount, header: t('marketers.fields.schools'), meta: { align: 'end' }, cell: ({ getValue }) => fmtNumber(getValue<number>()) },
       { id: 'paidStudents', accessorKey: 'paidStudents', header: t('marketers.fields.paid'), meta: { align: 'end' }, cell: ({ getValue }) => <span className="font-semibold">{fmtNumber(getValue<number>())}</span> },

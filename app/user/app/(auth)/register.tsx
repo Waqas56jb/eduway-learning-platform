@@ -11,12 +11,13 @@ import {
   FormSection,
   GovernoratePicker,
   LegalLinks,
-  MobileField,
+  PhoneField,
+  emptyPhone,
   SchoolPicker,
   SelectField,
   StepIndicator,
   registerSchema,
-  toE164ish,
+  toE164,
   useAuthReveal,
   useFieldError,
   type RegisterInput,
@@ -56,7 +57,7 @@ export default function RegisterScreen() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterInput, unknown, RegisterOutput>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { name: '', mobile: '', governorate: '', school: '', referral: '', acceptTerms: false },
+    defaultValues: { name: '', mobile: emptyPhone(), governorate: '', school: '', referral: '', acceptTerms: false },
     mode: 'onTouched',
   });
 
@@ -99,7 +100,7 @@ export default function RegisterScreen() {
         .map((d) => ({ doc: d.doc, version: d.version }));
       const sent = await useAuthStore.getState().startRegistration({
         name: v.name,
-        mobile: toE164ish(v.mobile),
+        mobile: toE164(v.mobile),
         governorate: v.governorate,
         schoolId: v.school ? schoolId : null,
         school: v.school || undefined,
@@ -265,10 +266,10 @@ function RegisterForm({
             control={control}
             name="mobile"
             render={({ field: { value, onChange, onBlur, ref } }) => (
-              <MobileField
+              <PhoneField
                 ref={ref}
                 value={value}
-                onChangeText={onChange}
+                onChange={onChange}
                 onBlur={onBlur}
                 onFocus={reveal}
                 error={fieldError(errors.mobile?.message)}

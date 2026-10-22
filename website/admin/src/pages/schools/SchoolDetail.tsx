@@ -11,6 +11,7 @@ import { schoolsApi, useSchool, useSchoolNotes, useSchoolProgress, type Attribut
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { fmtDate, fmtMoney, fmtNumber, fmtRelative } from '@/utils/format';
+import { formatPhone, phoneHref } from '@/utils/phone';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SchoolForm } from '@/components/forms/SchoolForm';
 import { Avatar, Button, ButtonLink, Card, CardBody, CardHeader, DataTable, EmptyState, ProgressBar, Select, SkeletonCard, StatusBadge, Textarea } from '@/components/ui';
@@ -112,7 +113,7 @@ export default function SchoolDetail() {
               <span className="min-w-0">
                 <span className="block truncate font-medium">{L(n, 'name')}</span>
                 <span className="block text-xs text-muted num" dir="ltr">
-                  {row.original.mobile}
+                  {formatPhone(row.original.mobile)}
                 </span>
               </span>
             </span>
@@ -304,8 +305,8 @@ export default function SchoolDetail() {
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
                 <div>
                   <div className="font-medium">{school.contactName}</div>
-                  <a href={`tel:${school.contactMobile.replace(/\s/g, '')}`} className="text-xs text-muted hover:text-accent num" dir="ltr">
-                    {school.contactMobile}
+                  <a href={phoneHref(school.contactMobile)} className="text-xs text-muted hover:text-accent num" dir="ltr">
+                    {formatPhone(school.contactMobile)}
                   </a>
                 </div>
               </div>

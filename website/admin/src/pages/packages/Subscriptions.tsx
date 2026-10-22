@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowUpDown, CalendarPlus, Gift, MoreHorizontal, Search, XCircle } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtRelative } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { useDebounce } from '@/hooks/useMisc';
@@ -65,7 +66,7 @@ export default function Subscriptions() {
                 {L(row.original, 'studentName')}
               </Link>
               <div className="text-[11px] text-muted num" dir="ltr">
-                {row.original.student.mobile}
+                {formatPhone(row.original.student.mobile)}
               </div>
             </div>
           </div>
@@ -272,7 +273,7 @@ function GrantModal({ onClose }: { onClose: () => void }) {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-ink">{L(flatRef(student), 'name')}</div>
                 <div className="text-[11px] text-muted num" dir="ltr">
-                  {student.mobile}
+                  {formatPhone(student.mobile)}
                 </div>
               </div>
               <Button variant="ghost" size="xs" onClick={() => setStudent(null)}>
@@ -294,7 +295,7 @@ function GrantModal({ onClose }: { onClose: () => void }) {
                         <Avatar name={s.name.en} src={s.avatarUrl} size="xs" />
                         <span className="flex-1 truncate">{L(flatRef(s), 'name')}</span>
                         <span className="text-[11px] text-muted num" dir="ltr">
-                          {s.mobile}
+                          {formatPhone(s.mobile)}
                         </span>
                       </button>
                     ))

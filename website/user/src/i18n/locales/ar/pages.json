@@ -144,8 +144,8 @@
       "name": "الاسم الكامل",
       "namePlaceholder": "اسمك",
       "contact": "رقم الهاتف أو البريد الإلكتروني",
-      "contactPlaceholder": "0770 123 4567 أو you@example.com",
-      "contactInvalid": "أدخل رقم هاتف عراقياً صحيحاً أو بريداً إلكترونياً صحيحاً",
+      "contactPlaceholder": "0770 123 4567 أو +44 7911 123456 أو you@example.com",
+      "contactInvalid": "أدخل رقم هاتف صحيحاً (مع رمز الدولة إن كان من خارج العراق) أو بريداً إلكترونياً صحيحاً",
       "subject": "الموضوع",
       "subjects": {
         "general": "استفسار عام",

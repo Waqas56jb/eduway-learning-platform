@@ -7,7 +7,7 @@ import { Badge, Button, Field, PhoneInput, Segmented, Skeleton, SkeletonCard, Te
 import { QueryError } from '@/components/ui/QueryError';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtRelative } from '@/utils/format';
-import { formatPhone, isValidPhone, toE164 } from '@/utils/phone';
+import { formatPhone, isolatePhone, isValidPhone, toE164 } from '@/utils/phone';
 import { ReadOnlyNotice, Section, useCanEditSettings } from './_shared';
 
 const STATUS_TONE: Record<WhatsAppStatus, Tone> = { connected: 'success', qr_pending: 'warning', connecting: 'info', disconnected: 'neutral' };

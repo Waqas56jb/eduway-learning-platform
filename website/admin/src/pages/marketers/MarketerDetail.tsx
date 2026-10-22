@@ -14,6 +14,7 @@ import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtMoney, fmtNumber, fmtRelative } from '@/utils/format';
+import { formatPhone, phoneHref } from '@/utils/phone';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { MarketerForm } from '@/components/forms/MarketerForm';
 import { BarChart } from '@/components/charts';
@@ -65,7 +66,7 @@ export default function MarketerDetail() {
               <span className="min-w-0">
                 <span className="block truncate font-medium">{L(n, 'name')}</span>
                 <span className="block text-xs text-muted num" dir="ltr">
-                  {row.original.mobile}
+                  {formatPhone(row.original.mobile)}
                 </span>
               </span>
             </span>
@@ -323,8 +324,8 @@ export default function MarketerDetail() {
               <div className="mt-4 w-full space-y-3 text-start text-sm">
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 shrink-0 text-muted" />
-                  <a href={`tel:${marketer.mobile.replace(/\s/g, '')}`} className="hover:text-accent num" dir="ltr">
-                    {marketer.mobile}
+                  <a href={phoneHref(marketer.mobile)} className="hover:text-accent num" dir="ltr">
+                    {formatPhone(marketer.mobile)}
                   </a>
                 </div>
                 <div className="flex items-center gap-3">

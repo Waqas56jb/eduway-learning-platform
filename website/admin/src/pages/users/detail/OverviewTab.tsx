@@ -5,6 +5,7 @@ import { Badge, Card, CardBody, CardHeader, EmptyState, ProgressBar, Skeleton, S
 import { useLang } from '@/hooks/useLocale';
 import { useCan } from '@/store/auth';
 import { fmtDate, fmtDateTime, fmtRelative } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { useApiMutation, useApiQuery } from '@/api/hooks';
 import { qk } from '@/api/keys';
 import { useLookups } from '@/api/lookups';
@@ -54,7 +55,7 @@ export function OverviewTab({ student }: { student: AdminStudentDetail }) {
             </InfoRow>
             <InfoRow label={t('common.mobile')}>
               <span dir="ltr" className="num">
-                {student.mobile}
+                {formatPhone(student.mobile)}
               </span>
             </InfoRow>
             <InfoRow label={t('common.email')}>{student.email ?? '—'}</InfoRow>

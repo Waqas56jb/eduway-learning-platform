@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtNumber, fmtRelative } from '@/utils/format';
+import { formatPhone, phoneHref } from '@/utils/phone';
 import { useAuth, useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { qk } from '@/api/keys';
@@ -87,7 +88,7 @@ function Requester({ ticket, compact }: { ticket: SupportTicketDto; compact?: bo
           )}
           {!compact && (
             <span className="block text-[11px] text-muted num" dir="ltr">
-              {ticket.student.mobile}
+              {formatPhone(ticket.student.mobile)}
             </span>
           )}
         </div>
@@ -421,7 +422,7 @@ function TicketDrawer({ id, onClose, onDelete }: { id: string | null; onClose: (
   const patch = (p: { status?: TicketStatus; priority?: TicketPriority; assigneeId?: string | null }) => x && m.update.mutate({ id: x.id, patch: p });
 
   const contact = x?.student ? x.student.mobile : x?.contact?.contact;
-  const contactHref = contact ? (isEmail(contact) ? `mailto:${contact}?subject=${encodeURIComponent(`[${x?.id}] ${x?.subject.en ?? ''}`)}` : `tel:${contact.replace(/\s/g, '')}`) : null;
+  const contactHref = contact ? (isEmail(contact) ? `mailto:${contact}?subject=${encodeURIComponent(`[${x?.id}] ${x?.subject.en ?? ''}`)}` : phoneHref(contact)) : null;
 
   return (
     <Drawer
@@ -476,7 +477,7 @@ function TicketDrawer({ id, onClose, onDelete }: { id: string | null; onClose: (
             </div>
             {contact && contactHref && (
               <a href={contactHref} className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-accent" dir="ltr">
-                {isEmail(contact) ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />} {contact}
+                {isEmail(contact) ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />} {isEmail(contact) ? contact : formatPhone(contact)}
               </a>
             )}
             {!x.student && <p className="mt-2 text-xs text-muted">{t('support.contactFormNote')}</p>}

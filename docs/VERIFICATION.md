@@ -462,3 +462,30 @@ the server zod schemas and sort allow-lists) found 3 UI sort mismatches; all are
   - a funded ZainCash UAT wallet (or ZainCash confirming the public wallets reset monthly);
   - Qi's webhook public key;
   - live credentials for all three.
+
+## International phone numbers (2026-10-23)
+
+Login/signup were locked to Iraqi `+964` numbers. Every client now has a country picker (flag, name, dial code, searchable in
+EN/AR), and the server validates any country's number with `libphonenumber-js` (max metadata), normalizing it to E.164. Iraqi
+local input (`07…`, `7…`, `964…`) still normalizes to `+964…`, so existing accounts and the demo student `+9647701234567` keep
+working. Rules: `docs/API_CONTRACT.md` §4.1.
+
+| Area | Check | Result |
+|---|---|---|
+| server | `npm run typecheck` (`NODE_OPTIONS=--max-old-space-size=4096`) | ✅ 0 errors |
+| server | `npm run lint` · `npm run check-prefix` | ✅ 0 problems · 21 SQL / 312 TS files, all prefixed |
+| server | `npm test` | ✅ 29 files, **419/419**. `tests/unit/phone.test.ts` has 50 cases: Iraqi local formats, +1, +44, +92, +971, +966, +90, invalid input, mobile-only, test ranges, masking |
+| server live | `POST /auth/send-otp {"phone":"+44 7700 900123","purpose":"register","channel":"sms"}` on :4100 | ✅ 200, `phone:"+447700900123"`, `maskedPhone:"+44 770• ••••23"`; the `eduway_platform_otp_codes` row stored `+447700900123` (E.164). Row deleted afterwards; no user was created |
+| server live | `send-otp` with the London landline `+44 20 7946 0958` (`Accept-Language: ar`) | ✅ 400 `PHONE_INVALID`, Arabic message |
+| website/user | `tsc -b --noEmit` · `npm run lint` · `npm run build` | ✅ clean · clean · built. libphonenumber is in its own `phone` chunk (231 kB / 58 kB gzip) |
+| website/admin | `tsc -b --noEmit` · `npm run lint` · `npm run build` | ✅ clean · clean · built (own `phone` chunk) |
+| app/user | `npx tsc --noEmit` · `npx expo export -p ios` | ✅ 0 errors · bundle exported. The only dependency added is pure-JS `libphonenumber-js`, so it runs in Expo Go |
+
+Notes:
+- `+44 7700 900xxx` is Ofcom's fictional "drama" range. libphonenumber rejects it as invalid, so the server and the dev builds of
+  the clients accept it, and NANP `555-01XX`, **outside production only**. QA can test international sign-up this way without
+  messaging a real person.
+- `/auth/*` rejects numbers that can't receive an OTP: fixed-line, toll-free and premium. Contact, admin and marketer phones accept
+  any valid number.
+- There is no country allowlist setting, so all countries are accepted.
+- Not verified in a browser or on a device: the visual pass of the picker in RTL and on phone widths.

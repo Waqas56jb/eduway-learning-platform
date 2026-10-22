@@ -4,8 +4,9 @@ import { Controller, useForm } from 'react-hook-form';
 import { Trans, useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthLayout, AuthSteps, DemoHint } from '@/components/auth/AuthLayout';
-import { MobileInput } from '@/components/auth/MobileInput';
-import { isIraqiMobile, normalizeMobile } from '@/components/auth/mobile';
+import { PhoneInput } from '@/components/auth/PhoneInput';
+import { emptyPhone } from '@/components/auth/mobile';
+import { DEFAULT_COUNTRY, isValidPhone, phoneToE164, type PhoneValue } from '@/lib/phone';
 import { Button, Checkbox, Input, Select, Seo } from '@/components/ui';
 import { errorMessage, isApiError } from '@/api/client';
 import { useLegalDocument } from '@/api/legal';
@@ -16,7 +17,7 @@ import { IMAGES } from '@/lib/images';
 
 interface RegisterForm {
   name: string;
-  mobile: string;
+  mobile: PhoneValue;
   governorate: string;
   school: string;
   referral: string;
@@ -41,7 +42,7 @@ export default function Register() {
     setError,
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
-    defaultValues: { name: '', mobile: '', governorate: '', school: '', referral: '', terms: false },
+    defaultValues: { name: '', mobile: emptyPhone(), governorate: '', school: '', referral: '', terms: false },
   });
 
   // PUB-02 governorates, PUB-03 school suggestions (directory pick or free text), PUB-04 referral check,
@@ -80,7 +81,7 @@ export default function Register() {
     try {
       await registerUser({
         name: v.name.trim(),
-        mobile: normalizeMobile(v.mobile),
+        mobile: phoneToE164(v.mobile),
         governorate: v.governorate,
         schoolId: match?.id ?? null,
         schoolName: match ? undefined : name || undefined,
@@ -116,14 +117,24 @@ export default function Register() {
           })}
         />
 
-        <MobileInput
-          label={t('auth.mobile.label')}
-          placeholder={t('auth.mobile.placeholder')}
-          error={errors.mobile?.message}
-          {...register('mobile', {
-            required: t('validation.required'),
-            validate: (v) => isIraqiMobile(v) || t('validation.mobile'),
-          })}
+        <Controller
+          name="mobile"
+          control={control}
+          rules={{
+            validate: (v) => (!v.national.trim() ? t('validation.required') : isValidPhone(v) || t('validation.mobile')),
+          }}
+          render={({ field }) => (
+            <PhoneInput
+              label={t('auth.mobile.label')}
+              placeholder={field.value.country === DEFAULT_COUNTRY ? t('auth.mobile.placeholder') : undefined}
+              error={errors.mobile?.message}
+              ref={field.ref}
+              name={field.name}
+              value={field.value}
+              onBlur={field.onBlur}
+              onChange={field.onChange}
+            />
+          )}
         />
 
         <div className="relative">

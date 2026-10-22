@@ -16,6 +16,7 @@ export default defineConfig({
           motion: ['framer-motion'],
           charts: ['recharts'],
           i18n: ['i18next', 'react-i18next'],
+          phone: ['libphonenumber-js/max', 'libphonenumber-js/mobile/examples'],
         },
       },
     },

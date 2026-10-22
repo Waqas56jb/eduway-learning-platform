@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { BookOpen, CornerDownLeft, Languages, LogOut, Moon, Search, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/utils/cn';
+import { isolatePhone } from '@/utils/phone';
 import { FLAT_PAGES } from '@/routes/nav';
 import { useAuth, useCan } from '@/store/auth';
 import { useUi } from '@/store/ui';
@@ -94,7 +95,7 @@ export function CommandPalette() {
 
     const studs: Entry[] =
       query && can('users', 'view')
-        ? (found?.students ?? []).map((s) => ({ id: `s:${s.id}`, group: 'students' as const, label: s.name[lang], sub: s.mobile, icon: <User className="h-4 w-4" />, run: go(`/users/${s.id}`) }))
+        ? (found?.students ?? []).map((s) => ({ id: `s:${s.id}`, group: 'students' as const, label: s.name[lang], sub: isolatePhone(s.mobile), icon: <User className="h-4 w-4" />, run: go(`/users/${s.id}`) }))
         : [];
 
     const less: Entry[] =

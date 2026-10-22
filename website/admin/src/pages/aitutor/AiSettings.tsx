@@ -36,6 +36,7 @@ import {
   type AiSettingsPatch,
 } from '@/api/aiTutor';
 import { cn } from '@/utils/cn';
+import { formatPhone } from '@/utils/phone';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
   Avatar,
@@ -560,7 +561,7 @@ export default function AiSettings() {
                             <Avatar name={s.name_en} size="xs" />
                             <span className="min-w-0 flex-1 truncate text-sm">{L(s, 'name')}</span>
                             <span className="num text-xs text-muted" dir="ltr">
-                              {s.mobile}
+                              {formatPhone(s.mobile)}
                             </span>
                             <span className="text-xs font-semibold text-danger">
                               {t('actions.disable')}

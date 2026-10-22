@@ -10,7 +10,8 @@
     "required": "Please enter your mobile number",
     "length": "Enter the 10 digits after +964",
     "prefix": "Iraqi mobile numbers start with 7",
-    "invalid": "Enter a valid Iraqi mobile number"
+    "invalid": "Enter a valid Iraqi mobile number",
+    "invalidCountry": "Enter a valid mobile number for the selected country."
   },
   "governorate": {
     "required": "Please select your governorate"

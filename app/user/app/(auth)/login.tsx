@@ -9,9 +9,10 @@ import {
   AuthSwitchLink,
   DemoHint,
   LegalLinks,
-  MobileField,
+  PhoneField,
+  emptyPhone,
   loginSchema,
-  toE164ish,
+  toE164,
   useFieldError,
   type LoginValues,
 } from '@/components/auth';
@@ -34,7 +35,7 @@ export default function LoginScreen() {
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { mobile: '' },
+    defaultValues: { mobile: emptyPhone() },
     mode: 'onTouched',
   });
 
@@ -46,7 +47,7 @@ export default function LoginScreen() {
 
   const onSubmit = handleSubmit(
     async ({ mobile }) => {
-      const sent = await useAuthStore.getState().requestOtp(toE164ish(mobile));
+      const sent = await useAuthStore.getState().requestOtp(toE164(mobile));
       if (!sent) {
         haptic.error();
         return;
@@ -89,13 +90,13 @@ export default function LoginScreen() {
           control={control}
           name="mobile"
           render={({ field: { value, onChange, onBlur, ref } }) => (
-            <MobileField
+            <PhoneField
               ref={(node) => {
                 ref(node);
                 mobileRef.current = node;
               }}
               value={value}
-              onChangeText={onChange}
+              onChange={onChange}
               onBlur={onBlur}
               error={fieldError(errors.mobile?.message)}
               hint={t('fields.mobile.hint')}

@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useLangStore } from '@/store/langStore';
 import { palette, radius, SCREEN_PADDING, space, useTheme } from '@/theme';
 import { haptic } from '@/utils/haptics';
+import { formatPhoneInternational } from '@/utils/phone';
 
 /** True while the software keyboard is on screen. */
 function useKeyboardVisible(): boolean {
@@ -243,7 +244,7 @@ export default function EditProfileScreen() {
           <Input
             label={t('editProfile.mobile')}
             icon="phone"
-            value={user.mobile}
+            value={formatPhoneInternational(user.mobile)}
             editable={false}
             keyboardType="phone-pad"
             hint={t('editProfile.mobileLocked')}

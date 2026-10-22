@@ -1,18 +1,19 @@
 import { ArrowRight, LockKeyhole, Sparkles } from 'lucide-react';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthLayout, DemoHint } from '@/components/auth/AuthLayout';
-import { MobileInput } from '@/components/auth/MobileInput';
-import { DEMO_MOBILE, isIraqiMobile, normalizeMobile } from '@/components/auth/mobile';
+import { PhoneInput } from '@/components/auth/PhoneInput';
+import { demoPhone, emptyPhone } from '@/components/auth/mobile';
+import { DEFAULT_COUNTRY, isValidPhone, phoneToE164, type PhoneValue } from '@/lib/phone';
 import { errorMessage, isApiError } from '@/api/client';
 import { Button, Seo } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { IMAGES } from '@/lib/images';
 
 interface LoginForm {
-  mobile: string;
+  mobile: PhoneValue;
 }
 
 export default function Login() {
@@ -23,16 +24,18 @@ export default function Login() {
   const from = (location.state as { from?: string } | null)?.from;
 
   const {
-    register,
+    control,
     handleSubmit,
     setValue,
+    watch,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<LoginForm>({ defaultValues: { mobile: '' } });
+  } = useForm<LoginForm>({ defaultValues: { mobile: emptyPhone() } });
+  const country = watch('mobile').country;
 
   const onSubmit = async ({ mobile }: LoginForm) => {
     try {
-      await requestOtp(normalizeMobile(mobile));
+      await requestOtp(phoneToE164(mobile));
       navigate('/verify-otp', { state: { from } });
     } catch (e) {
       // ACCOUNT_NOT_FOUND / ACCOUNT_LOCKED / OTP_RESEND_* … shown inline under the field.
@@ -43,7 +46,7 @@ export default function Login() {
   const [notFound, setNotFound] = useState(false);
 
   const fillDemo = () => {
-    setValue('mobile', DEMO_MOBILE, { shouldValidate: true });
+    setValue('mobile', demoPhone(), { shouldValidate: true });
     void handleSubmit(onSubmit)();
   };
 
@@ -59,17 +62,29 @@ export default function Login() {
       <p className="mt-2 text-muted">{t('auth.login.subtitle')}</p>
 
       <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
-        <MobileInput
-          label={t('auth.mobile.label')}
-          placeholder={t('auth.mobile.placeholder')}
-          hint={t('auth.mobile.hint')}
-          error={errors.mobile?.message}
-          autoFocus
-            {...register('mobile', {
-            required: t('validation.required'),
-            validate: (v) => isIraqiMobile(v) || t('validation.mobile'),
-            onChange: () => setNotFound(false),
-          })}
+        <Controller
+          name="mobile"
+          control={control}
+          rules={{
+            validate: (v) => (!v.national.trim() ? t('validation.required') : isValidPhone(v) || t('validation.mobile')),
+          }}
+          render={({ field }) => (
+            <PhoneInput
+              label={t('auth.mobile.label')}
+              placeholder={country === DEFAULT_COUNTRY ? t('auth.mobile.placeholder') : undefined}
+              hint={country === DEFAULT_COUNTRY ? t('auth.mobile.hint') : t('auth.phone.hint')}
+              error={errors.mobile?.message}
+              autoFocus
+              ref={field.ref}
+              name={field.name}
+              value={field.value}
+              onBlur={field.onBlur}
+              onChange={(v) => {
+                field.onChange(v);
+                setNotFound(false);
+              }}
+            />
+          )}
         />
 
         <Button

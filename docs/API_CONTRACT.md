@@ -91,6 +91,8 @@ without new codes. Every `message` is localized by `Accept-Language` (`en` | `ar
 
 | reason | Where |
 |---|---|
+| `PHONE_INVALID` | (400 `VALIDATION_ERROR`) any phone field that is not a valid international number (§4.1) |
+| `CONTACT_INVALID` | (400 `VALIDATION_ERROR`) PUB contact form `contact` is neither an email nor a valid phone |
 | `ACCOUNT_NOT_FOUND` | send-otp/verify-otp with `purpose:'login'` for an unregistered phone |
 | `ACCOUNT_EXISTS` | `purpose:'register'` for a registered phone (409 `CONFLICT`) |
 | `ACCOUNT_LOCKED` | (403 `FORBIDDEN`) student/admin locked/deactivated |
@@ -681,7 +683,7 @@ Used by: U Landing/Pricing FAQ, A subscription FAQ accordion.
 → data `PaymentMethodDto[]` (§14). Used by: U Pricing PaymentMethods, PaymentModal; A checkout.
 
 #### PUB-10 · `POST /public/contact`
-rl:public (5/hour/IP). Body `{ name: string /*3..80*/; contact: string /*email or Iraqi mobile*/; subject: 'general'|'support'|'billing'|'partnerships'|'schools'; message: string /*20..4000*/; locale?: Lang }`.
+rl:public (5/hour/IP). Body `{ name: string /*3..80*/; contact: string /*email or phone — any international number (+…/00…) or Iraqi local 07…; else 400 reason CONTACT_INVALID*/; subject: 'general'|'support'|'billing'|'partnerships'|'schools'; message: string /*20..4000*/; locale?: Lang }`.
 → data `{ ticketId: string /*EW-T-NNNNN*/; createdAt: ISODate }`. Creates an `eduway_platform_support_tickets` row (`category` mapped:
 billing→payment, support→access, others→account) + admin inbox notification. Used by: U Contact.
 
@@ -698,13 +700,21 @@ Errors 404. Used by: U Terms/Privacy, A legal/terms, legal/privacy, Register (ve
 
 ### 4.1 Students (phone OTP)
 
-Phone format: request field `phone` accepts `07XXXXXXXXX`, `7XXXXXXXXX`, `+9647XXXXXXXXX`, `9647…`, spaces allowed; server
-normalizes to E.164 `+9647XXXXXXXXX` (regex after normalization `^\+9647[3-9]\d{8}$`). DTOs return `mobile` in E.164.
+Phone format (international): request field `phone` accepts any country's number in international form (`+44 7911 123456`,
+`0044…`, `+1 (202) 555-0123`) — clients send E.164 from their country picker — plus the legacy Iraqi local forms `07XXXXXXXXX`,
+`7XXXXXXXXX`, `9647…` (input without `+`/`00` is read as Iraqi first). Spaces, dashes, dots, parentheses and Arabic-Indic digits are
+allowed. The server normalizes to E.164 (`+9647701234567`, `+447911123456`) with libphonenumber-js (full "max" metadata: real number
+ranges are checked, not only lengths) and, for `/auth/*`, rejects numbers that cannot receive an OTP (fixed-line, toll-free, premium,
+shared-cost, UAN, voicemail, pager). Invalid → 400 `VALIDATION_ERROR` with `details.reason = 'PHONE_INVALID'` (localized EN/AR:
+"Enter a valid mobile number for the selected country."). Outside production only, the reserved fictional test ranges
+`+44 7700 900000–900999` (Ofcom drama numbers) and `+1 NXX 555-01XX` are also accepted so QA accounts never reach a real person.
+No country allowlist exists — all countries are accepted. DTOs return `mobile` in E.164; display formatting is client-side
+(international format, e.g. `+44 7911 123456`).
 
 #### AUTH-01 · `POST /auth/send-otp`
 Auth public · rl:otp. Headers `X-Client-Platform`, `X-Device-Id`.
 Body `{ phone: string; purpose: 'login' | 'register'; channel?: 'sms' | 'whatsapp' }`.
-→ data `{ phone: string /*E.164*/; maskedPhone: string /*"+964 770 ••• ••67"*/; purpose; isRegistered: boolean; codeLength: 4 | 6; expiresInSeconds: number; resendInSeconds: number; resendsLeft: number; channel: 'sms' | 'whatsapp' }`.
+→ data `{ phone: string /*E.164*/; maskedPhone: string /*"+964 770 ••• ••67", "+44 791• ••••56" — country code, first 3 and last 2 national digits*/; purpose; isRegistered: boolean; codeLength: 4 | 6; expiresInSeconds: number; resendInSeconds: number; resendsLeft: number; channel: 'sms' | 'whatsapp' }`.
 `channel` omitted → `whatsapp` while the admin-linked WhatsApp number is connected (`WHATSAPP_PROVIDER=baileys`, §31a), else `sms`. The response
 `channel` is the channel the code was **actually** sent on: a WhatsApp OTP falls back to SMS when the session is down or the number is not on
 WhatsApp. Clients show "sent via WhatsApp" when `channel = 'whatsapp'`. The WhatsApp text is bilingual, in the student's language first
@@ -1664,7 +1674,7 @@ interface AdminInboxNotification {
 Auth admin. → data `MeAdminDto` (same as AUTH-07 for admin tokens). Used by: AD app boot, Topbar user menu, Profile, Sidebar gating.
 
 #### ADM-ME-02 · `PATCH /admin/me`
-Auth admin. Body `{ name?: Localized /*each min 3*/; email?: string; mobile?: string /*^\+964\s?7\d{2}\s?\d{3}\s?\d{4}$*/; avatarFileKey?: FileKey | null }`.
+Auth admin. Body `{ name?: Localized /*each min 3*/; email?: string; mobile?: string /*any international phone (§4.1 rules, fixed lines allowed) → stored E.164*/; avatarFileKey?: FileKey | null }`.
 Email change → verification email; stays old until confirmed. → data `AdminUserDto`. `audit:admin.update_profile`. Used by: AD Profile details.
 
 #### ADM-ME-03 · `POST /admin/me/password`
@@ -2739,7 +2749,7 @@ interface MarketerDto {
   status: 'active' | 'inactive';
   joinedAt: ISODate;
 }
-type MarketerWriteDto = { name: Localized; mobile: string /*Iraqi*/; email: string; governorateId: string; status: 'active' | 'inactive'; code?: string | null; avatarFileKey?: FileKey | null };
+type MarketerWriteDto = { name: Localized; mobile: string /*any international phone (§4.1 rules) → stored E.164*/; email: string; governorateId: string; status: 'active' | 'inactive'; code?: string | null; avatarFileKey?: FileKey | null };
 interface MilestoneItem { id: ID; threshold: number; reward: IQD; label: Localized }
 interface MilestoneSetDto {
   id: ID; version: number; status: 'active' | 'draft' | 'superseded';
@@ -3272,7 +3282,7 @@ Auth `admin:security.view`. → data `{ modules: ModuleKey[]; actions: PermActio
 Auth `admin:security.view`. Query `roleId?`, `status?`, `q` (name en/ar, email, mobile), `sort` (default `-lastLogin`), `page`, `pageSize`. → `AdminUserDto[]` + meta `{ stats: { total; active; mfaPct; invited } }`. Used by: AD AdminUsers.
 
 #### ADM-ADM-02 · `POST /admin/admins/invite`
-Auth `admin:security.create`. Body `{ name: Localized /*en min 2; ar defaults to en*/; email: string /*unique ci*/; roleId: ID; mobile?: string | null }`. Sends invite email (7-day token). → `AdminUserDto` (status invited). `audit:admin.invite`.
+Auth `admin:security.create`. Body `{ name: Localized /*en min 2; ar defaults to en*/; email: string /*unique ci*/; roleId: ID; mobile?: string | null /*'' → null; any international phone (§4.1) → E.164*/ }`. Sends invite email (7-day token). → `AdminUserDto` (status invited). `audit:admin.invite`.
 
 #### ADM-ADM-03 · `POST /admin/admins/:id/resend-invite`
 Auth `admin:security.edit`. → `OkDto`. `audit:admin.resend_invite`.

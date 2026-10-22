@@ -6,6 +6,7 @@ import { useLang } from '@/hooks/useLocale';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Field, Input, Segmented, SkeletonCard, Textarea } from '@/components/ui';
 import { QueryError } from '@/components/ui/QueryError';
+import { formatPhone } from '@/utils/phone';
 import { ReadOnlyNotice, SaveBar, Section, useCanEditSettings, useDraft } from './_shared';
 
 const SOCIAL: (keyof Contacts)[] = ['facebook', 'instagram', 'telegram', 'youtube', 'tiktok'];
@@ -103,8 +104,8 @@ export default function SupportContacts() {
             <div dir={previewLang === 'ar' ? 'rtl' : 'ltr'} lang={previewLang} className="rounded-2xl border border-line bg-surface-2 p-5" style={{ fontFamily: previewLang === 'ar' ? 'Tajawal, sans-serif' : 'Inter, sans-serif' }}>
               <div className="text-base font-bold text-primary">{previewLang === 'ar' ? 'تواصل معنا' : 'Contact us'}</div>
               <ul className="mt-4 space-y-3 text-sm">
-                <li className="flex items-center gap-3"><Phone className="h-4 w-4 text-accent" /><span dir="ltr">{draft.phone}</span></li>
-                <li className="flex items-center gap-3"><MessageCircle className="h-4 w-4 text-success" /><span dir="ltr">{draft.whatsapp}</span></li>
+                <li className="flex items-center gap-3"><Phone className="h-4 w-4 text-accent" /><span dir="ltr">{formatPhone(draft.phone)}</span></li>
+                <li className="flex items-center gap-3"><MessageCircle className="h-4 w-4 text-success" /><span dir="ltr">{formatPhone(draft.whatsapp)}</span></li>
                 <li className="flex items-center gap-3"><Mail className="h-4 w-4 text-info" /><span dir="ltr">{draft.email}</span></li>
                 <li className="flex items-start gap-3"><Clock className="mt-0.5 h-4 w-4 text-muted" /><span>{previewLang === 'ar' ? draft.hours_ar : draft.hours_en}</span></li>
                 <li className="flex items-start gap-3"><MapPin className="mt-0.5 h-4 w-4 text-muted" /><span>{previewLang === 'ar' ? draft.address_ar : draft.address_en}</span></li>

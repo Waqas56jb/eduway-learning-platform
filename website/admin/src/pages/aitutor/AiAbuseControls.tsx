@@ -37,6 +37,7 @@ import {
 } from '@/api/aiTutor';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtNumber, fmtRelative } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { PageHeader } from '@/components/layout/PageHeader';
 import {
   Avatar,
@@ -200,7 +201,7 @@ export default function AiAbuseControls() {
                   {L(s, 'name')}
                 </Link>
                 <span className="num text-xs text-muted" dir="ltr">
-                  {s.mobile}
+                  {formatPhone(s.mobile)}
                 </span>
               </div>
             </div>

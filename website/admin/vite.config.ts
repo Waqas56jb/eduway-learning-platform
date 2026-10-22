@@ -22,6 +22,7 @@ export default defineConfig({
           forms: ['react-hook-form', 'zod', '@hookform/resolvers'],
           i18n: ['i18next', 'react-i18next'],
           katex: ['katex'],
+          phone: ['libphonenumber-js/max', 'libphonenumber-js/mobile/examples'],
         },
       },
     },

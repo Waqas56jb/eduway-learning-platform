@@ -12,6 +12,7 @@ import type { BulkResult } from '@/api/types';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { fmtDateTime, fmtNumber, fmtPercent } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { cn } from '@/utils/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { QueryError } from '@/components/ui/QueryError';
@@ -94,7 +95,7 @@ export default function DeliveryLog() {
           return s ? (
             <Link to={`/users/${s.id}`} onClick={(e) => e.stopPropagation()} className="block hover:text-accent">
               <span className="block font-medium">{L(s, 'name')}</span>
-              <span className="block text-xs text-muted" dir="ltr">{s.mobile}</span>
+              <span className="block text-xs text-muted" dir="ltr">{formatPhone(s.mobile)}</span>
             </Link>
           ) : (
             <span className="text-muted">{row.original.studentId || '—'}</span>

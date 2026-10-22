@@ -7,6 +7,7 @@ import { Avatar, Badge, Button, ButtonLink, Card, EmptyState, ProgressBar, Skele
 import { useLang } from '@/hooks/useLocale';
 import { useCan } from '@/store/auth';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { errorMessage, isApiError } from '@/api/client';
 import { useApiQuery } from '@/api/hooks';
 import { qk } from '@/api/keys';
@@ -163,7 +164,7 @@ export default function UserDetail() {
               <span className="inline-flex items-center gap-1.5">
                 <Phone className="h-3.5 w-3.5" />
                 <span dir="ltr" className="num">
-                  {student.mobile}
+                  {formatPhone(student.mobile)}
                 </span>
               </span>
               <span className="inline-flex items-center gap-1.5">

@@ -5,6 +5,7 @@ import { Award, CheckCircle2, Clock, Flag, ListChecks, Target, XCircle } from 'l
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/utils/cn';
 import { fmtDateTime, fmtDuration, fmtNumber, fmtPercent } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { useCan } from '@/store/auth';
 import { useLang } from '@/hooks/useLocale';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -149,7 +150,7 @@ export default function Attempts() {
               <span>
                 <span className="block font-medium text-ink">{s?.name[lang] ?? '—'}</span>
                 <span className="block text-[11px] text-muted" dir="ltr">
-                  {s?.mobile}
+                  {formatPhone(s?.mobile)}
                 </span>
               </span>
             </span>

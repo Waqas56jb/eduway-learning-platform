@@ -14,6 +14,7 @@ import { useI18n } from '@/hooks/useI18n';
 import type { User } from '@/types';
 import { gradients, palette, radius, SCREEN_PADDING, space } from '@/theme';
 import { haptic } from '@/utils/haptics';
+import { formatPhoneInternational } from '@/utils/phone';
 
 export interface ProfileHeaderProps {
   user: User;
@@ -127,7 +128,7 @@ export const ProfileHeader = memo(function ProfileHeader({ user, overlap = 52 }:
             <View style={styles.metaItem}>
               <Icon name="phone" size={13} color={palette.goldLight} />
               <Text variant="label" color="rgba(255,255,255,0.86)" tabular style={styles.ltr} numberOfLines={1}>
-                {`⁦${user.mobile}⁩`}
+                {`⁦${formatPhoneInternational(user.mobile)}⁩`}
               </Text>
             </View>
             {governorate ? (

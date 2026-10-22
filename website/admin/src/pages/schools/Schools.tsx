@@ -12,6 +12,7 @@ import type { BulkResult } from '@/api/types';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SchoolForm } from '@/components/forms/SchoolForm';
 import { Avatar, Button, DataTable, FilterSelect, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
@@ -97,7 +98,7 @@ export default function Schools() {
           </div>
         ),
       },
-      { id: 'contactMobile', accessorKey: 'contactMobile', header: t('schools.fields.contactMobile'), enableSorting: false, cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{getValue<string>()}</span> },
+      { id: 'contactMobile', accessorKey: 'contactMobile', header: t('schools.fields.contactMobile'), enableSorting: false, cell: ({ getValue }) => <span className="whitespace-nowrap text-muted num" dir="ltr">{formatPhone(getValue<string>())}</span> },
       {
         id: 'marketer',
         accessorFn: (r) => (r.marketer ? L(r.marketer, 'name') : ''),

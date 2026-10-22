@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtDateTime, fmtMoney } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { errorMessage, toastError, uuid } from '@/api/client';
@@ -197,7 +198,7 @@ export default function TransactionDetail() {
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-ink">{L(txn, 'studentName')}</div>
                     <div className="text-xs text-muted num" dir="ltr">
-                      {txn.studentMobile}
+                      {formatPhone(txn.studentMobile)}
                     </div>
                     <div className="mt-1 text-xs text-muted">{L(txn, 'governorateName')}</div>
                     <Link to={`/users/${txn.studentId}`} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">
@@ -415,7 +416,7 @@ function ReceiptDoc({ receipt }: { receipt: ReceiptDto }) {
           <div className="font-[Tajawal,sans-serif] text-sm" dir="rtl">
             {receipt.billedTo?.name?.ar}
           </div>
-          <div className="text-[#6B7280]">{receipt.billedTo?.mobile}</div>
+          <div className="text-[#6B7280]" dir="ltr">{formatPhone(receipt.billedTo?.mobile)}</div>
         </div>
         <div className="text-end">
           <div>

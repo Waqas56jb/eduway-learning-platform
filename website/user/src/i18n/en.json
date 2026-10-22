@@ -98,7 +98,7 @@
   },
   "validation": {
     "required": "This field is required",
-    "mobile": "Enter a valid Iraqi mobile number (e.g. 07701234567)",
+    "mobile": "Enter a valid mobile number for the selected country",
     "email": "Enter a valid email address",
     "minLength": "Must be at least {{count}} characters",
     "terms": "You must accept the Terms and Privacy Policy",

@@ -116,7 +116,7 @@ export function splitPhone(raw: string | null | undefined, fallback: CountryCode
     const p = parsePhoneNumberFromString(v, fallback);
     if (p) {
       const country = p.country ?? countryForCallingCode(p.countryCallingCode) ?? fallback;
-      return { country, national: new AsYouType(country).input(String(p.nationalNumber)) };
+      return { country, national: formatNational(String(p.nationalNumber), country).display };
     }
   } catch {
     /* fall through */
@@ -131,9 +131,16 @@ export function splitPhone(raw: string | null | undefined, fallback: CountryCode
 export function formatNational(input: string, country: CountryCode): { display: string; e164: string } {
   const digits = input.replace(/\D/g, '');
   if (!digits) return { display: '', e164: '' };
+  const dial = `+${getCountryCallingCode(country)}`;
   const fmt = new AsYouType(country);
-  const display = fmt.input(digits);
-  const e164 = fmt.getNumber()?.number ?? `+${getCountryCallingCode(country)}${digits.replace(/^0+/, '')}`;
+  let display = fmt.input(digits);
+  // Without a trunk prefix (e.g. "770…" rather than "0770…") some regions don't format
+  // nationally — borrow the international grouping and drop the dial code.
+  if (/^\d+$/.test(display) && digits.length > 3) {
+    const intl = new AsYouType().input(`${dial}${digits}`);
+    if (intl.startsWith(dial)) display = intl.slice(dial.length).trim() || display;
+  }
+  const e164 = fmt.getNumber()?.number ?? `${dial}${digits.replace(/^0+/, '')}`;
   return { display, e164 };
 }
 
@@ -141,10 +148,11 @@ export function formatNational(input: string, country: CountryCode): { display: 
 export function parseInternational(input: string): { country?: CountryCode; national: string; e164: string } {
   const fmt = new AsYouType();
   fmt.input(input);
-  const country = fmt.getCountry() ?? countryForCallingCode(fmt.getCallingCode());
-  const nn = fmt.getNationalNumber();
-  const e164 = fmt.getNumber()?.number ?? `+${input.replace(/\D/g, '')}`;
-  if (country && nn) return { country, national: new AsYouType(country).input(nn), e164 };
+  const num = fmt.getNumber();
+  const country = fmt.getCountry() ?? num?.country ?? countryForCallingCode(fmt.getCallingCode());
+  const nn = num?.nationalNumber ? String(num.nationalNumber) : '';
+  const e164 = num?.number ?? `+${input.replace(/\D/g, '')}`;
+  if (country && nn) return { country, national: formatNational(nn, country).display, e164 };
   return { national: input, e164 };
 }
 

@@ -4,6 +4,7 @@ import { useSaveSettings, useSettingsSection, type GeneralSettings, type Support
 import { useUpload } from '@/api/storage';
 import { useLocalize } from '@/hooks/useLocale';
 import { fmtDate } from '@/utils/format';
+import { formatPhone } from '@/utils/phone';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ButtonLink, Field, FileUpload, Input, Select, SkeletonCard } from '@/components/ui';
 import { QueryError } from '@/components/ui/QueryError';
@@ -132,8 +133,8 @@ export default function General() {
             >
               <ul className="space-y-3 text-sm">
                 {[
-                  { icon: <Phone className="h-4 w-4" />, label: t('settings.support.phone'), value: support.phone },
-                  { icon: <MessageCircle className="h-4 w-4" />, label: t('settings.support.whatsapp'), value: support.whatsapp },
+                  { icon: <Phone className="h-4 w-4" />, label: t('settings.support.phone'), value: formatPhone(support.phone) },
+                  { icon: <MessageCircle className="h-4 w-4" />, label: t('settings.support.whatsapp'), value: formatPhone(support.whatsapp) },
                   { icon: <Mail className="h-4 w-4" />, label: t('common.email'), value: support.email },
                 ].map((r) => (
                   <li key={r.label} className="flex items-center gap-3">
