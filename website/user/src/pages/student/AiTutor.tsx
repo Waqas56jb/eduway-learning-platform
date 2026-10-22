@@ -134,7 +134,9 @@ export default function AiTutor() {
   const left = allowance?.remaining ?? 0;
   const disabledReason = allowance && !allowance.enabled ? allowance.disabledReason : null;
   const locked = !!allowance && (!allowance.enabled || left === 0);
-  const busy = pending !== null || streamingId !== null || uploading;
+  // A "New chat" still being created counts as busy: a question sent meanwhile went to the previous
+  // conversation and vanished from view once the new (empty) one became active.
+  const busy = pending !== null || streamingId !== null || uploading || createConversation.isPending;
   const studentTurns = messages.filter((m) => m.role === 'student').length;
   const asked = new Set(messages.filter((m) => m.role === 'student').map((m) => m.content.en.trim().toLowerCase()));
   const extraSuggestion = useMemo(

@@ -4,7 +4,7 @@
  */
 import { T } from '../../config/constants.js';
 import { db } from '../../config/db.js';
-import { isProd } from '../../config/env.js';
+import { devFlags } from '../../config/env.js';
 import { adminRef } from '../../common/dto/refs.js';
 import { BusinessRuleError, ConflictError, NotFoundError } from '../../common/errors/index.js';
 import type { Localized } from '../../common/i18n/index.js';
@@ -61,7 +61,7 @@ export async function getSection(section: SettingsSection): Promise<unknown> {
       lockoutMinutes: o.lockoutMinutes,
       provider: o.provider,
       fallbackProvider: o.fallbackProvider,
-      devBypassCode: isProd ? null : o.devBypassCode,
+      devBypassCode: devFlags.otpBypass ? o.devBypassCode : null,
     };
   }
   if (section === 'general') {
@@ -70,7 +70,7 @@ export async function getSection(section: SettingsSection): Promise<unknown> {
   }
   if (section === 'payments') {
     const p = v as SettingsValue<'payments'>;
-    const mockOn = isProd ? false : p.mockGatewayEnabled;
+    const mockOn = devFlags.mockPayments ? p.mockGatewayEnabled : false;
     return { ...p, mockGatewayEnabled: mockOn, gateways: p.gateways.filter((g) => g.id !== 'mock' || mockOn) };
   }
   return v;
@@ -113,7 +113,7 @@ export async function putSection(section: SettingsSection, body: Record<string, 
   if (section === 'otp') {
     const prov = (patch.provider ?? (before as { provider: string }).provider) as string;
     if (patch.fallbackProvider && patch.fallbackProvider === prov) throw new BusinessRuleError('INVALID_TRANSITION', { field: 'fallbackProvider' });
-    if (isProd) delete patch.devBypassCode;
+    if (!devFlags.otpBypass) delete patch.devBypassCode;
   }
   if (section === 'general' && 'logoFileKey' in patch) {
     const key = patch.logoFileKey as string | null;

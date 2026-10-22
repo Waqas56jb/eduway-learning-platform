@@ -22,7 +22,7 @@ import { LessonsTab } from '@/components/subjects/LessonsTab';
 import { QuestionBankTab } from '@/components/subjects/QuestionBankTab';
 import { Button, EmptyState, SegmentedControl, SkeletonCard, Text, toast } from '@/components/ui';
 import { BLURHASH } from '@/constants/images';
-import { toLesson, toSubject, useSubject } from '@/api';
+import { isLockedError, toLesson, toSubject, useSubject } from '@/api';
 import { openSubscription } from '@/api/locked';
 import type { SubjectDetail as SubjectDetailDto } from '@/api/types';
 import { useI18n } from '@/hooks/useI18n';
@@ -58,17 +58,31 @@ export default function SubjectDetailScreen() {
   }
 
   if (!query.data) {
+    if (query.isError && isLockedError(query.error)) {
+      return (
+        <Screen>
+          <Header />
+          <EmptyState
+            icon="lock"
+            title={t('common:premium.locked')}
+            message={query.error.message || t('common:errors.locked')}
+            actionLabel={t('common:premium.viewPlans')}
+            onAction={() => openSubscription(query.error.locked ?? { reason: 'NO_SUBSCRIPTION', subjectSlug: id })}
+          />
+        </Screen>
+      );
+    }
+    // Anything but a definitive 404 (offline, timeout, 5xx) is retryable.
+    const retryable = query.isError && query.error?.status !== 404;
     return (
       <Screen>
         <Header />
         <EmptyState
-          icon="subjects"
-          title={t('detail.notFoundTitle')}
-          message={t('detail.notFoundMessage')}
-          actionLabel={query.isError && !query.error?.status ? t('common:actions.retry') : t('common:actions.goHome')}
-          onAction={() =>
-            query.isError && !query.error?.status ? void query.refetch() : router.replace('/(tabs)/subjects')
-          }
+          icon={retryable ? 'wifi-off' : 'subjects'}
+          title={retryable ? t('common:states.error') : t('detail.notFoundTitle')}
+          message={retryable ? query.error?.message : t('detail.notFoundMessage')}
+          actionLabel={retryable ? t('common:actions.retry') : t('common:actions.goHome')}
+          onAction={() => (retryable ? void query.refetch() : router.replace('/(tabs)/subjects'))}
         />
       </Screen>
     );

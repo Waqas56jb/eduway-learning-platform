@@ -37,6 +37,8 @@ interface PurposeRule {
 
 const MB = 1024 * 1024;
 const IMG = /^image\/(png|jpeg|webp)$/;
+/** Any raster image — never image/svg+xml (scriptable; SEC-14). */
+const RASTER_IMG = /^image\/(png|jpeg|jpg|webp|gif|heic|heif|bmp)$/;
 export const PURPOSE_RULES: Record<UploadPurpose, PurposeRule> = {
   lesson_video: { bucket: BUCKETS.videos, folder: 'lessons', maxBytes: 5 * 1024 * MB, types: /^video\//, adminPerms: ['content.edit', 'content.create'] },
   lesson_thumbnail: { bucket: BUCKETS.thumbnails, folder: 'lessons', maxBytes: 5 * MB, types: IMG, adminPerms: ['content.edit', 'content.create'] },
@@ -45,10 +47,10 @@ export const PURPOSE_RULES: Record<UploadPurpose, PurposeRule> = {
   testimonial_avatar: { bucket: BUCKETS.thumbnails, folder: 'cms', maxBytes: 5 * MB, types: IMG, adminPerms: ['settings.edit'] },
   logo: { bucket: BUCKETS.thumbnails, folder: 'branding', maxBytes: 2 * MB, types: /^image\/(png|jpeg|webp|svg\+xml)$/, adminPerms: ['settings.edit'] },
   admin_avatar: { bucket: BUCKETS.thumbnails, folder: 'admins', maxBytes: 5 * MB, types: IMG, adminSelf: true },
-  student_avatar: { bucket: BUCKETS.thumbnails, folder: 'avatars', maxBytes: 5 * MB, types: /^image\//, student: true },
+  student_avatar: { bucket: BUCKETS.thumbnails, folder: 'avatars', maxBytes: 5 * MB, types: RASTER_IMG, student: true },
   lesson_resource: { bucket: BUCKETS.resources, folder: 'lessons', maxBytes: 50 * MB, types: /^application\/pdf$/, adminPerms: ['content.edit', 'content.create'] },
   lesson_captions: { bucket: BUCKETS.resources, folder: 'captions', maxBytes: 2 * MB, types: /^(text\/vtt|application\/x-subrip|text\/plain)$/, adminPerms: ['content.edit'] },
-  ai_attachment: { bucket: BUCKETS.resources, folder: 'ai', maxBytes: 8 * MB, types: /^image\//, student: true },
+  ai_attachment: { bucket: BUCKETS.resources, folder: 'ai', maxBytes: 8 * MB, types: RASTER_IMG, student: true },
   question_image: { bucket: BUCKETS.questionImages, folder: 'questions', maxBytes: 5 * MB, types: /^image\//, adminPerms: ['questions.create', 'questions.edit'] },
   question_import: { bucket: BUCKETS.resources, folder: 'imports', maxBytes: 10 * MB, types: /^(text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|text\/plain|application\/octet-stream)$/, adminPerms: ['questions.create'] },
   reconciliation_import: { bucket: BUCKETS.resources, folder: 'reconciliation', maxBytes: 20 * MB, types: /^(text\/csv|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|text\/plain|application\/octet-stream)$/, adminPerms: ['payments.approve'] },
@@ -142,6 +144,19 @@ export const storage = {
   },
 
   /** True when the object exists in its bucket. */
+  /** Stored object metadata (size / MIME as recorded by Supabase Storage), or null when the object is missing. */
+  async objectMeta(bucket: BucketName, objectPath: string): Promise<{ size: number | null; mimetype: string | null } | null> {
+    assertBucket(bucket);
+    const dir = path.posix.dirname(objectPath);
+    const base = path.posix.basename(objectPath);
+    const { data, error } = await supabaseService.storage.from(bucket).list(dir, { search: base, limit: 5 });
+    if (error) return null;
+    const o = (data ?? []).find((x) => x.name === base);
+    if (!o) return null;
+    const m = (o.metadata ?? {}) as { size?: unknown; mimetype?: unknown };
+    return { size: typeof m.size === 'number' ? m.size : null, mimetype: typeof m.mimetype === 'string' ? m.mimetype : null };
+  },
+
   async objectExists(bucket: BucketName, objectPath: string): Promise<boolean> {
     assertBucket(bucket);
     const dir = path.posix.dirname(objectPath);
@@ -160,8 +175,18 @@ export const storage = {
     const purposes = Array.isArray(opts.purpose) ? opts.purpose : [opts.purpose];
     if (!purposes.includes(row.purpose)) throw new AppError('VALIDATION_ERROR', 400, { reason: 'FILE_TYPE_NOT_ALLOWED', details: { purpose: row.purpose } });
     if (opts.ownerId && row.owner_id && row.owner_id !== opts.ownerId) throw new ForbiddenError();
-    if (!opts.skipExistsCheck && row.status === 'pending' && !(await this.objectExists(row.bucket, row.path))) {
-      throw new BusinessRuleError('FILE_NOT_UPLOADED');
+    if (!opts.skipExistsCheck && row.status === 'pending') {
+      const meta = await this.objectMeta(row.bucket, row.path);
+      if (!meta) throw new BusinessRuleError('FILE_NOT_UPLOADED');
+      // SEC-14: the signed PUT URL does not bind size/type — check what was actually stored against the purpose rule.
+      const rule = PURPOSE_RULES[row.purpose];
+      if (rule && meta.size !== null && meta.size > rule.maxBytes) {
+        throw new AppError('VALIDATION_ERROR', 400, { reason: 'FILE_TOO_LARGE', details: { maxMb: Math.round(rule.maxBytes / MB) } });
+      }
+      // MIME is enforced for student (untrusted) purposes; resumable admin uploads may be stored as octet-stream.
+      if (rule?.student && meta.mimetype && !rule.types.test(meta.mimetype)) {
+        throw new AppError('VALIDATION_ERROR', 400, { reason: 'FILE_TYPE_NOT_ALLOWED', details: { contentType: meta.mimetype } });
+      }
     }
     await db.query(
       `UPDATE ${T.uploads} SET status = 'attached', entity_type = $2, entity_id = $3, attached_at = now(), uploaded_at = COALESCE(uploaded_at, now()) WHERE id = $1`,

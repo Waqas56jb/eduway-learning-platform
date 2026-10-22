@@ -4,7 +4,7 @@
  */
 import { T, type ClientPlatform, type StudentPlatform } from '../../config/constants.js';
 import { db, tx, type TxClient } from '../../config/db.js';
-import { isProd } from '../../config/env.js';
+import { devFlags } from '../../config/env.js';
 import { invalidatePrincipal } from '../../common/auth/principal.js';
 import { AppError, BusinessRuleError, ConflictError, ForbiddenError, NotFoundError, RateLimitError, UnauthorizedError } from '../../common/errors/index.js';
 import { smsProvider } from '../../common/providers/sms.js';
@@ -52,7 +52,8 @@ async function assertNotLocked(phone: string): Promise<void> {
 }
 
 export function isDevBypass(otp: { devBypassCode: string | null; devBypassPhones: string[]; devBypassAllPhones: boolean }, phone: string, code: string): boolean {
-  if (isProd || !otp.devBypassCode) return false;
+  // SEC-21: explicit opt-in (DEV_OTP_BYPASS / explicit NODE_ENV=development), never in production.
+  if (!devFlags.otpBypass || !otp.devBypassCode) return false;
   return code === otp.devBypassCode && (otp.devBypassAllPhones || otp.devBypassPhones.includes(phone));
 }
 
@@ -151,6 +152,8 @@ async function checkCode(phone: string, code: string, ip: string | null): Promis
   if (isDevBypass(otp, phone, code)) return row;
   if (!row) throw new UnauthorizedError('OTP_EXPIRED');
   if (row.expires_at.getTime() <= Date.now()) throw new UnauthorizedError('OTP_EXPIRED');
+  // A code whose attempt budget is spent is dead even if a parallel request has not invalidated it yet.
+  if (row.attempts >= row.max_attempts) throw new UnauthorizedError('OTP_EXPIRED');
   if (safeEqual(row.code_hash, otpHash(phone, code))) return row;
 
   const updated = await authRepo.incrementOtpAttempts(row.id);
@@ -309,7 +312,10 @@ export async function verifyOtp(input: VerifyOtpInput, meta: ClientMeta): Promis
 
   let isNewUser = false;
   const userId = await tx(async (c) => {
-    if (otpRow) await authRepo.consumeOtp(otpRow.id, c);
+    // SEC-04: single-use under concurrency (dev-bypass logins may proceed without a code row).
+    if (otpRow && !(await authRepo.consumeOtp(otpRow.id, c)) && !isDevBypass(await settingsStore.get('otp'), phone, input.code)) {
+      throw new UnauthorizedError('OTP_EXPIRED');
+    }
     let id = user?.id;
     if (!id) {
       const created = await db.one<{ id: string }>(

@@ -62,6 +62,8 @@ export default function QuizScreen() {
   const [run, setRun] = useState<QuizRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [startError, setStartError] = useState<string | null>(null);
+  /** Offline / server hiccup when starting → offer a retry instead of only going back. */
+  const [startRetryable, setStartRetryable] = useState(false);
   const [showExplanation, setShowExplanation] = useState(true);
 
   const [index, setIndex] = useState(0);
@@ -96,6 +98,7 @@ export default function QuizScreen() {
         if (cancelled) return;
         const e = handleActionError(err);
         setStartError(e.message);
+        setStartRetryable(e.isNetwork || e.status >= 500);
         setRun(null);
       })
       .finally(() => {
@@ -278,11 +281,11 @@ export default function QuizScreen() {
         />
         <View style={styles.flex}>
           <EmptyState
-            icon="quiz"
-            title={t('empty.title')}
+            icon={startRetryable ? 'wifi-off' : 'quiz'}
+            title={startRetryable ? t('common:states.error') : t('empty.title')}
             message={startError ?? t('empty.message')}
-            actionLabel={t('actions.backToLesson')}
-            onAction={goBackOrHome}
+            actionLabel={startRetryable ? t('common:actions.retry') : t('actions.backToLesson')}
+            onAction={startRetryable ? () => setRunKey((k) => k + 1) : goBackOrHome}
           />
         </View>
       </Screen>

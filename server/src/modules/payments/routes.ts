@@ -11,7 +11,7 @@ import {
   recComparisonQuery, recExportBody, recImportBody, recQuery, recResolveBody, refundCreateBody, refundDto, refundListQuery, rejectBody, studentPaymentDto, transactionDetailDto, transactionRowDto, webhookAck,
 } from './schemas.js';
 import { studentPayments } from './student.service.js';
-import { processWebhook } from './webhook.service.js';
+import { processCallback, processWebhook } from './webhook.service.js';
 
 export const router = Router();
 const pay = ['Payments'];
@@ -33,11 +33,21 @@ defineRoute(
   { method: 'post', path: '/payments/webhook/:provider', tags: ['Webhooks'], summary: 'Gateway webhook (WHK-01) — signature-verified, idempotent', auth: 'public', rateLimit: rateLimits.webhook, params: providerParam, response: webhookAck },
   ({ req, params }) => processWebhook(params.provider, req.rawBody, req.headers, (req.body ?? {}) as Record<string, unknown>),
 );
+for (const method of ['get', 'post'] as const) {
+  defineRoute(
+    router,
+    { method, path: '/payments/callback/:provider', tags: ['Webhooks'], summary: 'Gateway browser return (ZainCash token / Qi finish / FastPay return) — verified, idempotent, 302 to the app', auth: 'public', rateLimit: rateLimits.webhook, params: providerParam, raw: true, rawContentType: 'text/html' },
+    async ({ req, res, params }) => {
+      const { redirectTo } = await processCallback(params.provider, req.query as Record<string, unknown>, (req.body ?? {}) as Record<string, unknown>, req.headers);
+      res.redirect(302, redirectTo);
+    },
+  );
+}
 defineRoute(router, { method: 'get', path: '/payments/:paymentId', tags: pay, summary: 'Payment status (PAY-08)', auth: 'student', params: paymentIdParam, response: studentPaymentDto }, ({ student, params }) => studentPayments.get(student.userId, params.paymentId));
 defineRoute(
   router,
   { method: 'get', path: '/payments/:paymentId/receipt', tags: pay, summary: 'Receipt JSON | PDF (PAY-10) — own payment, or admin with payments.view', auth: 'any', params: paymentIdParam, query: receiptQuery, raw: true, rawContentType: 'application/pdf' },
-  ({ req, res, params, query }) => c.receipt(req, res, params.paymentId, query.format),
+  ({ req, res, params, query }) => c.receipt(req, res, params.paymentId, query.format, query.lang),
 );
 
 // ── admin payments (ADM-PAY-*) ──
@@ -48,7 +58,7 @@ defineRoute(router, { method: 'get', path: '/admin/payments/:id', tags, summary:
 defineRoute(
   router,
   { method: 'get', path: '/admin/payments/:id/receipt', tags, summary: 'Receipt JSON | PDF (ADM-PAY-04)', auth: A, permission: 'payments.view', params: idParam, query: receiptQuery, raw: true, rawContentType: 'application/pdf', response: receiptDto },
-  ({ req, res, params, query }) => c.receipt(req, res, params.id, query.format),
+  ({ req, res, params, query }) => c.receipt(req, res, params.id, query.format, query.lang),
 );
 defineRoute(
   router,

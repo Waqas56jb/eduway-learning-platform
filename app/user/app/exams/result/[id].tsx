@@ -23,7 +23,7 @@ export default function ExamResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const { t, L, lang } = useI18n('exams');
-  const { data: result, isPending } = useExamResult(id);
+  const { data: result, isPending, error, refetch } = useExamResult(id);
   const shareRef = useRef<ComponentRef<typeof View>>(null);
   const [sharing, setSharing] = useState(false);
   const [showReview, setShowReview] = useState(false);
@@ -54,13 +54,23 @@ export default function ExamResultScreen() {
       <Screen padded={false} edges={['top', 'bottom']}>
         <Header title={t('result.title')} onBack={backToExams} />
         <View style={styles.center}>
-          <EmptyState
-            icon="exam"
-            title={t('result.notFoundTitle')}
-            message={t('result.notFoundMsg')}
-            actionLabel={t('result.backToExams')}
-            onAction={backToExams}
-          />
+          {error && error.status !== 404 ? (
+            <EmptyState
+              icon="wifi-off"
+              title={t('common:states.error')}
+              message={error.isNetwork ? t('common:states.offline') : error.message}
+              actionLabel={t('common:actions.retry')}
+              onAction={() => void refetch()}
+            />
+          ) : (
+            <EmptyState
+              icon="exam"
+              title={t('result.notFoundTitle')}
+              message={t('result.notFoundMsg')}
+              actionLabel={t('result.backToExams')}
+              onAction={backToExams}
+            />
+          )}
         </View>
       </Screen>
     );

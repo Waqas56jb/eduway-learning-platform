@@ -1,0 +1,41 @@
+# Fly.io alternative to render.yaml — NOT launched. From server/:
+#   fly launch --no-deploy --copy-config      (pick an app name, then edit `app` below)
+#   fly secrets set SUPABASE_URL=... SUPABASE_DB_URL=... (every secret; see docs/DEPLOYMENT.md)
+#   fly deploy
+app = "eduway-api"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+kill_timeout = "15s"            # server.ts force-exits after 10 s
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "node dist/scripts/migrate.js"
+  strategy = "rolling"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "4100"
+  API_PREFIX = "/api/v1"
+  DB_POOL_MAX = "4"
+  DB_SSL = "true"
+  JOBS_ENABLED = "true"
+
+[http_service]
+  internal_port = 4100
+  force_https = true
+  auto_stop_machines = "off"    # pg-boss background jobs need an always-on machine
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/api/v1/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

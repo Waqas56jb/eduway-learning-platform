@@ -188,5 +188,10 @@ if (asJson) {
   console.log(`Unique calls: ${results.length}  ·  matched: ${results.length - bad.length}  ·  missing: ${bad.length}`);
   for (const b of bad) console.log(`  ✗ ${b.method.padEnd(6)} ${b.path}   ← ${b.refs.join(', ')}`);
   if (process.argv.includes('--verbose')) for (const r of results.filter((x) => x.ok)) console.log(`  ✓ ${r.method.padEnd(6)} ${r.path}  →  ${r.op}`);
+  if (process.argv.includes('--unused')) {
+    const unused = ops.filter((o) => !o.used && o.path.startsWith('/admin'));
+    console.log(`Admin operations with no UI call: ${unused.length}`);
+    for (const o of unused) console.log(`  · ${o.method.padEnd(6)} ${o.path}`);
+  }
 }
 process.exit(bad.length ? 1 : 0);

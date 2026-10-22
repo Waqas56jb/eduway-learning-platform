@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { keepPreviousData } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { AlertTriangle, CheckCircle2, RefreshCcw, Send, Server } from 'lucide-react';
@@ -39,9 +40,16 @@ export default function DeliveryLog() {
     initialSort: '-createdAt',
     pageSize: 10,
   });
-  // KPIs + provider health across the whole log (ADM-DLV-02).
-  const statsQ = useApiQuery(qk.deliveries.sub('stats'), () => notificationsApi.deliveryStats({}));
+  // KPIs + provider health for the same filters as the table (ADM-DLV-02: every filter except `status`,
+  // because the KPIs are the status breakdown).
+  const search = list.exportFilters.q;
+  const statsParams = useMemo(() => ({ channel, provider, from, q: search }), [channel, provider, from, search]);
+  const statsQ = useApiQuery(qk.deliveries.sub('stats', statsParams), () => notificationsApi.deliveryStats(statsParams), { placeholderData: keepPreviousData });
   const stats = statsQ.data;
+  // Provider health cards act as the provider filter, so they use the same filters minus `provider`
+  // (same query key as the KPIs when no provider is picked → one request).
+  const healthParams = useMemo(() => ({ channel, provider: '', from, q: search }), [channel, from, search]);
+  const healthQ = useApiQuery(qk.deliveries.sub('stats', healthParams), () => notificationsApi.deliveryStats(healthParams), { placeholderData: keepPreviousData });
   const exp = useExport('/admin/deliveries/export', 'delivery-log');
 
   const retryM = useApiMutation((body: { ids?: string[]; filter?: Record<string, unknown> }) => notificationsApi.retry(body), {
@@ -63,7 +71,7 @@ export default function DeliveryLog() {
     retryM.mutate({ filter: { channel: channel || undefined, provider: provider || undefined, from, q: list.exportFilters.q, status: 'failed' } });
   };
 
-  const providerStats = useMemo(() => stats?.byProvider ?? [], [stats]);
+  const providerStats = useMemo(() => healthQ.data?.byProvider ?? [], [healthQ.data]);
 
   const columns = useMemo<ColumnDef<DeliveryVM>[]>(
     () => [
@@ -187,7 +195,7 @@ export default function DeliveryLog() {
             <Server className="h-4 w-4 text-accent" /> {t('notifications.log.providerHealth')}
           </h2>
           <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-            {statsQ.isLoading
+            {healthQ.isLoading
               ? Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
               : providerStats.map((p) => {
                   const tone = p.rate >= 90 ? 'success' : p.rate >= 75 ? 'warning' : 'danger';

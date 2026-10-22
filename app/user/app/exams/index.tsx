@@ -139,7 +139,11 @@ export default function ExamsScreen() {
       </View>
 
       <SectionHeader title={t('previous')} subtitle={examAttempts.length ? t('previousSub') : undefined} style={styles.section} />
-      {examAttempts.length ? (
+      {attemptsQuery.isPending ? (
+        <View style={styles.list}>
+          <SkeletonCard lines={2} />
+        </View>
+      ) : examAttempts.length ? (
         <View style={styles.list}>
           {examAttempts.map((a, i) => {
             const exam = examById.get(a.examId);

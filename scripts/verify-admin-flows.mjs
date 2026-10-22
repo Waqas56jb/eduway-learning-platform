@@ -5,6 +5,7 @@
  *   node scripts/verify-admin-flows.mjs                       # API_URL defaults to http://localhost:4100/api/v1
  *   API_URL=http://localhost:4155/api/v1 SERVER_LOG=<path to that server's stdout> node scripts/verify-admin-flows.mjs
  *   flags: --json (machine-readable summary)  --only=<module,module>  --purge-only=<runId|ALL> (hard-delete verify artefacts)
+ *          --legal-publish (also run the `legal-publish` module: publishes identical copies of the live terms, see below)
  *
  * Logs in as the seeded super admin (password read from server/.env → SEED_SUPER_ADMIN_PASSWORD, never printed),
  * walks every list/detail endpoint with the admin portal's real query params, exercises representative mutations
@@ -12,7 +13,7 @@
  * the temp admin is created with `npm run create-admin`. Exit code 1 when any step fails.
  */
 import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomInt, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -372,6 +373,56 @@ module('students', async () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+module('support', async () => {
+  // PUB-10 contact form → ticket → ADM-SUP-01..06 → delete. PUB-10 is rate limited (5/hour/IP): one ticket per run.
+  const marker = `verify-contact-${RUN}`;
+  const sup = (id) => `/admin/support-tickets/${encodeURIComponent(id)}`;
+  await step('Public contact form creates a ticket (PUB-10)', 'POST /public/contact', async () => {
+    const r = await post('/public/contact', { name: 'Verify Contact', contact: `${marker}@eduway.test`, subject: 'billing', message: `Automated verification ticket ${marker}. Please ignore, it is deleted right away.`, locale: 'en' }, { token: null });
+    has(r, ['ticketId', 'createdAt'], 'contact result');
+    if (!/^EW-T-\d{5,}$/.test(r.ticketId)) throw new Error(`unexpected ticket id ${r.ticketId}`);
+    ctx.ticket = r.ticketId;
+    onCleanup('support ticket', async () => {
+      await del(sup(r.ticketId)).catch(() => {});
+      sql(`DELETE FROM eduway_platform_support_tickets WHERE contact_value = $1`, [`${marker}@eduway.test`]);
+    });
+  });
+  await step('Ticket appears in the admin list (filters, sorts, counts) (ADM-SUP-01)', 'GET /admin/support-tickets', async () => {
+    if (!ctx.ticket) throw new Error('needs ticket');
+    const r = await list('/admin/support-tickets', { q: marker, page: 1, pageSize: 10 });
+    const rows = paged(r, ['id', 'student', 'contact', 'subject', 'message', 'category', 'priority', 'status', 'assignee', 'source', 'locale', 'replies', 'resolvedAt', 'createdAt'], 'SupportTicketDto');
+    const t = rows.find((x) => x.id === ctx.ticket);
+    if (!t) throw new Error('new ticket not found by q');
+    if (t.source !== 'contact_form' || t.category !== 'payment' || t.status !== 'open') throw new Error(`ticket mapped wrong: ${t.source}/${t.category}/${t.status}`);
+    has(r.meta, ['counts.open', 'counts.pending', 'counts.resolved'], 'ticket counts');
+    for (const f of [{ status: 'open' }, { category: 'payment' }, { priority: 'medium' }, { source: 'contact_form' }, { assigneeId: '__none' }, { sort: 'priority' }, { sort: '-updatedAt' }, { sort: 'status' }, { sort: 'number' }])
+      await list('/admin/support-tickets', { ...f, page: 1, pageSize: 5 });
+  });
+  await step('Detail → assign to me → priority → reply → resolve → reopen (ADM-SUP-02..04)', 'GET /admin/support-tickets/:id · PATCH · POST /:id/replies', async () => {
+    if (!ctx.ticket) throw new Error('needs ticket');
+    has(await get(sup(ctx.ticket)), ['id', 'messages', 'contact.contact'], 'SupportTicketDetailDto');
+    const a = await patch(sup(ctx.ticket), { assigneeId: ctx.adminId, priority: 'high' });
+    if (a.assignee?.id !== ctx.adminId || a.priority !== 'high') throw new Error('assign/priority not applied');
+    await expectError(400, () => patch(sup(ctx.ticket), { assigneeId: randomUUID() }));
+    const r = await post(`${sup(ctx.ticket)}/replies`, { body: 'Thanks, verification reply.' });
+    if (r.status !== 'pending' || r.replies !== 1 || r.messages.at(-1)?.authorKind !== 'admin') throw new Error(`reply not recorded (${r.status}, ${r.replies})`);
+    const c = await post(`${sup(ctx.ticket)}/replies`, { body: 'Closing (verification).', status: 'resolved' });
+    if (c.status !== 'resolved' || !c.resolvedAt) throw new Error('not resolved');
+    const reopened = await patch(sup(ctx.ticket), { status: 'open' });
+    if (reopened.status !== 'open' || reopened.resolvedAt) throw new Error('reopen did not clear resolvedAt');
+    await patch(sup(ctx.ticket), { status: 'resolved' });
+  });
+  await step('Export tickets (ADM-SUP-06)', 'POST /admin/support-tickets/export', async () => {
+    const f = await download('POST', '/admin/support-tickets/export', { body: { format: 'csv', filters: { q: marker } } });
+    if (!f.buf.toString('utf8').includes(ctx.ticket ?? '§')) throw new Error('ticket missing from export');
+  });
+  await step('Delete ticket → 404 (ADM-SUP-05)', 'DELETE /admin/support-tickets/:id', async () => {
+    if (!ctx.ticket) throw new Error('needs ticket');
+    await del(sup(ctx.ticket));
+    await expectError(404, () => get(sup(ctx.ticket)));
+  });
+});
+
 module('content', async () => {
   await step('Subjects / units / teachers (ADM-SUB-01, ADM-UNT-01, ADM-TCH-01)', 'GET /admin/subjects · /admin/subjects/:id · /units · /admin/teachers', async () => {
     const subs = arr(await get('/admin/subjects', { includeHidden: true }), ['id', 'slug', 'name', 'color', 'status'], 'AdminSubject');
@@ -382,6 +433,24 @@ module('content', async () => {
     ctx.topic = units[0]?.topics?.[0];
     const teachers = arr(await get('/admin/teachers', { subjectId: subs[0].id }), ['id', 'name'], 'TeacherDto');
     ctx.teacher = teachers[0] ?? arr(await get('/admin/teachers'), ['id'], 'TeacherDto')[0];
+  });
+  await step('Teachers page: list + lessonsCount, create with avatar upload → edit → deactivate → delete; 409 on a teacher with lessons (ADM-TCH-01..04)', 'GET/POST/PATCH/DELETE /admin/teachers · STO-01 teacher_avatar', async () => {
+    const all = arr(await get('/admin/teachers'), ['id', 'name', 'bio', 'avatarUrl', 'subjectId', 'yearsExperience', 'studentsCount', 'rating', 'active', 'lessonsCount'], 'AdminTeacherDto');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'); // 1×1 PNG
+    const s = await post('/storage/signed-upload-url', { purpose: 'teacher_avatar', fileName: `verify-${RUN}.png`, contentType: 'image/png', sizeBytes: png.length });
+    const up = await fetch(s.uploadUrl, { method: s.method ?? 'PUT', headers: { 'Content-Type': 'image/png', ...(s.headers ?? {}) }, body: png });
+    if (!up.ok) throw new Error(`storage PUT ${up.status}`);
+    const t = await post('/admin/teachers', { name: L(`Verify teacher ${RUN}`), bio: L('Verification bio'), subjectId: ctx.subject.id, avatarFileKey: s.fileKey, yearsExperience: 5, studentsCount: 100, rating: 4.5, active: true });
+    onCleanup('teacher', () => del(`/admin/teachers/${t.id}`).catch(() => {}));
+    has(t, ['id', 'lessonsCount'], 'AdminTeacherDto');
+    if (!t.avatarUrl) throw new Error('avatar not attached');
+    const e = await patch(`/admin/teachers/${t.id}`, { rating: 4.8, yearsExperience: null, active: false });
+    if (e.active !== false || e.rating !== 4.8 || e.yearsExperience !== null) throw new Error('edit not applied');
+    const cleared = await patch(`/admin/teachers/${t.id}`, { avatarFileKey: null });
+    if (cleared.avatarUrl) throw new Error('avatar not cleared');
+    await del(`/admin/teachers/${t.id}`);
+    const busy = all.find((x) => x.lessonsCount > 0);
+    if (busy) await expectError(409, () => del(`/admin/teachers/${busy.id}`), 'HAS_DEPENDENTS');
   });
   await step('Lessons list views + filters (ADM-LSN-01)', 'GET /admin/lessons', async () => {
     const r = paged(await list('/admin/lessons', { page: 1, pageSize: 20, sort: '-updatedAt' }), ['id', 'title', 'subject', 'unit', 'topic', 'status', 'teacher'], 'AdminLessonDto');
@@ -561,6 +630,18 @@ module('assessments', async () => {
     await patch(`/admin/quiz-rules/${r.id}`, { passThreshold: 70 });
     await del(`/admin/quiz-rules/${r.id}`);
   });
+  await step('Effective quiz rule page: lesson options → effective rule vs subject default; unknown lesson 404 (ADM-QZR-06)', 'GET /admin/lessons?view=options · GET /admin/quiz-rules/effective?lessonId', async () => {
+    const opts = paged(await list('/admin/lessons', { view: 'options', pageSize: 1000, excludeArchived: true }), ['id', 'order'], 'LessonOption');
+    const lessonId = ctx.lesson?.id ?? opts[0]?.id;
+    if (!lessonId) return;
+    const e = has(await get('/admin/quiz-rules/effective', { lessonId }), ['subjectId', 'subject.name', 'questionCount', 'poolSize', 'passThreshold', 'alternativeSets', 'retryPolicy', 'maxRetries', 'cooldownMinutes', 'randomize', 'showExplanation', 'requireCompletionToUnlock', 'source'], 'EffectiveQuizRuleDto');
+    if (!['subject', 'lesson'].includes(e.source)) throw new Error(`source=${e.source}`);
+    const defaults = (await list('/admin/quiz-rules', { scope: 'subject', pageSize: 100 })).data;
+    const def = defaults.find((r) => r.subjectId === e.subjectId);
+    if (!def) throw new Error('subject default missing for the effective rule subject');
+    if (e.source === 'subject' && def.questionCount !== e.questionCount) throw new Error('subject-sourced rule differs from the subject default');
+    await expectError(404, () => get('/admin/quiz-rules/effective', { lessonId: '00000000-0000-4000-8000-000000000000' }));
+  });
   await step('Blueprints list/stats/detail + availability (ADM-EXB-01/02/03/10)', 'GET /admin/exam-blueprints · /stats · /:id · POST /availability', async () => {
     const r = paged(await list('/admin/exam-blueprints', { page: 1, pageSize: 20, sort: '-updatedAt' }), ['id', 'name', 'rows', 'durationMin', 'status'], 'ExamBlueprintDto');
     await get('/admin/exam-blueprints/stats');
@@ -613,6 +694,8 @@ module('packages', async () => {
     has(await get('/admin/promotions/check-code', { code: `VERIFY${RUN}`.toUpperCase().slice(0, 16) }), ['available'], 'check-code');
     has(await get('/admin/promotions/generate-code', { prefix: 'VER' }), ['code'], 'generate-code');
     if (r[0]) await list(`/admin/promotions/${r[0].id}/redemptions`, { page: 1, pageSize: 10, sort: '-redeemedAt' });
+    const used = r.find((x) => (x.used ?? 0) > 0);
+    if (used) await download('POST', `/admin/promotions/${used.id}/redemptions/export`, { body: { format: 'csv' } }); // ADM-PRM-10 (RedemptionsModal export)
   });
   await step('Promotion create → edit → delete (ADM-PRM-03..05)', 'POST /admin/promotions · PATCH · DELETE', async () => {
     const code = `VF${RUN}`.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
@@ -653,6 +736,12 @@ module('payments', async () => {
     has(await get(`/admin/payments/${ctx.payment.id}/receipt`, { format: 'json' }), ['receiptNumber'], 'ReceiptDto');
     const pdf = await download('GET', `/admin/payments/${ctx.payment.id}/receipt`, { query: { format: 'pdf' } });
     if (!/pdf/.test(pdf.type)) throw new Error(`receipt type ${pdf.type}`);
+    // Language follows ?lang / Accept-Language: the Arabic PDF embeds Noto Sans Arabic (subset), the English one does not.
+    const ar = await download('GET', `/admin/payments/${ctx.payment.id}/receipt`, { query: { format: 'pdf' }, headers: { 'Accept-Language': 'ar' } });
+    if (!/NotoSansArabic/.test(ar.buf.toString('latin1'))) throw new Error('Arabic receipt does not embed Noto Sans Arabic');
+    if (!/-ar\.pdf/.test(ar.disposition)) throw new Error(`Arabic receipt file name ${ar.disposition}`);
+    const en = await download('GET', `/admin/payments/${ctx.payment.id}/receipt`, { query: { format: 'pdf', lang: 'en' }, headers: { 'Accept-Language': 'ar' } });
+    if (/NotoSansArabic/.test(en.buf.toString('latin1'))) throw new Error('?lang=en ignored');
   });
   await step('Partial refund request with Idempotency-Key (replay) → reject (ADM-PAY-05, ADM-REF-04)', 'POST /admin/payments/:id/refunds · POST /admin/refunds/:id/reject', async () => {
     if (!ctx.payment) throw new Error('no paid payment');
@@ -714,7 +803,10 @@ module('partners', async () => {
     ctx.marketer2 = r[1];
     has(await get(`/admin/marketers/${r[0].id}`), ['id', 'schools'], 'MarketerDetailDto');
     await get(`/admin/marketers/${r[0].id}/performance`, { months: 6 });
-    await get(`/admin/marketers/${r[0].id}/incentive-progress`, {});
+    has(await get(`/admin/marketers/${r[0].id}/incentive-progress`, {}), ['period.key', 'paid', 'result', 'progressPct'], 'IncentiveProgressDto');
+    // ADM-MKT-11: attributed students section (server paging, the UI's sort keys, search)
+    for (const sort of ['-createdAt', 'name', '-lastActive']) paged(await list(`/admin/marketers/${r[0].id}/students`, { page: 1, pageSize: 10, sort }), ['id', 'name', 'mobile', 'school', 'package', 'subscriptionStatus', 'source', 'lastActive', 'createdAt'], 'AdminStudentRow');
+    await list(`/admin/marketers/${r[0].id}/students`, { q: '77', page: 1, pageSize: 5 });
     arr(await get('/admin/milestone-sets'), ['id', 'items', 'status'], 'MilestoneSetDto');
   });
   await step('School create → note → assign marketer (double-attribution 409 → override) → delete', 'POST /admin/schools · /notes · PUT /:id/marketer · POST /admin/marketers/:id/schools · DELETE', async () => {
@@ -775,6 +867,22 @@ module('partners', async () => {
       if (mine[0] || after[0]) throw e;
     });
   });
+  await step('Incentive rule + settlement detail pages (ADM-INC-02, ADM-SET-02); unknown ids 404', 'GET /admin/incentive-rules/:id · GET /admin/settlements/:id', async () => {
+    for (const partnerType of ['school', 'marketer']) {
+      const rules = await get('/admin/incentive-rules', { partnerType });
+      if (!rules[0]) continue;
+      const r = has(await get(`/admin/incentive-rules/${rules[0].id}`), ['id', 'version', 'name.en', 'partnerType', 'qualificationThreshold', 'tiers', 'period', 'effectiveFrom', 'effectiveTo', 'status', 'createdBy', 'createdAt', 'activatedAt'], 'IncentiveRuleDto');
+      if (r.partnerType !== partnerType) throw new Error(`rule partnerType ${r.partnerType} ≠ ${partnerType}`);
+      if (r.tiers[0]) has(r.tiers[0], ['id', 'from', 'to', 'rewardType', 'amount', 'label'], 'IncentiveTier');
+      const st = (await list('/admin/settlements', { partnerType, page: 1, pageSize: 1, sort: '-period' })).data[0];
+      if (!st) continue;
+      const d = has(await get(`/admin/settlements/${st.id}`), ['id', 'partnerType', 'partnerId', 'partner.name', 'period', 'ruleId', 'ruleVersion', 'qualifiedStudents', 'amount', 'currency', 'status', 'approvedAt', 'paidAt', 'paymentReference', 'note', 'createdAt', 'items'], 'SettlementDto+items');
+      if (!Array.isArray(d.items)) throw new Error('settlement items not an array');
+      if (d.items[0]) has(d.items[0], ['studentId', 'studentName.en', 'paymentId', 'ref', 'paidAt', 'amount'], 'SettlementItem');
+    }
+    await expectError(404, () => get('/admin/incentive-rules/00000000-0000-4000-8000-000000000000'));
+    await expectError(404, () => get('/admin/settlements/00000000-0000-4000-8000-000000000000'));
+  });
   await step('Partner exports (schools / marketers / settlements)', 'POST /admin/schools/export · /admin/marketers/export · /admin/settlements/export', async () => {
     await download('POST', '/admin/schools/export', { body: { format: 'csv' } });
     await download('POST', '/admin/marketers/export', { body: { format: 'xlsx' } });
@@ -822,6 +930,14 @@ module('aitutor', async () => {
 
 // ═════════════════════════════════════════════════════════════════════════════
 module('analytics', async () => {
+  await step('Daily metrics page: all fields + aiBySubject, per platform (ADM-ANL-03)', 'GET /admin/analytics/daily?fields&platform', async () => {
+    const fields = ['dau', 'wau', 'mau', 'watchMinutes', 'videoCompletionRate', 'quizAttempts', 'quizCompletionRate', 'examAttempts', 'aiQuestions', 'aiActiveUsers', 'aiTokens', 'aiCostUsd', 'errorRate', 'registrations', 'revenue'];
+    for (const platform of [undefined, 'web', 'ios', 'android']) {
+      const rows = arr(await get('/admin/analytics/daily', { from: RANGE.from, to: RANGE.to, platform, fields: [...fields, 'aiBySubject'] }), ['date', ...fields, 'aiBySubject'], 'DailyRow');
+      if (rows.length < 28) throw new Error(`expected ~30 daily rows, got ${rows.length}`);
+      if (rows.some((r) => fields.some((f) => typeof r[f] !== 'number'))) throw new Error('non-numeric daily metric');
+    }
+  });
   await step('Business analytics all grains + compare + platform (ADM-ANL-01)', 'GET /admin/analytics/business', async () => {
     for (const grain of ['day', 'week', 'month']) has(await get('/admin/analytics/business', { ...RANGE, grain, compare: true }), ['kpis', 'timeline'], 'BusinessAnalyticsDto');
     for (const platform of ['web', 'ios', 'android']) await get('/admin/analytics/business', { ...RANGE, platform });
@@ -829,7 +945,15 @@ module('analytics', async () => {
   await step('Learning analytics (+subject) (ADM-ANL-02)', 'GET /admin/analytics/learning', async () => {
     const d = await get('/admin/analytics/learning', { ...RANGE, compare: true });
     has(d, ['kpis.dau', 'kpis.dau.prevWau', 'kpis.dau.prevMau'], 'LearningAnalyticsDto');
-    await get('/admin/analytics/learning', { ...RANGE, subjectId: ctx.lookups.subjects[0].id });
+    // The page passes subjectId to every chart endpoint (learning + topics); subject-scoped charts must narrow.
+    const sid = ctx.lookups.subjects[0].id;
+    const one = await get('/admin/analytics/learning', { ...RANGE, subjectId: sid });
+    if (one.scoreBySubject.some((x) => x.subjectId !== sid)) throw new Error('scoreBySubject not filtered by subjectId');
+    if (one.weakTopics.some((x) => x.subject.id !== sid)) throw new Error('weakTopics not filtered by subjectId');
+    const allQ = d.questionAccuracy.reduce((a, b) => a + b.questions, 0);
+    const subQ = one.questionAccuracy.reduce((a, b) => a + b.questions, 0);
+    if (subQ > allQ) throw new Error(`questionAccuracy grew with a subject filter (${subQ} > ${allQ})`);
+    arr(await get('/admin/analytics/topics', { ...RANGE, subjectId: sid, sort: 'accuracy' }), ['topicId', 'subject'], 'TopicSignalDto');
   });
   await step('Topics + platform split (ADM-ANL-04/05)', 'GET /admin/analytics/topics · /platform-split', async () => {
     arr(await get('/admin/analytics/topics', { ...RANGE, sort: 'accuracy', limit: 50 }), ['topicId', 'accuracy', 'subject'], 'TopicSignalDto');
@@ -903,10 +1027,30 @@ module('notifications', async () => {
     const x = await post(`/admin/campaigns/${scheduled.id}/cancel`);
     if (x.status !== 'draft' || x.scheduledAt) throw new Error(`cancel → ${x.status} (contract: back to draft, scheduledAt null)`);
   });
+  await step('Campaign detail page: campaign + its deliveries (ADM-CMP-02, ADM-DLV-01 ?campaignId); unknown id 404', 'GET /admin/campaigns/:id · GET /admin/deliveries?campaignId', async () => {
+    const c0 = (await list('/admin/campaigns', { page: 1, pageSize: 1, sort: '-createdAt' })).data[0];
+    if (c0) {
+      const c = has(await get(`/admin/campaigns/${c0.id}`), ['id', 'name', 'channel', 'templateId', 'template', 'filters', 'audienceCount', 'status', 'scheduledAt', 'sentAt', 'stats.queued', 'stats.sent', 'stats.delivered', 'stats.failed', 'createdBy', 'createdAt'], 'CampaignDto');
+      const d = await list('/admin/deliveries', { campaignId: c.id, page: 1, pageSize: 10, sort: '-createdAt' });
+      paged(d, ['id', 'recipient', 'channel', 'provider', 'status', 'attempts', 'createdAt'], 'DeliveryDto');
+      if (d.data.some((x) => x.campaignId && x.campaignId !== c.id)) throw new Error('campaignId filter not applied');
+      await list('/admin/deliveries', { campaignId: c.id, status: 'failed', page: 1, pageSize: 10, sort: '-createdAt' });
+    }
+    await expectError(404, () => get('/admin/campaigns/00000000-0000-4000-8000-000000000000'));
+  });
   await step('Delivery log + stats (ADM-DLV-01/02)', 'GET /admin/deliveries · /stats', async () => {
     paged(await list('/admin/deliveries', { page: 1, pageSize: 20, sort: '-createdAt' }), ['id', 'channel', 'status'], 'DeliveryDto');
     for (const f of [{ channel: 'in_app' }, { status: 'failed' }]) await list('/admin/deliveries', { ...f, page: 1, pageSize: 5 });
-    await get('/admin/deliveries/stats', {});
+    const all = has(await get('/admin/deliveries/stats', {}), ['total', 'delivered', 'failed', 'queued', 'rate', 'byProvider'], 'DeliveryStatsDto');
+    // The page sends its filters (channel, provider, from, q; not status) to the KPIs.
+    const from = new Date(Date.now() - 7 * 86400000).toISOString();
+    const f = await get('/admin/deliveries/stats', { channel: 'in_app', from });
+    if (f.total > all.total || f.byProvider.some((p) => p.channel !== 'in_app')) throw new Error('stats ignore channel/from filters');
+    const prov = all.byProvider[0]?.provider;
+    if (prov) {
+      const p = await get('/admin/deliveries/stats', { provider: prov, q: 'zz-no-match-zz' });
+      if (p.total !== 0) throw new Error('stats ignore q filter');
+    }
   });
   await step('Notification exports (templates / campaigns / deliveries)', 'POST /admin/notification-templates/export · /admin/campaigns/export · /admin/deliveries/export', async () => {
     for (const p of ['/admin/notification-templates/export', '/admin/campaigns/export', '/admin/deliveries/export']) await download('POST', p, { body: { format: 'csv' } });
@@ -1061,6 +1205,92 @@ module('security', async () => {
   });
 });
 
+/**
+ * `legal-publish` (opt-in: --legal-publish or --only=legal-publish). Terms/privacy are the only legal document types, so
+ * publishing always replaces the live version. To keep the student-facing text unchanged:
+ *   1. a temporary student registers and accepts the current terms + privacy;
+ *   2. an identical clone of the live terms is published WITH re-acceptance: the student gets pendingLegal, student
+ *      routes answer 403 LEGAL_ACCEPTANCE_REQUIRED, AUTH-08 clears it and the acceptance shows up in ADM-LGL-07;
+ *   3. a second identical clone is published WITHOUT re-acceptance (seconds later, in a finally block): nobody is
+ *      prompted, PUB-11 serves the original text, and that identical version stays current;
+ *   4. the temporary student is deleted.
+ */
+module('legal-publish', async () => {
+  const phone = `+96477${String(randomInt(10_000_000, 99_999_999))}`;
+  const dev = { 'X-Client-Platform': 'web', 'X-Device-Id': `verify-legal-${RUN}` };
+  const st = (o = {}) => ({ token: ctx.legalStudent, headers: dev, ...o });
+  let original;
+  await step('Snapshot live terms + register a temporary student accepting them (PUB-11, AUTH-01/02)', 'GET /legal/:doc · POST /auth/send-otp · /auth/verify-otp', async () => {
+    original = { terms: await get('/legal/terms', undefined, { token: null }), privacy: await get('/legal/privacy', undefined, { token: null }) };
+    const drafts = (await get('/admin/legal/terms/versions')).filter((x) => x.status === 'draft');
+    if (drafts.length) throw new Error(`a terms draft already exists (${drafts[0].version}); not touching it`);
+    const gov = (await get('/public/governorates', undefined, { token: null }))[0].id;
+    const s = await post('/auth/send-otp', { phone, purpose: 'register', channel: 'sms' }, { token: null, headers: dev });
+    onCleanup('temporary legal student', async () => {
+      sql(`DELETE FROM eduway_platform_users WHERE phone = $1 AND kind = 'student'`, [phone]);
+      sql(`DELETE FROM eduway_platform_otp_codes WHERE phone = $1`, [phone]);
+    });
+    const { rows } = sql(`SELECT code_hash FROM eduway_platform_otp_codes WHERE phone = $1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1`, [phone]);
+    const secret = ENV.JWT_REFRESH_SECRET;
+    let code = null;
+    for (let n = 0; n < 10 ** s.codeLength && !code; n++) {
+      const c = String(n).padStart(s.codeLength, '0');
+      if (createHmac('sha256', secret).update(`otp:${phone}:${c}`).digest('hex') === rows[0]?.code_hash) code = c;
+    }
+    if (!code) throw new Error('OTP not recoverable');
+    const acceptedLegal = [{ doc: 'terms', version: original.terms.version }, { doc: 'privacy', version: original.privacy.version }];
+    const v = await post('/auth/verify-otp', { phone, code, purpose: 'register', deviceId: dev['X-Device-Id'], platform: 'web', deviceName: 'verify-admin-flows legal', registration: { name: 'Verify Legal', governorateId: gov, acceptTerms: true, acceptedLegal, language: 'en' } }, { token: null, headers: dev });
+    ctx.legalStudent = v.accessToken;
+    if (v.me.user.pendingLegal?.length) throw new Error('fresh student already has pendingLegal');
+  });
+  await step('Publish an identical terms clone WITH re-acceptance → pendingLegal → 403 → accept → cleared (ADM-LGL-02/04/07, AUTH-08)', 'POST /admin/legal/terms/versions · /versions/:id/publish · GET /auth/me · POST /auth/accept-legal', async () => {
+    if (!ctx.legalStudent) throw new Error('needs student');
+    const pub = (await get('/admin/legal/terms/versions')).find((x) => x.status === 'published');
+    const a = await post('/admin/legal/terms/versions', { cloneFromId: pub.id });
+    await patch(`/admin/legal/versions/${a.id}`, { changeSummary: L('Re-published unchanged (verification)') });
+    let published = false;
+    try {
+      const r = await post(`/admin/legal/versions/${a.id}/publish`, { requireReacceptance: true });
+      published = true;
+      if (r.published.id !== a.id || r.retired?.id !== pub.id) throw new Error('publish did not retire the previous version');
+      const me = await get('/auth/me', undefined, st());
+      const pending = me.user?.pendingLegal ?? me.pendingLegal;
+      if (!pending?.some((x) => x.doc === 'terms' && x.version === a.version)) throw new Error(`pendingLegal missing terms ${a.version}: ${JSON.stringify(pending)}`);
+      await expectError(403, () => get('/progress/dashboard', undefined, st()), 'LEGAL_ACCEPTANCE_REQUIRED');
+      const acc = await post('/auth/accept-legal', { documents: [{ doc: 'terms', version: a.version }] }, st());
+      if (acc.pendingLegal.length) throw new Error(`still pending: ${JSON.stringify(acc.pendingLegal)}`);
+      await get('/progress/dashboard', undefined, st());
+      const rows = paged(await list(`/admin/legal/versions/${a.id}/acceptances`, { page: 1, pageSize: 20 }), ['student', 'acceptedAt', 'platform'], 'acceptance');
+      if (!rows.some((x) => x.student.mobile === phone)) throw new Error('acceptance not listed');
+    } finally {
+      if (!published) await del(`/admin/legal/versions/${a.id}`).catch(() => {});
+      else {
+        // Runs whatever happened above: never leave a re-acceptance requirement live for real students.
+        const cur = (await get('/admin/legal/terms/versions')).find((x) => x.status === 'published');
+        const b = await post('/admin/legal/terms/versions', { cloneFromId: cur.id });
+        await patch(`/admin/legal/versions/${b.id}`, { changeSummary: L('Re-published unchanged (verification)') });
+        await post(`/admin/legal/versions/${b.id}/publish`, { requireReacceptance: false });
+        ctx.legalFinal = b;
+      }
+    }
+  });
+  await step('Identical version stays current without a prompt; text unchanged (PUB-11, ADM-LGL-06)', 'GET /legal/terms · /admin/legal/terms/stats · GET /auth/me', async () => {
+    if (!ctx.legalFinal) throw new Error('final publish missing');
+    const now = await get('/legal/terms', undefined, { token: null });
+    if (now.version !== ctx.legalFinal.version) throw new Error(`current terms ${now.version}, expected ${ctx.legalFinal.version}`);
+    const text = (d) => JSON.stringify([d.title, d.subtitle, d.intro, d.sections, d.contactEmail]);
+    if (!now.sections?.length || text(now) !== text(original.terms)) throw new Error('terms text changed');
+    const priv = await get('/legal/privacy', undefined, { token: null });
+    if (priv.version !== original.privacy.version) throw new Error('privacy changed');
+    const stats = await get('/admin/legal/terms/stats');
+    if (stats.currentVersion !== ctx.legalFinal.version) throw new Error('stats current version');
+    const me = await get('/auth/me', undefined, st());
+    if ((me.user?.pendingLegal ?? me.pendingLegal ?? []).length) throw new Error('prompt after the no-reacceptance publish');
+    const live = sql(`SELECT count(*)::int AS n FROM eduway_platform_legal_documents WHERE status = 'published' AND requires_acceptance AND doc_type = 'terms' AND id = $1`, [ctx.legalFinal.id]).rows[0];
+    if (live?.n) throw new Error('live terms still require re-acceptance');
+  });
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 (async () => {
   const purgeOnly = process.argv.find((a) => a.startsWith('--purge-only='));
@@ -1071,6 +1301,7 @@ module('security', async () => {
   console.log(AS_JSON ? '' : `EDUWAY admin live verification → ${API}  (run ${RUN})`);
   for (const m of modules) {
     if (ONLY.length && m.name !== 'auth' && !ONLY.includes(m.name)) continue;
+    if (m.name === 'legal-publish' && !ONLY.includes(m.name) && !process.argv.includes('--legal-publish')) continue;
     currentModule = m.name;
     if (!AS_JSON) console.log(`\n▶ ${m.name}`);
     try {

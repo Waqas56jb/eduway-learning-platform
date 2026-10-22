@@ -144,7 +144,7 @@ export default function ExamRoomScreen() {
         </Screen>
       );
     }
-    const network = e.isNetwork;
+    const network = e.isNetwork || e.status >= 500;
     return (
       <Screen edges={['top', 'bottom']}>
         <Header title={t('title')} />
@@ -152,7 +152,7 @@ export default function ExamRoomScreen() {
           <EmptyState
             icon={network ? 'wifi-off' : 'exam'}
             title={network ? t('common:states.error') : t('notFound.title')}
-            message={network ? t('common:states.offline') : t('notFound.message')}
+            message={network ? (e.isNetwork ? t('common:states.offline') : e.message) : t('notFound.message')}
             actionLabel={network ? t('common:actions.retry') : t('notFound.action')}
             onAction={network ? () => setReloadKey((k) => k + 1) : goToExams}
           />

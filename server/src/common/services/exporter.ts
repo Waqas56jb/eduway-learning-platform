@@ -31,9 +31,14 @@ export interface ExportColumn<R> {
 
 const BOM = String.fromCharCode(0xfeff);
 
-function csvCell(v: unknown): string {
+/** SEC-15: neutralise spreadsheet formulas (CSV/XLSX injection) in user-controlled text — `=`, `+`, `-`, `@`, TAB, CR. */
+export function neutralizeFormula(s: string): string {
+  return /^[=+\-@\t\r]/.test(s) && !/^[-+]?\d+(\.\d+)?$/.test(s) ? `'${s}` : s;
+}
+
+export function csvCell(v: unknown): string {
   if (v === null || v === undefined) return '';
-  const s = String(v);
+  const s = typeof v === 'string' ? neutralizeFormula(v) : String(v);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

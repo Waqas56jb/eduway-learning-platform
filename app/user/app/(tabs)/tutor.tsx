@@ -27,7 +27,7 @@ import { LimitReached } from '@/components/tutor/LimitReached';
 import { fromDto, type TutorMessage } from '@/components/tutor/messages';
 import { SuggestedPrompts } from '@/components/tutor/SuggestedPrompts';
 import { TutorAvatar } from '@/components/tutor/TutorAvatar';
-import { Chip, IconButton, Text } from '@/components/ui';
+import { Chip, EmptyState, IconButton, Skeleton, Text } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore } from '@/store';
 import type { SubjectId } from '@/types';
@@ -60,7 +60,8 @@ export default function TutorScreen() {
   const allow: AiAllowance | undefined = allowance ?? meAllowance;
 
   const [activeId, setActive] = useState<string | null>(null);
-  const { data: activeConv } = useConversation(activeId);
+  const convQuery = useConversation(activeId);
+  const activeConv = convQuery.data;
   const activeSummary = useMemo(() => conversations?.find((c) => c.id === activeId) ?? null, [conversations, activeId]);
   /** Optimistic student message + streaming tutor answer while a send is in flight. */
   const [pending, setPending] = useState<TutorMessage[]>([]);
@@ -306,7 +307,21 @@ export default function TutorScreen() {
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
           >
-            {limited ? (
+            {activeId && convQuery.isLoading ? (
+              <View style={styles.convSkeleton}>
+                <Skeleton width="70%" height={56} radius={18} />
+                <Skeleton width="85%" height={96} radius={18} style={styles.convSkeletonEnd} />
+                <Skeleton width="60%" height={56} radius={18} />
+              </View>
+            ) : activeId && convQuery.isError && !activeConv ? (
+              <EmptyState
+                icon="wifi-off"
+                title={t('common:states.error')}
+                message={convQuery.error.isNetwork ? t('common:states.offline') : convQuery.error.message}
+                actionLabel={t('common:actions.retry')}
+                onAction={() => void convQuery.refetch()}
+              />
+            ) : limited ? (
               <LimitReached quota={aiQuota} renewsAt={renewsAt} />
             ) : (
               <SuggestedPrompts subjectId={subjectId} onSelect={(p) => void onSend(p)} disabled={typing || pending.length > 0} />
@@ -379,6 +394,8 @@ const styles = StyleSheet.create({
   chipsScroll: { flexGrow: 0 },
   chips: { gap: space.sm, paddingHorizontal: SCREEN_PADDING, paddingTop: space.xs, paddingBottom: space.md },
   hairline: { height: StyleSheet.hairlineWidth },
+  convSkeleton: { gap: space.md, paddingVertical: space.lg },
+  convSkeletonEnd: { alignSelf: 'flex-end' },
   emptyContent: {
     flexGrow: 1,
     justifyContent: 'center',

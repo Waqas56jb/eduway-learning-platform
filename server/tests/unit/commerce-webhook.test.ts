@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { decideAttribution } from '../../src/modules/marketers/attribution.js';
 import { canonicalGateway, getProvider, mockGateway, signMock } from '../../src/modules/payments/providers.js';
-import { decideWebhook, runWebhook, type LockedPayment, type ParsedWebhook, type WebhookStore } from '../../src/modules/payments/webhook-core.js';
+import { decideWebhook, runWebhook, settlementProblem, type LockedPayment, type ParsedWebhook, type WebhookStore } from '../../src/modules/payments/webhook-core.js';
 
 /** In-memory store with the same uniqueness semantics as payment_events (provider, provider_event_id). */
 function memoryStore(payments: LockedPayment[]) {
   const events = new Set<string>();
-  const state = { grants: 0, failures: 0, duplicates: 0 };
+  const state = { grants: 0, failures: 0, duplicates: 0, rejected: 0, lastFailure: '' };
   const store: WebhookStore = {
     async recordEvent(provider, evt) {
       const k = `${provider}|${evt.eventId}`;
@@ -17,6 +17,9 @@ function memoryStore(payments: LockedPayment[]) {
     async recordDuplicate() {
       state.duplicates++;
     },
+    async recordRejected() {
+      state.rejected++;
+    },
     async findPaymentForUpdate(evt) {
       return payments.find((p) => p.id === evt.paymentId) ?? null;
     },
@@ -24,9 +27,10 @@ function memoryStore(payments: LockedPayment[]) {
       p.status = 'paid';
       state.grants++;
     },
-    async applyFailure(p, status) {
+    async applyFailure(p, status, e) {
       p.status = status;
       state.failures++;
+      state.lastFailure = String((e.payload as { reason?: unknown }).reason ?? status);
     },
   };
   return { store, state };
@@ -69,6 +73,39 @@ describe('webhook idempotency', () => {
     expect(decideWebhook('initiated', 'payment.succeeded')).toBe('apply_success');
     expect(decideWebhook('pending', 'payment.failed')).toBe('apply_failure');
     for (const s of ['paid', 'failed', 'cancelled', 'refunded', 'partially_refunded']) expect(decideWebhook(s, 'payment.succeeded')).toBe('duplicate');
+  });
+});
+
+describe('settlement checks (SEC-24)', () => {
+  it('pure check: missing / wrong amount / wrong currency', () => {
+    expect(settlementProblem({ total: 100, currency: 'IQD' }, { amount: 100, currency: 'IQD' })).toBeNull();
+    expect(settlementProblem({ total: 100, currency: 'IQD' }, { amount: 100 })).toBeNull();
+    expect(settlementProblem({ total: 100, currency: 'IQD' }, { amount: 100, currency: 'iqd' })).toBeNull();
+    expect(settlementProblem({ total: 100, currency: 'IQD' }, { amount: null })).toBe('amount_missing');
+    expect(settlementProblem({ total: 100, currency: 'IQD' }, { amount: 99 })).toBe('amount_mismatch');
+    expect(settlementProblem({ total: 100, currency: 'IQD' }, { amount: Number.NaN })).toBe('amount_mismatch');
+    expect(settlementProblem({ total: 100, currency: 'IQD' }, { amount: 100, currency: 'USD' })).toBe('currency_mismatch');
+    expect(settlementProblem({ total: 0, currency: 'IQD' }, { amount: 0 })).toBeNull();
+  });
+  it('a success without an amount is rejected and its event id is NOT consumed', async () => {
+    const p = { id: 'pay1', status: 'pending', total: 30_000, currency: 'IQD' };
+    const { store, state } = memoryStore([p]);
+    const r = await runWebhook(store, 'fastpay', evt({ amount: null }));
+    expect(r).toMatchObject({ applied: null, rejected: 'amount_missing', duplicate: false });
+    expect(p.status).toBe('pending');
+    expect(state.rejected).toBe(1);
+    // A later delivery of the same event WITH the amount still settles the payment.
+    expect((await runWebhook(store, 'fastpay', evt())).applied).toBe('paid');
+    expect(state.grants).toBe(1);
+  });
+  it('a wrong amount or currency fails the payment and never grants', async () => {
+    const a = { id: 'pay1', status: 'pending', total: 30_000, currency: 'IQD' };
+    const b = { id: 'pay2', status: 'pending', total: 30_000, currency: 'IQD' };
+    const { store, state } = memoryStore([a, b]);
+    expect(await runWebhook(store, 'qicard', evt({ amount: 1 }))).toMatchObject({ applied: 'failed', rejected: 'amount_mismatch' });
+    expect(state.lastFailure).toBe('amount_mismatch');
+    expect(await runWebhook(store, 'qicard', evt({ eventId: 'evt_2', paymentId: 'pay2', currency: 'USD' }))).toMatchObject({ applied: 'failed', rejected: 'currency_mismatch' });
+    expect(state.grants).toBe(0);
   });
 });
 

@@ -6,7 +6,7 @@ import { T } from '../../config/constants.js';
 import { db } from '../../config/db.js';
 import { entitlements, evaluateSubjectAccess } from '../../common/entitlements.js';
 import { NotFoundError } from '../../common/errors/index.js';
-import { bookmarkedQuestionIds, findSubject, loadQuestions, sqlSearch, toPublic, toReview, type QuestionPublic, type QuestionReview } from '../learning-core/index.js';
+import { bookmarkedQuestionIds, conflictError, findSubject, loadQuestions, sqlSearch, toPublic, toReview, type QuestionPublic, type QuestionReview } from '../learning-core/index.js';
 import type { BankQuery } from './schemas.js';
 
 export interface BankFilter {
@@ -156,6 +156,17 @@ export const bankService = {
     const q = loaded.get(questionId);
     if (!q || q.row.status !== 'published') throw new NotFoundError('question');
     await entitlements.assertAccess(userId, q.row.subject_id, { feature: 'question_bank' });
+    // SEC-11: the review DTO contains the answer key — hide it while the question sits in one of the student's
+    // open exam / quiz attempts (exam state hands out question ids).
+    const active = await db.scalar<number>(
+      `SELECT count(*)::int FROM (
+         SELECT 1 FROM ${T.exam_attempts} WHERE user_id = $1 AND status = 'in_progress' AND $2::uuid = ANY(question_ids)
+         UNION ALL
+         SELECT 1 FROM ${T.quiz_attempts} WHERE user_id = $1 AND status = 'in_progress' AND $2::uuid = ANY(question_ids)
+       ) x`,
+      [userId, questionId],
+    );
+    if (active) throw conflictError('QUESTION_IN_ACTIVE_ATTEMPT', { questionId });
     const bm = await bookmarkedQuestionIds(userId);
     return toReview(q, { bookmarked: bm.has(questionId) });
   },
@@ -170,7 +181,7 @@ export const bankService = {
       params.push(s.id);
       extra = `AND q.subject_id = $2`;
     }
-    const base = `FROM ${T.bookmarks} b JOIN ${T.questions} q ON q.id = b.entity_id WHERE b.user_id = $1 AND b.entity_type = 'question' AND q.deleted_at IS NULL ${extra}`;
+    const base = `FROM ${T.bookmarks} b JOIN ${T.questions} q ON q.id = b.entity_id WHERE b.user_id = $1 AND b.entity_type = 'question' AND q.deleted_at IS NULL AND q.status = 'published' ${extra}`;
     const total = (await db.scalar<number>(`SELECT count(*)::int ${base}`, params)) ?? 0;
     params.push(pageSize, (page - 1) * pageSize);
     const rows = await db.many<{ id: string }>(`SELECT q.id ${base} ORDER BY b.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
@@ -180,7 +191,7 @@ export const bankService = {
     return [...(await bookmarkedQuestionIds(userId))];
   },
   async bookmark(userId: string, questionId: string) {
-    const ok = await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE id = $1 AND deleted_at IS NULL`, [questionId]);
+    const ok = await db.scalar<number>(`SELECT count(*)::int FROM ${T.questions} WHERE id = $1 AND deleted_at IS NULL AND status = 'published'`, [questionId]);
     if (!ok) throw new NotFoundError('question');
     await db.query(`INSERT INTO ${T.bookmarks} (user_id, entity_type, entity_id) VALUES ($1, 'question', $2) ON CONFLICT DO NOTHING`, [userId, questionId]);
     return { questionId, bookmarked: true as const };

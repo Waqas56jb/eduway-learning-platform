@@ -57,7 +57,18 @@
     "emailSub": "For billing and account requests",
     "phoneNumber": "+964 770 000 1234",
     "emailAddress": "support@eduway.iq",
-    "opening": "Opening {{channel}}…"
+    "opening": "Opening {{channel}}…",
+    "messageTitle": "Send us a message",
+    "messageSub": "We’ll reply by SMS or a call on your registered number.",
+    "messagePlaceholder": "Describe the problem or question…",
+    "messageHint": "At least {{count}} characters",
+    "send": "Send message",
+    "sent": "Message sent — ticket {{id}}",
+    "topics": {
+      "support": "Technical help",
+      "billing": "Billing",
+      "general": "General"
+    }
   },
   "about": {
     "version": "Version {{version}}",

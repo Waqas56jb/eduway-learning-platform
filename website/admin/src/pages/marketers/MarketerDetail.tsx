@@ -1,19 +1,23 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Award, BarChart3, Check, Mail, MapPin, Pencil, Phone, Plus, School as SchoolIcon, X } from 'lucide-react';
+import { ArrowLeft, Award, BarChart3, Check, Mail, MapPin, Pencil, Phone, Plus, School as SchoolIcon, Target, UserRound, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { useApiMutation } from '@/api/hooks';
+import { useApiMutation, usePagedList } from '@/api/hooks';
+import { qk } from '@/api/keys';
+import { flatRef } from '@/api/adapters';
+import type { AdminStudentRow } from '@/api/students';
 import { useLookups } from '@/api/lookups';
-import { marketersApi, partnerKeys, useMarketer, useMarketerPerformance } from '@/api/partners';
+import { marketersApi, partnerKeys, useMarketer, useMarketerPerformance, useMarketerProgress } from '@/api/partners';
 import { useCan } from '@/store/auth';
 import { useLocalize } from '@/hooks/useLocale';
 import { cn } from '@/utils/cn';
-import { fmtDate, fmtMoney, fmtNumber } from '@/utils/format';
+import { fmtDate, fmtMoney, fmtNumber, fmtRelative } from '@/utils/format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { MarketerForm } from '@/components/forms/MarketerForm';
 import { BarChart } from '@/components/charts';
-import { Avatar, Button, ButtonLink, Card, CardBody, CardHeader, EmptyState, ProgressBar, Select, SkeletonCard, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
+import { Avatar, Badge, Button, ButtonLink, Card, CardBody, CardHeader, DataTable, EmptyState, ProgressBar, Select, SkeletonCard, StatCard, StatusBadge, Tooltip, useConfirm } from '@/components/ui';
 import { QueryError } from '@/components/ui/QueryError';
 import { SettlementsTable } from '@/pages/schools/SettlementsTable';
 import { TierBadge } from '@/pages/schools/TierBadge';
@@ -30,6 +34,14 @@ export default function MarketerDetail() {
   const guard = useAttributionGuard();
   const detailQ = useMarketer(id);
   const perfQ = useMarketerPerformance(id);
+  const progressQ = useMarketerProgress(id);
+  const students = usePagedList({
+    key: (p) => qk.marketers.sub('students', id, p),
+    fetcher: (p) => marketersApi.students(id!, p),
+    pageSize: 10,
+    initialSort: '-createdAt',
+    enabled: !!id,
+  });
   const marketer = detailQ.data?.marketer;
   const marketers = lookups.marketers;
   const schools = lookups.schools;
@@ -38,6 +50,67 @@ export default function MarketerDetail() {
   const [pick, setPick] = useState('');
   const [assigning, setAssigning] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  const studentCols = useMemo<ColumnDef<AdminStudentRow>[]>(
+    () => [
+      {
+        id: 'name',
+        accessorFn: (r) => L(flatRef(r), 'name'),
+        header: t('common.student'),
+        cell: ({ row }) => {
+          const n = flatRef(row.original);
+          return (
+            <span className="flex min-w-[12rem] items-center gap-2.5">
+              <Avatar name={n.name_en} src={row.original.avatarUrl} size="sm" />
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{L(n, 'name')}</span>
+                <span className="block text-xs text-muted num" dir="ltr">
+                  {row.original.mobile}
+                </span>
+              </span>
+            </span>
+          );
+        },
+      },
+      {
+        id: 'school',
+        accessorFn: (r) => (r.school ? L(flatRef(r.school), 'name') : (r.schoolName ?? '—')),
+        header: t('common.school'),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <div className="min-w-[9rem]">
+              {r.school ? (
+                <Link to={`/schools/${r.school.id}`} onClick={(e) => e.stopPropagation()} className="text-ink/80 hover:text-accent hover:underline">
+                  {L(flatRef(r.school), 'name')}
+                </Link>
+              ) : (
+                <span className="text-muted">{r.schoolName ?? '—'}</span>
+              )}
+              <div className="text-[11px] text-muted">{t(`marketers.detail.sources.${r.source}`, { defaultValue: r.source })}</div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'package',
+        accessorFn: (r) => (r.package ? L(flatRef(r.package), 'name') : '—'),
+        header: t('common.package'),
+        enableSorting: false,
+        cell: ({ getValue }) => <span className="whitespace-nowrap text-muted">{getValue<string>()}</span>,
+      },
+      { id: 'subscriptionStatus', accessorKey: 'subscriptionStatus', header: t('marketers.detail.subscription'), enableSorting: false, cell: ({ getValue }) => <StatusBadge status={getValue<string>()} /> },
+      {
+        id: 'lastActive',
+        accessorKey: 'lastActive',
+        header: t('marketers.detail.lastActive'),
+        cell: ({ row }) => <span className="whitespace-nowrap text-xs text-muted">{row.original.lastActive ? fmtRelative(row.original.lastActive) : '—'}</span>,
+      },
+      { id: 'createdAt', accessorKey: 'createdAt', header: t('common.created'), cell: ({ getValue }) => <span className="whitespace-nowrap text-muted">{fmtDate(getValue<string>())}</span> },
+    ],
+    [t, L],
+  );
 
   const unassignM = useApiMutation((schoolId: string) => marketersApi.unassignSchool(id!, schoolId), {
     invalidate: [...partnerKeys],
@@ -218,6 +291,25 @@ export default function MarketerDetail() {
           </Card>
 
           <Card className="overflow-hidden">
+            <CardHeader icon={<UserRound className="h-4 w-4" />} title={t('marketers.detail.attributed')} subtitle={t('marketers.detail.attributedSub', { count: students.meta.total })} />
+            <DataTable
+              bare
+              data={students.items}
+              columns={studentCols}
+              loading={students.isLoading}
+              error={students.error}
+              onRetry={() => students.refetch()}
+              server={students.server}
+              getRowId={(r) => r.id}
+              searchPlaceholder={t('marketers.detail.studentsSearch')}
+              onRowClick={can('users', 'view') ? (r) => navigate(`/users/${r.id}`) : undefined}
+              emptyTitle={t('marketers.detail.attributedEmpty')}
+              emptyHint={t('marketers.detail.attributedEmptyHint')}
+              maxHeight="480px"
+            />
+          </Card>
+
+          <Card className="overflow-hidden">
             <CardHeader title={t('marketers.detail.settlements')} />
             <SettlementsTable partnerType="marketer" partnerId={marketer.id} compact />
           </Card>
@@ -248,6 +340,55 @@ export default function MarketerDetail() {
               </div>
             </CardBody>
           </Card>
+
+          {/* Incentive progress under the marketer rule (ADM-MKT-13) */}
+          {progressQ.isLoading ? (
+            <SkeletonCard lines={4} />
+          ) : progressQ.error ? (
+            <QueryError compact error={progressQ.error} onRetry={() => progressQ.refetch()} />
+          ) : (
+            <Card>
+              <CardHeader
+                icon={<Target className="h-4 w-4" />}
+                title={t('marketers.detail.incentive')}
+                subtitle={progressQ.data ? `${t('marketers.detail.incentiveSub')} · ${progressQ.data.period.key}` : t('marketers.detail.incentiveSub')}
+              />
+              <CardBody className="space-y-4">
+                {(() => {
+                  const prog = progressQ.data;
+                  const res = prog?.result ?? null;
+                  const nextTier = res?.nextTier ?? null;
+                  if (!prog?.rule) return <p className="text-sm text-muted">{t('marketers.detail.noRule')}</p>;
+                  return (
+                    <>
+                      <div className="flex items-end justify-between gap-3">
+                        <div>
+                          <div className="kpi-num text-3xl text-primary">{fmtNumber(prog.paid)}</div>
+                          <div className="text-xs text-muted">{t('marketers.detail.periodPaid')}</div>
+                        </div>
+                        <div className="text-end">
+                          <div className="text-xs text-muted">{t('marketers.detail.estimated')}</div>
+                          <div className="kpi-num text-xl text-accent">{fmtMoney(res?.amount ?? 0)}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {res?.tier && <Badge tone="accent">{res.tier.label}</Badge>}
+                        <ProgressBar value={prog.progressPct} size="md" className="flex-1" label={t('marketers.detail.incentive')} />
+                        {nextTier && <Badge tone="neutral">{nextTier.label}</Badge>}
+                      </div>
+                      <p className="text-xs text-muted">
+                        {!res?.qualified && res?.breakdown === 'not_qualified'
+                          ? t('marketers.detail.notQualified', { count: prog.rule.qualificationThreshold })
+                          : nextTier
+                            ? t('marketers.detail.nextTier', { count: res?.studentsToNext ?? Math.max(0, nextTier.from - prog.paid), tier: nextTier.label })
+                            : t('marketers.detail.topTier')}
+                      </p>
+                    </>
+                  );
+                })()}
+              </CardBody>
+            </Card>
+          )}
 
           <Card>
             <CardHeader icon={<Award className="h-4 w-4" />} title={t('marketers.detail.milestones')} />

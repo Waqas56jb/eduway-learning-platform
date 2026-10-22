@@ -206,7 +206,13 @@ export function refreshAccessToken(): Promise<string | null> {
       tokenStore.set(r.data.data, current.remember);
       return r.data.data.accessToken;
     })
-    .catch(() => null)
+    .catch((e: unknown) => {
+      // Only a rejected refresh token ends the session. A transient failure (429 rate limit, offline, 5xx)
+      // must keep the tokens — it used to sign the admin out and wipe a perfectly valid session.
+      const s = axios.isAxiosError(e) ? e.response?.status : undefined;
+      if (s === 400 || s === 401 || s === 403) return null;
+      throw e;
+    })
     .finally(() => {
       refreshing = null;
     });
@@ -225,7 +231,12 @@ http.interceptors.response.use(
     const canRefresh = config && !config._retried && !NO_REFRESH.some((p) => url.includes(p)) && !!tokenStore.get()?.refreshToken;
     if (status === 401 && canRefresh && (code === 'TOKEN_EXPIRED' || code === 'UNAUTHORIZED' || !code)) {
       config._retried = true;
-      const token = await refreshAccessToken();
+      let token: string | null;
+      try {
+        token = await refreshAccessToken();
+      } catch (refreshError) {
+        throw await normalize(refreshError);
+      }
       if (token) {
         const headers = AxiosHeaders.from(config.headers);
         headers.set('Authorization', `Bearer ${token}`);

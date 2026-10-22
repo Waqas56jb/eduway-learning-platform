@@ -7,6 +7,7 @@ import {
   CreditCard,
   FileQuestion,
   LayoutDashboard,
+  LifeBuoy,
   Megaphone,
   Package,
   School,
@@ -45,7 +46,10 @@ export const NAV: NavGroup[] = [
   },
   {
     key: 'people',
-    items: [{ key: 'users', icon: Users, module: 'users', path: '/users' }],
+    items: [
+      { key: 'users', icon: Users, module: 'users', path: '/users' },
+      { key: 'supportTickets', icon: LifeBuoy, module: 'users', path: '/support' },
+    ],
   },
   {
     key: 'learning',
@@ -59,6 +63,7 @@ export const NAV: NavGroup[] = [
           { key: 'units', path: '/content/units' },
           { key: 'lessons', path: '/content/lessons' },
           { key: 'videos', path: '/content/videos' },
+          { key: 'teachers', path: '/content/teachers' },
           { key: 'workflow', path: '/content/workflow' },
         ],
       },
@@ -80,6 +85,7 @@ export const NAV: NavGroup[] = [
           { key: 'quizRules', path: '/assessments/quiz-rules' },
           { key: 'blueprints', path: '/assessments/blueprints' },
           { key: 'attempts', path: '/assessments/attempts' },
+          { key: 'effectiveRule', path: '/assessments/effective-rule' },
         ],
       },
     ],
@@ -154,6 +160,7 @@ export const NAV: NavGroup[] = [
         children: [
           { key: 'business', path: '/analytics/business' },
           { key: 'learningAnalytics', path: '/analytics/learning' },
+          { key: 'dailyMetrics', path: '/analytics/daily' },
           { key: 'exports', path: '/analytics/exports' },
         ],
       },

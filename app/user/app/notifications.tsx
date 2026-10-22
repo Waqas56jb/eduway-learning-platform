@@ -160,6 +160,14 @@ export default function NotificationsScreen() {
               <SkeletonCard key={i} lines={2} />
             ))}
           </View>
+        ) : list.isError && !list.data ? (
+          <EmptyState
+            icon="wifi-off"
+            title={t('common:states.error')}
+            message={list.error.isNetwork ? t('common:states.offline') : list.error.message}
+            actionLabel={t('common:actions.retry')}
+            onAction={() => void list.refetch()}
+          />
         ) : sections.length === 0 ? (
           <Animated.View key={`empty-${filter}`} entering={FadeIn.duration(250)} style={styles.empty}>
             <EmptyState

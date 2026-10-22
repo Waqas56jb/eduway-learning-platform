@@ -22,7 +22,7 @@ import type { StudentPrincipal } from '../../common/types/index.js';
 import { paged } from '../../common/utils/response.js';
 import { costUsd, denialFor, periodFor } from './allowance.js';
 import { toSummary, toTutorMessage, type TutorMessage } from './dto.js';
-import { providerFor, type AiChatMessage, type RetrievedChunk } from './providers/index.js';
+import { providerFor, resolveModel, type AiChatMessage, type RetrievedChunk } from './providers/index.js';
 import { aiRepo, type ConversationRow, type MessageRow } from './repository.js';
 import { retrieveContext } from './retrieval.js';
 import { classifyMessage, excerpt, findBlockedKeyword } from './safety.js';
@@ -284,7 +284,7 @@ export const aiTutorService = {
         const provider = providerFor(settings.provider);
         const result = await provider.stream(
           {
-            model: settings.model,
+            model: resolveModel(provider.name, settings.model),
             system: systemPrompt(settings.safety_rules, lang, conv.subject_name_en ? { en: conv.subject_name_en, ar: conv.subject_name_ar ?? '' } : null),
             messages,
             temperature: Number(settings.temperature),

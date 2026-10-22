@@ -6,7 +6,7 @@ import { Icon } from '@/components/icons';
 import { Header, Screen } from '@/components/layout';
 import { SESSION_TEXT_INSET, SessionRow, SettingsGroup, SettingsRow } from '@/components/settings';
 import { useRevokeOtherSessions, useRevokeSession, useSessions, toSession } from '@/api';
-import { Dialog, SkeletonCard, Text, toast } from '@/components/ui';
+import { Dialog, EmptyState, SkeletonCard, Text, toast } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import type { Session } from '@/types';
 import { gradients, palette, radius, SCREEN_PADDING, space, useTheme } from '@/theme';
@@ -19,7 +19,8 @@ export default function SessionsScreen() {
   const { t, lang } = useI18n('settings');
   const { colors } = useTheme();
   // ME-03 list, ME-04 revoke one (optimistic), ME-05 revoke all others.
-  const { data: sessions, isLoading } = useSessions();
+  const sessionsQuery = useSessions();
+  const { data: sessions, isLoading } = sessionsQuery;
   const revokeOne = useRevokeSession();
   const revokeOthers = useRevokeOtherSessions();
   const [target, setTarget] = useState<Target>(null);
@@ -82,6 +83,14 @@ export default function SessionsScreen() {
             <SkeletonCard lines={2} />
             <SkeletonCard lines={2} />
           </View>
+        ) : sessionsQuery.isError && !sessions ? (
+          <EmptyState
+            icon="wifi-off"
+            title={t('common:states.error')}
+            message={sessionsQuery.error.isNetwork ? t('common:states.offline') : sessionsQuery.error.message}
+            actionLabel={t('common:actions.retry')}
+            onAction={() => void sessionsQuery.refetch()}
+          />
         ) : others.length > 0 ? (
           <>
             <SettingsGroup

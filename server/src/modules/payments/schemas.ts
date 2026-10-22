@@ -25,7 +25,11 @@ export const initiateBody = z.object({
 export const mockConfirmBody = z.object({ outcome: z.enum(['success', 'failure', 'cancel']) });
 export const paymentIdParam = z.object({ paymentId: z.string().uuid() });
 export const providerParam = z.object({ provider: z.string().min(2).max(30) });
-export const receiptQuery = z.object({ format: z.enum(['json', 'pdf']).default('json') });
+export const receiptQuery = z.object({
+  format: z.enum(['json', 'pdf']).default('json'),
+  /** PDF language. Default: the request's Accept-Language, else the payer's account language. */
+  lang: z.enum(['en', 'ar']).optional(),
+});
 export const myPaymentsQuery = paginationQuery;
 
 const csv = z.union([z.string(), z.array(z.string())]).transform((v) => (Array.isArray(v) ? v.join(',') : v));

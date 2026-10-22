@@ -37,10 +37,13 @@ export function LessonQuiz({ lesson, open, onClose, onNextLesson, onReviewMistak
   const { l } = useLang();
   const [round, setRound] = useState(0);
 
-  // Fresh questions every time the quiz is opened.
-  useEffect(() => {
+  // Fresh questions every time the quiz is opened. Bumped during render (not in an effect): an effect let
+  // QuizRun mount with the stale key first, so every opening sent QUZ-01 twice and burned an extra attempt.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setRound((r) => r + 1);
-  }, [open]);
+  }
 
   return (
     <Modal open={open} onClose={onClose} size="xl" title={t('learn.quiz.title')} description={l(lesson.title)}>

@@ -52,7 +52,29 @@
     "notFound": "Marketer not found",
     "back": "Back to marketers",
     "students": "students",
-    "noMilestoneSet": "No active milestone set yet."
+    "noMilestoneSet": "No active milestone set yet.",
+    "attributed": "Attributed students",
+    "attributedSub": "{{count}} students via the marketer's referral code and assigned schools",
+    "studentsSearch": "Search name or mobile…",
+    "attributedEmpty": "No attributed students yet",
+    "attributedEmptyHint": "Students appear here when they register with this marketer's code or at an assigned school.",
+    "subscription": "Subscription",
+    "lastActive": "Last active",
+    "sources": {
+      "organic": "Organic",
+      "school": "Via school",
+      "marketer": "Marketer code",
+      "referral": "Referral",
+      "campaign": "Campaign"
+    },
+    "incentive": "Incentive progress",
+    "incentiveSub": "Current period",
+    "noRule": "No active marketer incentive rule.",
+    "periodPaid": "Paid students this period",
+    "estimated": "Estimated reward",
+    "notQualified": "Below the qualification threshold of {{count}} paid students.",
+    "nextTier": "{{count}} more paid students to reach {{tier}}.",
+    "topTier": "Top tier reached for this period."
   },
   "milestones": {
     "title": "Milestone Rewards",

@@ -112,7 +112,8 @@ export default function BlueprintEditor() {
   /** Available vs required questions per difficulty for each row (ADM-EBP-10, usable pool = approved + published). */
   const rowsKey = useDebounce(JSON.stringify(bp.rows.map(({ subjectId, topicId, count, easy, medium, hard }) => ({ subjectId, topicId, count, easy, medium, hard }))), 400);
   const availQ = useApiQuery(qk.blueprints.sub('availability', rowsKey), () => blueprintsApi.availability(JSON.parse(rowsKey)), {
-    enabled: bp.rows.every((r) => !!r.subjectId),
+    // Gate on the debounced rows actually sent (the live rows can be ahead of them while lookups / the blueprint load).
+    enabled: (JSON.parse(rowsKey) as { subjectId: string }[]).every((r) => !!r.subjectId) && bp.rows.every((r) => !!r.subjectId),
     placeholderData: (prev) => prev,
     meta: { silentError: true },
   });

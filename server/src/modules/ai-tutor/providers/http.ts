@@ -1,10 +1,9 @@
 /**
- * Real AI providers over HTTP (streaming). Selected by `ai_settings.provider` when the matching API key is set:
- *   - OpenAiCompatibleProvider: OpenAI `/chat/completions` (also Azure OpenAI deployments / any compatible gateway)
- *   - AnthropicProvider: Anthropic Messages API (`/v1/messages`, `stream: true`)
- * Both parse the upstream SSE stream and forward text deltas.
+ * OpenAI-compatible provider over HTTP (streaming): OpenAI `/chat/completions` (also Azure OpenAI deployments /
+ * any compatible gateway). Parses the upstream SSE stream and forwards text deltas; usage comes from the final
+ * `stream_options.include_usage` chunk. (Anthropic uses the official SDK — see anthropic.ts.)
  */
-import axios, { type AxiosError } from 'axios';
+import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import type { Readable } from 'node:stream';
 import { estimateTokens } from '../allowance.js';
 import { parseSse } from '../sse.js';
@@ -54,6 +53,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly azure = false,
+    private readonly http: AxiosInstance = axios,
   ) {}
 
   private headers(): Record<string, string> {
@@ -83,7 +83,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     let tokensOut = 0;
     let model = req.model;
     try {
-      const res = await axios.post<Readable>(
+      const res = await this.http.post<Readable>(
         this.url('/chat/completions'),
         { model: req.model, messages: this.toMessages(req), temperature: req.temperature, max_tokens: req.maxTokens, stream: true, stream_options: { include_usage: true } },
         { headers: { ...this.headers(), 'Content-Type': 'application/json' }, responseType: 'stream', timeout: TIMEOUT_MS, signal: req.signal },
@@ -110,69 +110,11 @@ export class OpenAiCompatibleProvider implements AiProvider {
   }
 
   async embed(texts: string[], model: string): Promise<number[][]> {
-    const res = await axios.post<{ data: { embedding: number[]; index: number }[] }>(
+    const res = await this.http.post<{ data: { embedding: number[]; index: number }[] }>(
       this.url('/embeddings'),
       { model, input: texts },
       { headers: { ...this.headers(), 'Content-Type': 'application/json' }, timeout: 60_000 },
     );
     return [...res.data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
-  }
-}
-
-export class AnthropicProvider implements AiProvider {
-  readonly name = 'anthropic';
-
-  constructor(
-    private readonly baseUrl: string,
-    private readonly apiKey: string,
-  ) {}
-
-  async stream(req: AiGenerateRequest, onDelta: (text: string) => void): Promise<AiGenerateResult> {
-    const ctx = contextBlock(req.context, req.lang);
-    const messages = req.messages.map((m) =>
-      m.imageUrl
-        ? { role: m.role, content: [{ type: 'image', source: { type: 'url', url: m.imageUrl } }, { type: 'text', text: m.content || ' ' }] }
-        : { role: m.role, content: m.content },
-    );
-    let text = '';
-    let tokensIn = 0;
-    let tokensOut = 0;
-    let model = req.model;
-    try {
-      const res = await axios.post<Readable>(
-        `${this.baseUrl}/v1/messages`,
-        { model: req.model, system: ctx ? `${req.system}\n\n${ctx}` : req.system, messages, max_tokens: req.maxTokens, temperature: req.temperature, stream: true },
-        {
-          headers: { 'x-api-key': this.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          responseType: 'stream',
-          timeout: TIMEOUT_MS,
-          signal: req.signal,
-        },
-      );
-      await consumeSse(res.data, (event, data) => {
-        const json = JSON.parse(data) as {
-          message?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number } };
-          delta?: { type?: string; text?: string };
-          usage?: { output_tokens?: number };
-          error?: { message?: string };
-        };
-        if (event === 'message_start') {
-          model = json.message?.model ?? model;
-          tokensIn = json.message?.usage?.input_tokens ?? 0;
-        } else if (event === 'content_block_delta' && json.delta?.type === 'text_delta' && json.delta.text) {
-          text += json.delta.text;
-          onDelta(json.delta.text);
-        } else if (event === 'message_delta') {
-          tokensOut = json.usage?.output_tokens ?? tokensOut;
-        } else if (event === 'error') {
-          throw new AiProviderError(json.error?.message ?? 'Anthropic stream error');
-        }
-      });
-    } catch (err) {
-      if (err instanceof AiProviderError) throw err;
-      if (err instanceof SyntaxError) throw new AiProviderError('AI provider returned malformed stream');
-      throw await upstreamError(err);
-    }
-    return { text, tokensIn, tokensOut: tokensOut || estimateTokens(text), model, provider: this.name };
   }
 }

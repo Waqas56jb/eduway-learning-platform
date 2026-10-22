@@ -1,13 +1,13 @@
 /**
- * Delivery channel providers. Push: Expo push API (axios) or a mock in development. SMS/WhatsApp: the shared
+ * Delivery channel providers. Push: Expo (expo-server-sdk) or a mock in development. SMS/WhatsApp: the shared
  * `SmsProvider` abstraction (MockSmsProvider in dev). Email: nodemailer (`mailer`, logs in dev). In-app needs no
  * provider (the inbox row is the delivery).
  */
-import axios from 'axios';
-import { env, isProd } from '../../config/env.js';
+import { Expo, type ExpoPushMessage, type ExpoPushReceipt, type ExpoPushTicket } from 'expo-server-sdk';
+import { env, type Env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
-import { mailer } from '../../common/providers/mail.js';
-import { smsProvider } from '../../common/providers/sms.js';
+import { emailProviderName, mailer } from '../../common/providers/mail.js';
+import { SmsSendError, smsProvider } from '../../common/providers/sms.js';
 
 export interface PushMessage {
   to: string;
@@ -30,32 +30,52 @@ export interface PushProvider {
   receipts?(ids: string[]): Promise<Record<string, { ok: boolean; error?: string; invalidToken?: boolean }>>;
 }
 
-const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
-const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
+/** The part of the Expo SDK client we use (injectable for tests). */
+export interface ExpoClientLike {
+  chunkPushNotifications(messages: ExpoPushMessage[]): ExpoPushMessage[][];
+  chunkPushNotificationReceiptIds(ids: string[]): string[][];
+  sendPushNotificationsAsync(messages: ExpoPushMessage[]): Promise<ExpoPushTicket[]>;
+  getPushNotificationReceiptsAsync(ids: string[]): Promise<Record<string, ExpoPushReceipt>>;
+}
 
+const isDeviceNotRegistered = (r: { status: string; details?: { error?: string } }) => r.status === 'error' && r.details?.error === 'DeviceNotRegistered';
+
+/**
+ * Real Expo push via expo-server-sdk: messages are chunked (100 per request), tickets mapped back to their
+ * message, invalid tokens (`DeviceNotRegistered` / malformed tokens) are flagged so the dispatcher revokes them,
+ * and receipts are fetched in chunks of 300 by the `eduway.expo-push-receipts` job.
+ */
 export class ExpoPushProvider implements PushProvider {
   readonly name = 'expo';
+  private readonly client: ExpoClientLike;
 
-  private headers() {
-    return { 'Content-Type': 'application/json', Accept: 'application/json', ...(env.EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${env.EXPO_ACCESS_TOKEN}` } : {}) };
+  constructor(client?: ExpoClientLike, accessToken = env.EXPO_ACCESS_TOKEN) {
+    this.client = client ?? new Expo(accessToken ? { accessToken } : {});
   }
 
   async send(messages: PushMessage[]): Promise<PushTicket[]> {
-    const out: PushTicket[] = [];
-    for (let i = 0; i < messages.length; i += 100) {
-      const chunk = messages.slice(i, i + 100);
+    const out: PushTicket[] = new Array<PushTicket>(messages.length);
+    const valid: { idx: number; msg: ExpoPushMessage }[] = [];
+    messages.forEach((m, idx) => {
+      if (!Expo.isExpoPushToken(m.to)) out[idx] = { ok: false, error: 'DeviceNotRegistered', invalidToken: true };
+      else valid.push({ idx, msg: { to: m.to, title: m.title, body: m.body, data: m.data ?? {}, sound: 'default', priority: 'high', channelId: 'default' } });
+    });
+    // Chunk ourselves over the index list so each ticket maps back to its source message.
+    const chunks = this.client.chunkPushNotifications(valid.map((v) => v.msg));
+    let cursor = 0;
+    for (const chunk of chunks) {
+      const slice = valid.slice(cursor, cursor + chunk.length);
+      cursor += chunk.length;
       try {
-        const res = await axios.post<{ data: { status: 'ok' | 'error'; id?: string; message?: string; details?: { error?: string } }[] }>(
-          EXPO_PUSH_URL,
-          chunk.map((m) => ({ to: m.to, title: m.title, body: m.body, data: m.data ?? {}, sound: 'default', priority: 'high', channelId: 'default' })),
-          { headers: this.headers(), timeout: 15_000 },
-        );
-        for (const t of res.data.data) {
-          out.push(t.status === 'ok' ? { ok: true, id: t.id } : { ok: false, error: t.details?.error ?? t.message ?? 'error', invalidToken: t.details?.error === 'DeviceNotRegistered' });
-        }
+        const tickets = await this.client.sendPushNotificationsAsync(chunk);
+        slice.forEach((v, k) => {
+          const t = tickets[k];
+          if (!t) out[v.idx] = { ok: false, error: 'no ticket' };
+          else if (t.status === 'ok') out[v.idx] = { ok: true, id: t.id };
+          else out[v.idx] = { ok: false, error: t.details?.error ?? t.message ?? 'error', invalidToken: isDeviceNotRegistered(t) };
+        });
       } catch (err) {
-        const msg = (err as Error).message;
-        for (let k = 0; k < chunk.length; k++) out.push({ ok: false, error: `expo: ${msg}` });
+        for (const v of slice) out[v.idx] = { ok: false, error: `expo: ${(err as Error).message}` };
       }
     }
     return out;
@@ -63,14 +83,15 @@ export class ExpoPushProvider implements PushProvider {
 
   async receipts(ids: string[]) {
     const out: Record<string, { ok: boolean; error?: string; invalidToken?: boolean }> = {};
-    for (let i = 0; i < ids.length; i += 300) {
-      const res = await axios.post<{ data: Record<string, { status: 'ok' | 'error'; message?: string; details?: { error?: string } }> }>(
-        EXPO_RECEIPTS_URL,
-        { ids: ids.slice(i, i + 300) },
-        { headers: this.headers(), timeout: 15_000 },
-      );
-      for (const [id, r] of Object.entries(res.data.data ?? {})) {
-        out[id] = r.status === 'ok' ? { ok: true } : { ok: false, error: r.details?.error ?? r.message ?? 'error', invalidToken: r.details?.error === 'DeviceNotRegistered' };
+    for (const chunk of this.client.chunkPushNotificationReceiptIds(ids)) {
+      try {
+        const res = await this.client.getPushNotificationReceiptsAsync(chunk);
+        for (const [id, r] of Object.entries(res)) {
+          out[id] = r.status === 'ok' ? { ok: true } : { ok: false, error: r.details?.error ?? r.message ?? 'error', invalidToken: isDeviceNotRegistered(r) };
+        }
+      } catch (err) {
+        // Receipts not fetched stay `sent`; the next run (within a day) retries them.
+        logger.warn({ err: (err as Error).message, count: chunk.length }, 'expo receipts fetch failed');
       }
     }
     return out;
@@ -99,27 +120,43 @@ export class MockPushProvider implements PushProvider {
 }
 
 const mockPush = new MockPushProvider();
+
+/** Pure push selection: `auto` = Expo in production, mock elsewhere; NODE_ENV=test is always mock. */
+export function selectPushProvider(e: Pick<Env, 'PUSH_PROVIDER' | 'NODE_ENV'>): 'expo' | 'mock' {
+  const mode = e.PUSH_PROVIDER === 'auto' ? (e.NODE_ENV === 'production' ? 'expo' : 'mock') : e.PUSH_PROVIDER;
+  return mode === 'expo' && e.NODE_ENV !== 'test' ? 'expo' : 'mock';
+}
+
+let expoPush: ExpoPushProvider | null = null;
 export function pushProvider(): PushProvider {
-  const mode = env.PUSH_PROVIDER === 'auto' ? (isProd ? 'expo' : 'mock') : env.PUSH_PROVIDER;
-  return mode === 'expo' && env.NODE_ENV !== 'test' ? new ExpoPushProvider() : mockPush;
+  return selectPushProvider(env) === 'expo' ? (expoPush ??= new ExpoPushProvider()) : mockPush;
 }
 
 export async function sendSms(to: string, text: string, channel: 'sms' | 'whatsapp'): Promise<{ provider: string; id: string }> {
   const p = smsProvider();
-  const r = await p.send({ to, text, channel });
-  return { provider: channel === 'whatsapp' ? `${p.name}-whatsapp` : p.name, id: r.providerMessageId };
+  try {
+    const r = await p.send({ to, text, channel });
+    return { provider: smsChannelName(channel), id: r.providerMessageId };
+  } catch (err) {
+    // Non-retryable provider errors (invalid number, template rejected) fail the delivery without retries.
+    throw Object.assign(err as Error, { permanent: err instanceof SmsSendError ? err.permanent : false });
+  }
 }
 
-export async function sendEmail(to: string, subject: string, text: string): Promise<{ provider: string }> {
-  await mailer.send({ to, subject, text });
-  return { provider: env.SMTP_URL ? 'smtp' : 'mock-email' };
+function smsChannelName(channel: 'sms' | 'whatsapp'): string {
+  const name = smsProvider().nameFor(channel);
+  return channel === 'whatsapp' && !name.startsWith('whatsapp') ? `${name}-whatsapp` : name;
+}
+
+export async function sendEmail(to: string, subject: string, text: string): Promise<{ provider: string; id?: string | null }> {
+  const r = await mailer.sendOrThrow({ to, subject, text });
+  return { provider: emailProviderName(), id: r.messageId };
 }
 
 /** Provider name per channel (delivery rows, provider health cards). */
 export function providerNameFor(channel: string): string {
   if (channel === 'push') return pushProvider().name;
   if (channel === 'in_app') return 'in-app';
-  if (channel === 'email') return env.SMTP_URL ? 'smtp' : 'mock-email';
-  const sms = smsProvider().name;
-  return channel === 'whatsapp' ? `${sms}-whatsapp` : sms;
+  if (channel === 'email') return emailProviderName();
+  return smsChannelName(channel === 'whatsapp' ? 'whatsapp' : 'sms');
 }

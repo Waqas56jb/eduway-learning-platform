@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { Screen } from '@/components/layout';
-import { Button, Chip, IconButton, Input, PressableScale, SectionHeader, Text } from '@/components/ui';
+import { Button, Chip, EmptyState, IconButton, Input, PressableScale, SectionHeader, Skeleton, Text } from '@/components/ui';
 import { EntryCard, FiltersSheet, QuickStartCard, RecentAttemptRow } from '@/components/practice';
 import { useBankFacets, useBookmarkIds, usePracticeSessions } from '@/api/bank';
 import { useMistakeSummary } from '@/api/mistakes';
@@ -322,7 +322,22 @@ export default function PracticeTab() {
       {/* Quick start grid */}
       <View style={styles.section}>
         <SectionHeader title={t('quickStart.title')} subtitle={t('quickStart.subtitle')} />
+        {allFacets.isError && !allFacets.data ? (
+          <EmptyState
+            icon="wifi-off"
+            title={t('common:states.error')}
+            message={allFacets.error.isNetwork ? t('common:states.offline') : allFacets.error.message}
+            actionLabel={t('common:actions.retry')}
+            onAction={() => {
+              void allFacets.refetch();
+              void facets.refetch();
+            }}
+          />
+        ) : null}
         <View style={styles.grid}>
+          {allFacets.isLoading
+            ? [0, 1, 2, 3].map((i) => <Skeleton key={i} width={colWidth} height={150} radius={radius.lg} />)
+            : null}
           {subjectStats.map((s, i) => {
             const wide = remainder === 1 && i === subjectStats.length - 1;
             return (

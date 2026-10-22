@@ -17,6 +17,7 @@ import {
   ticketListQuery,
   ticketParam,
   ticketPatchBody,
+  ticketReplyBody,
   txQuery,
   unlockBody,
   updateStudentBody,
@@ -49,5 +50,10 @@ defineRoute(router, { method: 'get', path: '/admin/students/:id/activity', tags,
 defineRoute(router, { method: 'get', path: '/admin/students/:id/transactions', tags, summary: 'Student transactions (ADM-STU-20)', auth: A, permission: 'users.view', params: idParam, query: txQuery }, ({ params, query }) => c.transactions(params.id, query));
 
 // ── support tickets (ADM-SUP-*) ──
-defineRoute(router, { method: 'get', path: '/admin/support-tickets', tags: ['Admin · Support'], summary: 'Support tickets (ADM-SUP-01)', auth: A, permission: 'users.view', query: ticketListQuery }, ({ query }) => c.tickets(query));
-defineRoute(router, { method: 'patch', path: '/admin/support-tickets/:id', tags: ['Admin · Support'], summary: 'Update ticket (ADM-SUP-02)', auth: A, permission: 'users.edit', params: ticketParam, body: ticketPatchBody }, ({ req, params, body }) => c.updateTicket(req, params.id, body));
+const SUP = ['Admin · Support'];
+defineRoute(router, { method: 'get', path: '/admin/support-tickets', tags: SUP, summary: 'Support tickets (ADM-SUP-01) — meta.counts by status', auth: A, permission: 'users.view', query: ticketListQuery }, ({ query }) => c.tickets(query));
+defineRoute(router, { method: 'post', path: '/admin/support-tickets/export', tags: SUP, summary: 'Export support tickets (ADM-SUP-06)', auth: A, permission: 'users.export', body: exportRequest, raw: true, rawContentType: 'text/csv' }, ({ req, res, body }) => c.exportTickets(req, res, body));
+defineRoute(router, { method: 'get', path: '/admin/support-tickets/:id', tags: SUP, summary: 'Ticket detail + thread (ADM-SUP-03)', auth: A, permission: 'users.view', params: ticketParam }, ({ params }) => c.ticket(params.id));
+defineRoute(router, { method: 'patch', path: '/admin/support-tickets/:id', tags: SUP, summary: 'Update ticket: status / priority / assignee (ADM-SUP-02)', auth: A, permission: 'users.edit', params: ticketParam, body: ticketPatchBody }, ({ req, params, body }) => c.updateTicket(req, params.id, body));
+defineRoute(router, { method: 'post', path: '/admin/support-tickets/:id/replies', tags: SUP, summary: 'Reply to a ticket (ADM-SUP-04)', auth: A, permission: 'users.edit', params: ticketParam, body: ticketReplyBody, status: 201 }, ({ req, admin, params, body }) => c.replyTicket(req, admin, params.id, body));
+defineRoute(router, { method: 'delete', path: '/admin/support-tickets/:id', tags: SUP, summary: 'Delete ticket (ADM-SUP-05)', auth: A, permission: 'users.delete', params: ticketParam, response: okDto }, ({ req, params }) => c.removeTicket(req, params.id));

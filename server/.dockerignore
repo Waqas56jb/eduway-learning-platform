@@ -1,0 +1,19 @@
+# Keep secrets, local builds and dev artefacts out of the Docker build context.
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+*.log
+tests
+docs
+eslint-rules
+eslint.config.js
+vitest.config.ts
+Dockerfile
+.dockerignore
+fly.toml
+railway.json
+README.md
+.git

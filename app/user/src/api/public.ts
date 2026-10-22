@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { get } from './client';
+import { get, post } from './client';
 import { qk } from './keys';
 import type {
   AppConfigDto,
@@ -83,3 +83,8 @@ export const fetchLegalDoc = (doc: LegalDoc, version?: string) =>
   get<LegalDocumentDto>(`/legal/${doc}`, version ? { version } : undefined, { skipAuth: true });
 export const useLegalDoc = (doc: LegalDoc, version?: string) =>
   useQuery({ queryKey: qk.public.legal(doc, version), queryFn: () => fetchLegalDoc(doc, version), staleTime: HOUR });
+
+// PUB-10 — in-app "message support" (creates a support ticket `EW-T-NNNNN`; rate limited 5/hour/IP).
+export type ContactSubject = 'general' | 'support' | 'billing' | 'partnerships' | 'schools';
+export const submitSupportMessage = (body: { name: string; contact: string; subject: ContactSubject; message: string; locale?: 'en' | 'ar' }) =>
+  post<{ ticketId: string; createdAt: string }>('/public/contact', body);

@@ -99,6 +99,24 @@ export interface SupportTicketDto {
   status: 'open' | 'pending' | 'resolved';
   assignee: AdminRef | null;
   source: 'contact_form' | 'app' | 'admin';
+  /** Language the ticket was written in (contact-form `locale`). */
+  locale: 'en' | 'ar';
+  /** Number of admin replies in the thread. */
+  replies: number;
+  resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SupportTicketMessageDto {
+  id: string;
+  authorKind: 'student' | 'admin' | 'system';
+  /** Admin author (null for student/system messages). */
+  author: AdminRef | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface SupportTicketDetailDto extends SupportTicketDto {
+  messages: SupportTicketMessageDto[];
 }

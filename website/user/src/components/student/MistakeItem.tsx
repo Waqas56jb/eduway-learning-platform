@@ -144,7 +144,8 @@ export function MistakeItem({
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="space-y-5 border-t border-primary/5 px-4 pb-5 pt-4 sm:px-5">
-              {question.formula && (
+              {/* While retrying, the QuizCard below already renders the formula — don't show it twice. */}
+              {question.formula && !retrying && (
                 <div className="rounded-xl bg-cream px-4 py-2">
                   <Formula tex={question.formula} block className="!my-1" />
                 </div>

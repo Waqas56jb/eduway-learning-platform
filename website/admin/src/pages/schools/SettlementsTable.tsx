@@ -76,7 +76,11 @@ export function SettlementsTable({ partnerType, partnerId, compact }: Props) {
 
   const columns = useMemo<ColumnDef<SettlementVM>[]>(
     () => [
-      { id: 'period', accessorKey: 'period', header: t('schools.settlements.period'), cell: ({ row }) => <span className="font-medium">{fmtPeriod(row.original.period)}</span> },
+      { id: 'period', accessorKey: 'period', header: t('schools.settlements.period'), cell: ({ row }) => (
+          <Link to={`/${module}/settlements/${row.original.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-ink hover:text-accent hover:underline">
+            {fmtPeriod(row.original.period)}
+          </Link>
+        ) },
       ...(compact
         ? []
         : [
@@ -218,7 +222,7 @@ export function SettlementsTable({ partnerType, partnerId, compact }: Props) {
 }
 
 /** Mark one or several approved settlements as paid (ADM-SET-05 / ADM-SET-07) with an optional payment reference. */
-function MarkPaidModal({ items, onClose }: { items: SettlementVM[] | null; onClose: () => void }) {
+export function MarkPaidModal({ items, onClose }: { items: SettlementVM[] | null; onClose: () => void }) {
   const { t } = useTranslation();
   const [ref, setRef] = useState('');
   const [note, setNote] = useState('');

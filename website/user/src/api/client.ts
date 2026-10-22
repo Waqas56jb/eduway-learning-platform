@@ -275,11 +275,10 @@ http.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     let token = accessToken;
     // After a reload only the refresh token exists → obtain an access token first.
     if ((!token || Date.now() >= accessExpiresAt) && readRefresh()) {
-      try {
-        token = await refreshAccessToken();
-      } catch {
-        token = accessToken;
-      }
+      // A transient refresh failure (429 / offline / 5xx — the refresh token is kept) fails this request
+      // with that error. Sending it unauthenticated instead turned into a 401 on /auth/me, which signed the
+      // student out to /login although the session was still valid.
+      token = await refreshAccessToken();
     }
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }

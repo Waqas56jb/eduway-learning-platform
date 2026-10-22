@@ -10,7 +10,7 @@ import type { z } from '../../common/validation/zod.js';
 import { isUuid, ruleError, sqlSearch } from '../learning-core/index.js';
 import { contentRepo, type TeacherRow } from './repository.js';
 import type { subjectCreateBody, subjectPatchBody, teacherBody, teacherPatchBody } from './schemas.js';
-import type { AdminSubject, AdminTopic, AdminUnit, TeacherDto } from './types.js';
+import type { AdminSubject, AdminTeacherDto, AdminTopic, AdminUnit, TeacherDto } from './types.js';
 
 type SubjectCreate = z.infer<typeof subjectCreateBody>;
 type SubjectPatch = z.infer<typeof subjectPatchBody>;
@@ -127,6 +127,17 @@ export async function toTeacherDtos(rows: TeacherRow[]): Promise<TeacherDto[]> {
     rating: r.rating === null ? null : Number(r.rating),
     active: r.active,
   }));
+}
+
+/** Admin teacher rows also carry `lessonsCount` (non-deleted lessons referencing the teacher — delete is blocked while > 0). */
+async function withLessonCounts(list: TeacherDto[]): Promise<AdminTeacherDto[]> {
+  if (!list.length) return [];
+  const rows = await db.many<{ teacher_id: string; n: number }>(
+    `SELECT teacher_id, count(*)::int AS n FROM ${T.lessons} WHERE teacher_id = ANY($1::uuid[]) AND deleted_at IS NULL GROUP BY teacher_id`,
+    [list.map((x) => x.id)],
+  );
+  const by = new Map(rows.map((r) => [r.teacher_id, r.n]));
+  return list.map((x) => ({ ...x, lessonsCount: by.get(x.id) ?? 0 }));
 }
 
 const shortId = () => randomUUID().slice(0, 8);
@@ -317,12 +328,12 @@ export const structureService = {
   async teachers(f: { subjectId?: string; active?: boolean }) {
     const subjectId = f.subjectId ? (await contentRepo.subject(f.subjectId))?.id : undefined;
     if (f.subjectId && !subjectId) throw new NotFoundError('subject');
-    return toTeacherDtos(await contentRepo.teachers({ subjectId, active: f.active }));
+    return withLessonCounts(await toTeacherDtos(await contentRepo.teachers({ subjectId, active: f.active })));
   },
   async teacher(id: string) {
     const [row] = await contentRepo.teachers({ ids: [id] });
     if (!row) throw new NotFoundError('teacher');
-    return (await toTeacherDtos([row]))[0] as TeacherDto;
+    return (await withLessonCounts(await toTeacherDtos([row])))[0] as AdminTeacherDto;
   },
   async createTeacher(b: z.infer<typeof teacherBody>) {
     if (!(await contentRepo.subject(b.subjectId))) throw new NotFoundError('subject');

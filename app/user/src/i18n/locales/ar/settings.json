@@ -57,7 +57,18 @@
     "emailSub": "لطلبات الدفع والحساب",
     "phoneNumber": "+964 770 000 1234",
     "emailAddress": "support@eduway.iq",
-    "opening": "جارٍ فتح {{channel}}…"
+    "opening": "جارٍ فتح {{channel}}…",
+    "messageTitle": "أرسل لنا رسالة",
+    "messageSub": "سنردّ عليك برسالة نصية أو اتصال على رقمك المسجّل.",
+    "messagePlaceholder": "اكتب المشكلة أو سؤالك…",
+    "messageHint": "{{count}} حرفًا على الأقل",
+    "send": "إرسال الرسالة",
+    "sent": "تم إرسال رسالتك — رقم التذكرة {{id}}",
+    "topics": {
+      "support": "مساعدة تقنية",
+      "billing": "الدفع والاشتراك",
+      "general": "استفسار عام"
+    }
   },
   "about": {
     "version": "الإصدار {{version}}",

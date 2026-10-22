@@ -37,7 +37,7 @@ function RetryContent({ id }: { id: string }) {
   const { t, L, lang } = useI18n('mistakes');
   const insets = useSafeAreaInsets();
   // MST-03 (embedded question + history); MST-05 retry updates this cache entry.
-  const { data: entry, isPending } = useMistake(id || undefined);
+  const { data: entry, isPending, error, refetch } = useMistake(id || undefined);
   const retryMutation = useRetryMistake();
   const [feedback, setFeedback] = useState<{ correctIndex: number; correctOptionId: string | null; explanation: { en: string; ar: string } | null } | null>(null);
   const question = useMemo(() => {
@@ -123,13 +123,23 @@ function RetryContent({ id }: { id: string }) {
       <Screen padded={false} edges={['top', 'bottom']}>
         <Header title={t('retry.title')} />
         <View style={styles.notFound}>
-          <EmptyState
-            icon="alert"
-            title={t('retry.notFoundTitle')}
-            message={t('retry.notFoundMessage')}
-            actionLabel={t('retry.backToList')}
-            onAction={() => router.replace('/mistakes')}
-          />
+          {error && error.status !== 404 ? (
+            <EmptyState
+              icon="wifi-off"
+              title={t('common:states.error')}
+              message={error.isNetwork ? t('common:states.offline') : error.message}
+              actionLabel={t('common:actions.retry')}
+              onAction={() => void refetch()}
+            />
+          ) : (
+            <EmptyState
+              icon="alert"
+              title={t('retry.notFoundTitle')}
+              message={t('retry.notFoundMessage')}
+              actionLabel={t('retry.backToList')}
+              onAction={() => router.replace('/mistakes')}
+            />
+          )}
         </View>
       </Screen>
     );

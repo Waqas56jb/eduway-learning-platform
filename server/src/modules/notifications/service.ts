@@ -4,7 +4,7 @@ import { T } from '../../config/constants.js';
 import { db, tx } from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { adminRef, studentRef, type StudentRef } from '../../common/dto/refs.js';
-import { BusinessRuleError, ConflictError, NotFoundError } from '../../common/errors/index.js';
+import { BusinessRuleError, ConflictError, NotFoundError, bulkItemError } from '../../common/errors/index.js';
 import type { AdminPrincipal } from '../../common/types/index.js';
 import { cursorPage, decodeCursor } from '../../common/utils/pagination.js';
 import { enqueue } from '../../jobs/index.js';
@@ -206,7 +206,7 @@ export const templatesService = {
         succeeded.push(id);
       } catch (err) {
         const e = err as { code?: string; reason?: string; message: string };
-        failed.push({ id, code: e.code ?? 'INTERNAL', reason: e.reason, message: e.message });
+        failed.push({ id, ...bulkItemError(e) });
       }
     }
     return { succeeded, failed };
@@ -548,8 +548,11 @@ export const deliveriesService = {
       const rows = await db.many<{ campaign_id: string | null }>(
         `UPDATE ${T.notification_deliveries} SET status = $3, error = $4, delivered_at = CASE WHEN $3 = 'delivered' THEN now() ELSE delivered_at END, updated_at = now()
           WHERE (($1::text IS NOT NULL AND provider_message_id = $1) OR ($2::uuid IS NOT NULL AND id = $2)) AND status <> 'delivered'
+            AND (provider = $5 OR left(provider, length($5) + 1) = $5 || '-')
           RETURNING campaign_id`,
-        [pid, e.deliveryId ?? null, e.status, e.status === 'failed' ? (e.error ?? 'failed').slice(0, 500) : null],
+        // SEC-25: a receipt posted to /webhooks/notifications/:provider only touches deliveries of that provider
+        // (`twilio` also matches `twilio-whatsapp`).
+        [pid, e.deliveryId ?? null, e.status, e.status === 'failed' ? (e.error ?? 'failed').slice(0, 500) : null, provider],
       );
       updated += rows.length;
       for (const r of rows) if (r.campaign_id) campaigns.add(r.campaign_id);

@@ -1,0 +1,151 @@
+# EDUWAY CI — static checks, unit tests and builds for every app. Needs NO secrets.
+# The optional `server-integration` job runs only when the Supabase CI secrets exist (a separate, non-production
+# project is strongly recommended: the integration suite writes eduway_platform_test_* objects).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  server:
+    name: server · prefix / typecheck / lint / unit / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check-prefix
+      - run: npm run typecheck
+      - run: npm run lint
+      # Unit tests default every required env var to a dummy value (tests/setup/unit.ts) and never touch a DB.
+      - run: npm test
+      - run: npm run build
+
+  server-docker:
+    name: server · docker build (no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: false
+          tags: eduway-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  server-integration:
+    name: server · integration tests (only with secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: server
+    # Never on pull requests from forks; only when the secret is configured.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    concurrency:
+      group: eduway-integration-db       # one run at a time against the shared pooler (~15 connections)
+      cancel-in-progress: false
+    env:
+      HAS_DB: ${{ secrets.CI_SUPABASE_DB_URL != '' }}
+      SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.CI_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CI_SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.CI_SUPABASE_DB_URL }}
+      DB_POOL_MAX: '2'
+      JOBS_ENABLED: 'false'
+      SUPABASE_AUTH_MIRROR: 'false'
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Skip notice
+        if: env.HAS_DB != 'true'
+        working-directory: .
+        run: echo "CI_SUPABASE_* secrets not configured — integration tests skipped."
+      - uses: actions/checkout@v4
+        if: env.HAS_DB == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_DB == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - if: env.HAS_DB == 'true'
+        run: npm ci --no-audit --no-fund
+      - name: Integration tests (eduway_platform_test_* prefix)
+        if: env.HAS_DB == 'true'
+        run: |
+          # Ephemeral JWT secrets for this run only (never printed).
+          for k in JWT_ACCESS_SECRET JWT_REFRESH_SECRET JWT_ADMIN_SECRET; do
+            v=$(node -e "process.stdout.write(require('crypto').randomBytes(48).toString('base64url'))")
+            echo "::add-mask::$v"
+            echo "$k=$v" >> "$GITHUB_ENV"
+          done
+      - if: env.HAS_DB == 'true'
+        run: npm run test:integration
+
+  websites:
+    name: website/${{ matrix.app }} · typecheck / lint / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [user, admin]
+    defaults:
+      run:
+        working-directory: website/${{ matrix.app }}
+    env:
+      # Placeholder: CI only proves the bundle builds. Real values are set in the hosting provider.
+      VITE_API_URL: https://api.example.invalid/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: website/${{ matrix.app }}/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+
+  app:
+    name: app/user · tsc
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: app/user
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/user/package-lock.json
+      - run: npm ci --no-audit --no-fund       # .npmrc sets legacy-peer-deps
+      - run: npx tsc --noEmit
+      - run: npx expo config --type public > /dev/null

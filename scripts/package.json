@@ -1,0 +1,13 @@
+{
+  "name": "eduway-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Repo-level tooling scripts (verify-*, load test). Run from the repo root: node scripts/<name>.mjs",
+  "type": "module",
+  "scripts": {
+    "load-test": "node load-test.mjs"
+  },
+  "devDependencies": {
+    "autocannon": "^7.15.0"
+  }
+}

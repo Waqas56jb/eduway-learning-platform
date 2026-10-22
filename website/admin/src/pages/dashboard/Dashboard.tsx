@@ -156,7 +156,7 @@ export default function Dashboard() {
         <StatCard loading={loading} label={t('dashboard.kpi.videosPublished')} value={fmtNumber(kpis.published.value)} delta={kpis.published.deltaPct ?? undefined} hint={t('dashboard.kpi.lessonsTotal', { total: kpis.totalLessons })} icon={<PlayCircle />} color="#7C3AED" trend={kpis.published.spark} onClick={can('content') ? () => navigate('/content/lessons') : undefined} />
         <StatCard loading={loading} label={t('dashboard.kpi.quizAttempts')} value={fmtNumber(kpis.quiz.value)} delta={kpis.quiz.deltaPct ?? undefined} hint={t('dashboard.kpi.vsPrev7')} icon={<ClipboardCheck />} color="#DB2777" trend={kpis.quiz.spark} />
         <StatCard loading={loading} label={t('dashboard.kpi.aiQuestions')} value={fmtNumber(kpis.ai.value)} delta={kpis.ai.deltaPct ?? undefined} hint={t('dashboard.kpi.vsLastMonth')} icon={<Bot />} color="#EA580C" trend={kpis.ai.spark} onClick={can('aitutor') ? () => navigate('/ai-tutor') : undefined} />
-        <StatCard loading={loading} label={t('dashboard.kpi.openIssues')} value={fmtNumber(kpis.open.value)} hint={t('dashboard.kpi.pendingTickets', { count: kpis.pending })} icon={<LifeBuoy />} color="#DC2626" trend={kpis.open.spark} />
+        <StatCard loading={loading} label={t('dashboard.kpi.openIssues')} value={fmtNumber(kpis.open.value)} hint={t('dashboard.kpi.pendingTickets', { count: kpis.pending })} icon={<LifeBuoy />} color="#DC2626" trend={kpis.open.spark} onClick={can('users') ? () => navigate('/support') : undefined} />
       </section>
 
       {/* Revenue + packages */}

@@ -73,6 +73,20 @@ export interface HandlerCtx<A extends AuthMode, B, Q, P> {
   locale: 'en' | 'ar';
 }
 
+/** Security-relevant summary of every declared route (consumed by the route-coverage security test). */
+export interface RouteManifestEntry {
+  method: HttpMethod;
+  path: string;
+  auth: AuthMode;
+  permissions: string[];
+  anyPermissions: string[];
+  hasParams: boolean;
+  hasQuery: boolean;
+  hasBody: boolean;
+  rateLimited: boolean;
+}
+export const routeManifest: RouteManifestEntry[] = [];
+
 const toOpenApiPath = (p: string) => `${API_VERSION_PREFIX}${p}`.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
 
 const AUTH_MW: Record<AuthMode, RequestHandler | null> = {
@@ -125,6 +139,17 @@ export function defineRoute<
   };
 
   router[def.method](def.path, ...chain, final);
+  routeManifest.push({
+    method: def.method,
+    path: def.path,
+    auth: def.auth,
+    permissions: def.permission ? (Array.isArray(def.permission) ? def.permission : [def.permission]) : [],
+    anyPermissions: def.anyPermission ?? [],
+    hasParams: !!def.params,
+    hasQuery: !!def.query,
+    hasBody: !!def.body,
+    rateLimited: !!def.rateLimit,
+  });
   registerDocs(def);
 }
 

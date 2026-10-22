@@ -5,6 +5,7 @@
  */
 import { T } from '../../config/constants.js';
 import { db, tx, type TxClient } from '../../config/db.js';
+import { devFlags, env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 import { NotFoundError, UnauthorizedError } from '../../common/errors/index.js';
 import { notifyStudent } from '../commerce/lib.js';
@@ -14,18 +15,21 @@ import type { PriceQuote } from './pricing.js';
 import { getProvider } from './providers.js';
 import { issueReceipt } from './receipt.js';
 import { paymentsRepo } from './repository.js';
-import { runWebhook, type LockedPayment, type ParsedWebhook, type WebhookOutcome, type WebhookStore } from './webhook-core.js';
+import { runWebhook, settlementProblem, type LockedPayment, type ParsedWebhook, type WebhookOutcome, type WebhookStore } from './webhook-core.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function dbWebhookStore(c: TxClient, provider: string): WebhookStore {
   return {
     async findPaymentForUpdate(evt) {
+      // SEC-10: an event from gateway X may only settle a payment made through gateway X (outside production the
+      // MockGateway may confirm any gateway's checkout — that is how dev/staging test unconfigured gateways).
+      const bound = provider === 'mock' && devFlags.mockPayments ? null : provider;
       if (evt.paymentId && UUID.test(evt.paymentId)) {
-        return db.maybeOne<LockedPayment>(`SELECT id, status, total FROM ${T.payments} WHERE id = $1 FOR UPDATE`, [evt.paymentId], c);
+        return db.maybeOne<LockedPayment>(`SELECT id, status, total, currency FROM ${T.payments} WHERE id = $1 AND ($2::text IS NULL OR provider = $2::text) FOR UPDATE`, [evt.paymentId, bound], c);
       }
       if (evt.providerRef) {
-        return db.maybeOne<LockedPayment>(`SELECT id, status, total FROM ${T.payments} WHERE (provider_ref = $1 OR ref = $1) FOR UPDATE`, [evt.providerRef], c);
+        return db.maybeOne<LockedPayment>(`SELECT id, status, total, currency FROM ${T.payments} WHERE (provider_ref = $1 OR ref = $1) AND ($2::text IS NULL OR provider = $2::text) FOR UPDATE`, [evt.providerRef, bound], c);
       }
       return null;
     },
@@ -46,10 +50,19 @@ export function dbWebhookStore(c: TxClient, provider: string): WebhookStore {
         c,
       );
     },
+    async recordRejected(prov, evt, paymentId, reason) {
+      await db.query(
+        `INSERT INTO ${T.payment_events} (payment_id, kind, provider, verified, payload, note) VALUES ($1, 'webhook', $2, true, $3::jsonb, $4)`,
+        [paymentId, prov, JSON.stringify({ ...evt.payload, idempotencyKey: evt.eventId, type: evt.type, rejected: reason }), `${evt.type} rejected (${reason})`],
+        c,
+      );
+      logger.warn({ provider: prov, paymentId, reason }, 'payment success event rejected');
+    },
     async applySuccess(payment, evt) {
-      if (evt.amount !== null && Number.isFinite(evt.amount) && evt.amount !== payment.total) {
-        // Amount tampering / mismatch → never grant access.
-        await this.applyFailure(payment, 'failed', { ...evt, payload: { ...evt.payload, reason: 'amount_mismatch' } });
+      // Defence in depth — runWebhook already refused these (SEC-24).
+      const problem = settlementProblem(payment, evt);
+      if (problem) {
+        await this.applyFailure(payment, 'failed', { ...evt, payload: { ...evt.payload, reason: problem } });
         return;
       }
       const p = await db.one<{ id: string; user_id: string; package_id: string; billing_cycle: 'monthly' | 'yearly'; promotion_id: string | null; marketer_id: string | null; metadata: { quote?: PriceQuote }; total: number; ref: string }>(
@@ -106,18 +119,89 @@ async function notifyPaid(paymentId: string): Promise<void> {
   });
 }
 
+async function recordUnverified(provider: string, body: Record<string, unknown>, note: string): Promise<void> {
+  await db
+    .query(`INSERT INTO ${T.payment_events} (payment_id, kind, provider, verified, payload, note) VALUES (NULL, 'webhook', $1, false, $2::jsonb, $3)`, [provider, JSON.stringify(body).slice(0, 10_000), note])
+    .catch(() => undefined);
+}
+
 export async function processWebhook(providerId: string, rawBody: Buffer | undefined, headers: Record<string, string | string[] | undefined>, body: Record<string, unknown>): Promise<{ received: true; duplicate: boolean }> {
   const provider = getProvider(providerId);
-  if (!provider) throw new NotFoundError('resource');
+  // SEC-10: the MockGateway endpoint does not exist in production (its HMAC key may be derived from another secret).
+  if (!provider || (provider.id === 'mock' && !devFlags.mockPayments)) throw new NotFoundError('resource');
   const raw = rawBody ?? Buffer.from(JSON.stringify(body));
+  // Gateways with API-verified notifications (FastPay IPN, Qi notify): trust only what the gateway API confirms.
+  if (provider.verifyWebhook && provider.configured()) {
+    const verified = await provider.verifyWebhook({ rawBody: raw, headers, body });
+    if (!verified) {
+      await recordUnverified(provider.id, body, 'notification verification failed');
+      logger.warn({ provider: provider.id }, 'webhook verification failed');
+      throw new UnauthorizedError('SIGNATURE_INVALID');
+    }
+    if (!verified.event) return { received: true, duplicate: false };
+    const out = await applyWebhookEvent(provider.id, verified.event);
+    return { received: true, duplicate: out.duplicate };
+  }
   if (!provider.verifySignature(raw, headers)) {
-    await db
-      .query(`INSERT INTO ${T.payment_events} (payment_id, kind, provider, verified, payload, note) VALUES (NULL, 'webhook', $1, false, $2::jsonb, 'signature verification failed')`, [provider.id, JSON.stringify(body).slice(0, 10_000)])
-      .catch(() => undefined);
+    await recordUnverified(provider.id, body, 'signature verification failed');
     logger.warn({ provider: provider.id }, 'webhook signature invalid');
     throw new UnauthorizedError('SIGNATURE_INVALID');
   }
   const evt = provider.parseWebhook(body);
   const out = await applyWebhookEvent(provider.id, evt);
   return { received: true, duplicate: out.duplicate };
+}
+
+/** Allowed browser return targets: app custom schemes, or http(s) URLs on our own web origins. */
+export function safeReturnTarget(url: string | null | undefined): string | null {
+  if (!url) return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return /^javascript:|^data:|^vbscript:/i.test(url) ? null : url;
+  const origins = new Set([env.USER_APP_URL, env.ADMIN_APP_URL, ...env.CORS_ORIGINS].map((o) => {
+    try {
+      return new URL(o).origin;
+    } catch {
+      return '';
+    }
+  }));
+  return origins.has(u.origin) ? url : null;
+}
+
+/**
+ * Browser redirect callback (ZainCash token redirect, Qi finish URL, FastPay return URL). Verifies the result
+ * with the gateway, applies it through the same idempotent pipeline as webhooks, then returns the URL the
+ * browser is sent back to (the app's returnUrl / returnScheme, else the web app's subscription page).
+ */
+export async function processCallback(providerId: string, query: Record<string, unknown>, body: Record<string, unknown>, headers: Record<string, string | string[] | undefined>): Promise<{ redirectTo: string }> {
+  const provider = getProvider(providerId);
+  if (!provider?.handleCallback || !provider.configured()) throw new NotFoundError('resource');
+  const result = await provider.handleCallback({
+    query,
+    body,
+    headers,
+    lookupProviderRef: (ref) => db.scalar<string>(`SELECT provider_ref FROM ${T.payments} WHERE ref = $1 AND provider = $2`, [ref, provider.id]).then((v) => v ?? null),
+  });
+  if (!result) {
+    await recordUnverified(provider.id, { query }, 'callback verification failed');
+    logger.warn({ provider: provider.id }, 'payment callback verification failed');
+    throw new UnauthorizedError('SIGNATURE_INVALID');
+  }
+  let paymentId: string | null = null;
+  if (result.event) paymentId = (await applyWebhookEvent(provider.id, result.event)).paymentId;
+  const keys = [result.ref, result.providerRef, result.event?.providerRef].filter((k): k is string => !!k);
+  const p = await db.maybeOne<{ id: string; status: string; metadata: { returnUrl?: string | null; returnScheme?: string | null } | null }>(
+    paymentId
+      ? `SELECT id, status, metadata FROM ${T.payments} WHERE id = $1`
+      : `SELECT id, status, metadata FROM ${T.payments} WHERE provider = $2 AND (ref = ANY($1::text[]) OR provider_ref = ANY($1::text[])) LIMIT 1`,
+    paymentId ? [paymentId] : [keys, provider.id],
+  );
+  const fallback = `${env.USER_APP_URL.replace(/\/+$/, '')}/subscription`;
+  const target = safeReturnTarget(p?.metadata?.returnScheme) ?? safeReturnTarget(p?.metadata?.returnUrl) ?? fallback;
+  const sep = target.includes('?') ? '&' : '?';
+  return { redirectTo: p ? `${target}${sep}paymentId=${encodeURIComponent(p.id)}&status=${encodeURIComponent(p.status)}` : target };
 }

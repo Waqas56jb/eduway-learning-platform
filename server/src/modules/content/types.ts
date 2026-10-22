@@ -108,6 +108,11 @@ export interface TeacherDto {
   active: boolean;
 }
 
+/** ADM-TCH-* response: TeacherDto + lessons referencing the teacher. */
+export interface AdminTeacherDto extends TeacherDto {
+  lessonsCount: number;
+}
+
 export interface AdminSubject {
   id: string;
   slug: string;

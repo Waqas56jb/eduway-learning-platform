@@ -16,12 +16,14 @@ const AcceptInvite = p(() => import('@/pages/auth/AcceptInvite'));
 const Dashboard = p(() => import('@/pages/dashboard/Dashboard'));
 const UsersList = p(() => import('@/pages/users/UsersList'));
 const UserDetail = p(() => import('@/pages/users/UserDetail'));
+const SupportTickets = p(() => import('@/pages/support/SupportTickets'));
 // Content
 const Subjects = p(() => import('@/pages/content/Subjects'));
 const Units = p(() => import('@/pages/content/Units'));
 const Lessons = p(() => import('@/pages/content/Lessons'));
 const LessonEditor = p(() => import('@/pages/content/LessonEditor'));
 const Videos = p(() => import('@/pages/content/Videos'));
+const Teachers = p(() => import('@/pages/content/Teachers'));
 const ContentWorkflow = p(() => import('@/pages/content/ContentWorkflow'));
 // Questions
 const QuestionBank = p(() => import('@/pages/questions/QuestionBank'));
@@ -33,6 +35,7 @@ const QuizRules = p(() => import('@/pages/assessments/QuizRules'));
 const ExamBlueprints = p(() => import('@/pages/assessments/ExamBlueprints'));
 const BlueprintEditor = p(() => import('@/pages/assessments/BlueprintEditor'));
 const Attempts = p(() => import('@/pages/assessments/Attempts'));
+const EffectiveQuizRule = p(() => import('@/pages/assessments/EffectiveQuizRule'));
 // Packages
 const Packages = p(() => import('@/pages/packages/Packages'));
 const Promotions = p(() => import('@/pages/packages/Promotions'));
@@ -47,6 +50,8 @@ const Schools = p(() => import('@/pages/schools/Schools'));
 const SchoolDetail = p(() => import('@/pages/schools/SchoolDetail'));
 const IncentiveRules = p(() => import('@/pages/schools/IncentiveRules'));
 const SchoolSettlements = p(() => import('@/pages/schools/SchoolSettlements'));
+const IncentiveRuleDetail = p(() => import('@/pages/schools/IncentiveRuleDetail'));
+const SettlementDetail = p(() => import('@/pages/schools/SettlementDetail'));
 // Marketers
 const Marketers = p(() => import('@/pages/marketers/Marketers'));
 const MarketerDetail = p(() => import('@/pages/marketers/MarketerDetail'));
@@ -60,10 +65,12 @@ const AiAbuseControls = p(() => import('@/pages/aitutor/AiAbuseControls'));
 const BusinessAnalytics = p(() => import('@/pages/analytics/BusinessAnalytics'));
 const LearningAnalytics = p(() => import('@/pages/analytics/LearningAnalytics'));
 const Exports = p(() => import('@/pages/analytics/Exports'));
+const DailyMetrics = p(() => import('@/pages/analytics/DailyMetrics'));
 // Notifications
 const Templates = p(() => import('@/pages/notifications/Templates'));
 const TemplateEditor = p(() => import('@/pages/notifications/TemplateEditor'));
 const SendCampaign = p(() => import('@/pages/notifications/SendCampaign'));
+const CampaignDetail = p(() => import('@/pages/notifications/CampaignDetail'));
 const DeliveryLog = p(() => import('@/pages/notifications/DeliveryLog'));
 // Settings
 const General = p(() => import('@/pages/settings/General'));
@@ -118,6 +125,7 @@ export const router = createBrowserRouter([
 
           page('/users', 'users', UsersList),
           page('/users/:id', 'users', UserDetail),
+          page('/support', 'users', SupportTickets),
 
           { path: '/content', element: <Navigate to="/content/subjects" replace /> },
           page('/content/subjects', 'content', Subjects),
@@ -126,6 +134,7 @@ export const router = createBrowserRouter([
           page('/content/lessons/new', 'content', LessonEditor),
           page('/content/lessons/:id', 'content', LessonEditor),
           page('/content/videos', 'content', Videos),
+          page('/content/teachers', 'content', Teachers),
           page('/content/workflow', 'content', ContentWorkflow),
 
           page('/questions', 'questions', QuestionBank),
@@ -140,6 +149,7 @@ export const router = createBrowserRouter([
           page('/assessments/blueprints/new', 'assessments', BlueprintEditor),
           page('/assessments/blueprints/:id', 'assessments', BlueprintEditor),
           page('/assessments/attempts', 'assessments', Attempts),
+          page('/assessments/effective-rule', 'assessments', EffectiveQuizRule),
 
           page('/packages', 'packages', Packages),
           page('/packages/promotions', 'packages', Promotions),
@@ -154,11 +164,15 @@ export const router = createBrowserRouter([
           page('/schools', 'schools', Schools),
           page('/schools/incentive-rules', 'schools', IncentiveRules),
           page('/schools/settlements', 'schools', SchoolSettlements),
+          page('/schools/incentive-rules/:id', 'schools', IncentiveRuleDetail),
+          page('/schools/settlements/:id', 'schools', SettlementDetail),
           page('/schools/:id', 'schools', SchoolDetail),
 
           page('/marketers', 'marketers', Marketers),
           page('/marketers/milestones', 'marketers', MilestoneRewards),
           page('/marketers/settlements', 'marketers', MarketerSettlements),
+          page('/marketers/incentive-rules/:id', 'marketers', IncentiveRuleDetail),
+          page('/marketers/settlements/:id', 'marketers', SettlementDetail),
           page('/marketers/:id', 'marketers', MarketerDetail),
 
           page('/ai-tutor', 'aitutor', AiUsageDashboard),
@@ -169,12 +183,14 @@ export const router = createBrowserRouter([
           page('/analytics/business', 'analytics', BusinessAnalytics),
           page('/analytics/learning', 'analytics', LearningAnalytics),
           page('/analytics/exports', 'analytics', Exports),
+          page('/analytics/daily', 'analytics', DailyMetrics),
 
           { path: '/notifications', element: <Navigate to="/notifications/templates" replace /> },
           page('/notifications/templates', 'notifications', Templates),
           page('/notifications/templates/new', 'notifications', TemplateEditor),
           page('/notifications/templates/:id', 'notifications', TemplateEditor),
           page('/notifications/campaigns', 'notifications', SendCampaign),
+          page('/notifications/campaigns/:id', 'notifications', CampaignDetail),
           page('/notifications/delivery-log', 'notifications', DeliveryLog),
 
           { path: '/settings', element: <Navigate to="/settings/general" replace /> },

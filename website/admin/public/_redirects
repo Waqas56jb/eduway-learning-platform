@@ -1,0 +1,3 @@
+# Netlify alternative to vercel.json: serve index.html for every client-side route (SPA fallback).
+# Real files (e.g. /assets/*) are served first; this rule only applies when no file matches.
+/*    /index.html   200

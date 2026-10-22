@@ -94,6 +94,7 @@
     "error": "We couldn't load this video. Check your connection and try again.",
     "retry": "Retry",
     "qualityChanged": "Quality set to {{quality}}",
-    "speedChanged": "Playback speed {{speed}}"
+    "speedChanged": "Playback speed {{speed}}",
+    "orderLocked": "Finish the previous lesson to unlock this one."
   }
 }

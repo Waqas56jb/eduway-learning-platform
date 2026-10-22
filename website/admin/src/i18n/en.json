@@ -80,7 +80,11 @@
     "learningSettings": "Learning",
     "marketingSettings": "Marketing",
     "securitySettings": "Security",
-    "cms": "Testimonials & FAQ"
+    "cms": "Testimonials & FAQ",
+    "teachers": "Teachers",
+    "supportTickets": "Support Tickets",
+    "effectiveRule": "Effective Rule",
+    "dailyMetrics": "Daily Metrics"
   },
   "actions": {
     "save": "Save",
@@ -438,7 +442,8 @@
     "required": "This field is required",
     "min": "Must be at least {{min}}",
     "max": "Must be at most {{max}}",
-    "invalidEmail": "Enter a valid email address"
+    "invalidEmail": "Enter a valid email address",
+    "integer": "Enter a whole number"
   },
   "toast": {
     "saved": "Changes saved",

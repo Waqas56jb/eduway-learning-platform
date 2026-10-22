@@ -168,6 +168,14 @@ export default function MistakesScreen() {
               <SkeletonCard />
               <SkeletonCard />
             </View>
+          ) : query.isError && !query.data ? (
+            <EmptyState
+              icon="wifi-off"
+              title={t("common:states.error")}
+              message={query.error.isNetwork ? t("common:states.offline") : query.error.message}
+              actionLabel={t("common:actions.retry")}
+              onAction={() => void query.refetch()}
+            />
           ) : (
             empty
           )

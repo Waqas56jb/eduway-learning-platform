@@ -154,6 +154,20 @@ export interface TeacherDto {
   rating: number | null;
   active: boolean;
 }
+/** ADM-TCH-01..04 response: TeacherDto + number of (non-deleted) lessons taught. */
+export interface AdminTeacherDto extends TeacherDto {
+  lessonsCount: number;
+}
+export interface TeacherWriteDto {
+  name: Localized;
+  bio?: Localized;
+  avatarFileKey?: FileKey | null;
+  subjectId: ID;
+  yearsExperience?: number | null;
+  studentsCount?: number | null;
+  rating?: number | null;
+  active?: boolean;
+}
 
 // ─── UI view models (flat shapes the pages already render) ───────────────────
 export type SubjectVM = Subject & { slug: string; stats: AdminSubject['stats']; tagline: Localized; description: Localized; icon: string };
@@ -302,6 +316,11 @@ export const topicsApi = {
 
 export const teachersApi = {
   list: async (params?: { subjectId?: ID; active?: boolean }) => (await api.get<TeacherDto[]>('/admin/teachers', params)).map(toTeacherVM),
+  /** Full admin rows (bio, stats, lessonsCount) for the Teachers page. */
+  listFull: (params?: { subjectId?: ID; active?: boolean }) => api.get<AdminTeacherDto[]>('/admin/teachers', params),
+  create: (body: TeacherWriteDto) => api.post<AdminTeacherDto>('/admin/teachers', body),
+  update: (id: ID, body: Partial<TeacherWriteDto>) => api.patch<AdminTeacherDto>(`/admin/teachers/${id}`, body),
+  remove: (id: ID) => api.delete<OkDto>(`/admin/teachers/${id}`),
 };
 
 export type LessonTransitionBody = { to: ContentStatus; publishAt?: ISODate; note?: string; patch?: Partial<LessonWriteDto> };

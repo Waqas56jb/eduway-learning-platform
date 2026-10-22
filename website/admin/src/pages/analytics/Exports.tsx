@@ -28,6 +28,7 @@ import {
   type ExportRecordDto,
   type ReportKey,
 } from '@/api/analytics';
+import { exportRequest, useExport } from '@/api/hooks';
 import { cn } from '@/utils/cn';
 import { fmtDate, fmtDateTime, fmtNumber, fmtRelative } from '@/utils/format';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -72,6 +73,8 @@ export default function Exports() {
 
   const preview = useExportPreview({ report, from: range.from, to: range.to });
   const history = useExportHistory({ report: historyFilter }, !!awaiting);
+  // Whole history (all pages, current filter) as a server export (ADM-EXP-05).
+  const historyExp = useExport('/admin/exports/history/export', 'export-history');
   const create = useCreateExport();
   const dl = useDownloadExport();
   const loading = history.isLoading;
@@ -203,7 +206,9 @@ export default function Exports() {
         enableSorting: false,
         meta: { noExport: true, align: 'end' },
         cell: ({ row }) =>
-          row.original.status === 'ready' && allowed ? (
+          // Table-toolbar exports are only logged (no stored file → `downloadUrl` null): no re-download button,
+          // which used to fail with 422 EXPORT_NOT_READY.
+          row.original.status === 'ready' && row.original.downloadUrl && allowed ? (
             <Button
               size="icon-sm"
               variant="ghost"
@@ -369,7 +374,8 @@ export default function Exports() {
           onRetry={() => history.refetch()}
           server={history.server}
           pageSize={10}
-          exportName={allowed ? 'export-history' : undefined}
+          onExport={allowed ? () => historyExp.mutate(exportRequest('csv', history.exportFilters)) : undefined}
+          exporting={historyExp.isPending}
           toolbar={
             <FilterSelect
               label={t('analytics.exports.report')}

@@ -78,8 +78,9 @@ export const useAuth = create<AuthState>()(
       setMfa: (mfaToken, enroll, remember) => set({ stage: enroll ? 'enroll' : '2fa', mfaToken, remember }),
 
       logout: (opts) => {
-        const refresh = tokenStore.get()?.refreshToken;
-        if (refresh && !opts?.silent) authApi.logout(refresh).catch(() => undefined);
+        const tokens = tokenStore.get();
+        const refresh = tokens?.refreshToken;
+        if (refresh && !opts?.silent) authApi.logout(refresh, tokens?.accessToken).catch(() => undefined);
         tokenStore.clear();
         queryClient.clear();
         set({ stage: 'anon', me: null, adminId: null, mfaToken: null, previewRole: null, previewRoleId: null });

@@ -7,7 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { T } from '../../config/constants.js';
 import { db, tx, type Executor } from '../../config/db.js';
 import { adminRef, type AdminRef } from '../../common/dto/refs.js';
-import { BusinessRuleError, ForbiddenError, NotFoundError } from '../../common/errors/index.js';
+import { BusinessRuleError, ForbiddenError, NotFoundError, bulkItemError } from '../../common/errors/index.js';
 import type { Localized } from '../../common/i18n/index.js';
 import { hasPermission } from '../../common/middleware/rbac.js';
 import { storage } from '../../common/services/storage.js';
@@ -471,7 +471,7 @@ export const questionsAdminService = {
         succeeded.push(id);
       } catch (err) {
         const e = err as { code?: string; reason?: string; message: string };
-        failed.push({ id, code: e.code ?? 'INTERNAL', reason: e.reason, message: e.message });
+        failed.push({ id, ...bulkItemError(e) });
       }
     }
     return { succeeded, failed };

@@ -260,31 +260,41 @@ export const analyticsService = {
     const pEndW = pwin.get(prev.to) ?? { wau: 0, mau: 0 };
 
     const { t0, t1 } = instants(r);
+    // `subjectId` narrows every subject-scoped chart (scores, accuracy bands, exam scores, mistakes, topics).
+    // KPIs / timeline / platform rows come from the daily rollups, which have no subject dimension.
+    const sid = q.subjectId ?? null;
     const [scores, accuracy, examBest, recurrence, topics] = await Promise.all([
       db.many<Row>(
         `SELECT s.id, s.name_en, s.name_ar, s.color, round(avg(qa.score)::numeric, 1) AS score
            FROM ${T.quiz_attempts} qa JOIN ${T.lessons} l ON l.id = qa.lesson_id JOIN ${T.subjects} s ON s.id = l.subject_id
           WHERE qa.status IN ('passed', 'failed') AND qa.submitted_at >= $1 AND qa.submitted_at < $2 AND ($3::text IS NULL OR qa.platform::text = $3)
+            AND ($4::uuid IS NULL OR s.id = $4)
           GROUP BY s.id ORDER BY s.sort_order`,
-        [t0, t1, q.platform ?? null],
+        [t0, t1, q.platform ?? null, sid],
       ),
       db.many<{ acc: number }>(
         `WITH ans AS (
            SELECT qa.question_id, qa.is_correct FROM ${T.quiz_attempt_answers} qa WHERE qa.answered_at >= $1 AND qa.answered_at < $2
            UNION ALL SELECT pa.question_id, pa.is_correct FROM ${T.practice_answers} pa WHERE pa.answered_at >= $1 AND pa.answered_at < $2
            UNION ALL SELECT ea.question_id, ea.is_correct FROM ${T.exam_attempt_answers} ea WHERE ea.is_correct IS NOT NULL AND ea.updated_at >= $1 AND ea.updated_at < $2
-         ) SELECT avg(CASE WHEN is_correct THEN 100 ELSE 0 END)::float AS acc FROM ans GROUP BY question_id`,
-        [t0, t1],
+         ) SELECT avg(CASE WHEN ans.is_correct THEN 100 ELSE 0 END)::float AS acc FROM ans
+             WHERE $3::uuid IS NULL OR EXISTS (SELECT 1 FROM ${T.questions} qq WHERE qq.id = ans.question_id AND qq.subject_id = $3)
+            GROUP BY ans.question_id`,
+        [t0, t1, sid],
       ),
       db.many<{ best: number }>(
-        `SELECT max(e.score)::float AS best FROM ${T.exam_attempts} e WHERE e.status IN ('submitted', 'auto_submitted') AND e.submitted_at >= $1 AND e.submitted_at < $2 AND ($3::text IS NULL OR e.platform::text = $3) GROUP BY e.user_id`,
-        [t0, t1, q.platform ?? null],
+        `SELECT max(e.score)::float AS best FROM ${T.exam_attempts} e
+          WHERE e.status IN ('submitted', 'auto_submitted') AND e.submitted_at >= $1 AND e.submitted_at < $2 AND ($3::text IS NULL OR e.platform::text = $3)
+            AND ($4::uuid IS NULL OR EXISTS (SELECT 1 FROM ${T.exam_blueprints} b WHERE b.id = e.blueprint_id AND b.subject_id = $4))
+          GROUP BY e.user_id`,
+        [t0, t1, q.platform ?? null, sid],
       ),
       db.many<Row>(
         `SELECT t.id, t.title_en AS name_en, t.title_ar AS name_ar, sum(mr.repeat_count)::int AS recurrence
            FROM ${T.mistake_records} mr JOIN ${T.topics} t ON t.id = mr.topic_id
-          WHERE mr.last_wrong_at >= $1 AND mr.last_wrong_at < $2 GROUP BY t.id ORDER BY recurrence DESC LIMIT 8`,
-        [t0, t1],
+          WHERE mr.last_wrong_at >= $1 AND mr.last_wrong_at < $2 AND ($3::uuid IS NULL OR mr.subject_id = $3)
+          GROUP BY t.id ORDER BY recurrence DESC LIMIT 8`,
+        [t0, t1, sid],
       ),
       this.topics({ from: q.from, to: q.to, subjectId: q.subjectId }),
     ]);

@@ -86,7 +86,8 @@ npx eas-cli@latest build --profile production --platform ios
 npx eas-cli@latest submit --platform ios
 ```
 
-Bundle identifiers: `com.eduway.student` (iOS and Android).
+Bundle identifiers: `com.eduway.student` (iOS and Android). Each profile sets `EXPO_PUBLIC_API_URL` (development/preview →
+staging API, production → `https://api.eduway.iq/api/v1`). Full EAS setup, build and submit steps: `docs/DEPLOYMENT.md` §5.
 
 ## Language & RTL
 

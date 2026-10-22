@@ -1,7 +1,7 @@
 /** Admin payments (ADM-PAY-*), refunds (ADM-REF-*). */
 import { T } from '../../config/constants.js';
 import { db, tx, type Executor } from '../../config/db.js';
-import { BusinessRuleError, NotFoundError, ValidationError } from '../../common/errors/index.js';
+import { BusinessRuleError, NotFoundError, ValidationError, bulkItemError } from '../../common/errors/index.js';
 import { assertPermission } from '../../common/middleware/rbac.js';
 import type { AdminPrincipal } from '../../common/types/index.js';
 import { orderBy } from '../../common/utils/pagination.js';
@@ -280,7 +280,7 @@ export const adminPayments = {
         succeeded.push(id);
       } catch (e) {
         const err = e as { code?: string; reason?: string; message: string };
-        failed.push({ id, code: err.code ?? 'INTERNAL', reason: err.reason, message: err.message });
+        failed.push({ id, ...bulkItemError(err) });
       }
     }
     return { succeeded, failed };

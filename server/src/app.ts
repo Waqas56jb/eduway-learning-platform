@@ -12,7 +12,7 @@ import { errorHandler, notFoundHandler } from './common/middleware/errorHandler.
 import { rateLimits } from './common/middleware/rateLimit.js';
 import { clientContext, locale, requestId } from './common/middleware/requestContext.js';
 import './common/types/index.js';
-import { env, isProd } from './config/env.js';
+import { devFlags, env, trustProxySetting } from './config/env.js';
 import { logger } from './config/logger.js';
 import { generateOpenApiDocument } from './docs/openapi.js';
 import { modules } from './modules/index.js';
@@ -23,8 +23,8 @@ export function corsOptions(): CorsOptions {
   const allowed = new Set([...env.CORS_ORIGINS, env.ADMIN_APP_URL, env.USER_APP_URL]);
   return {
     origin(origin, cb) {
-      // Native apps / curl send no Origin header.
-      if (!origin || allowed.has(origin) || (!isProd && DEV_ORIGIN.test(origin))) return cb(null, true);
+      // Native apps / curl send no Origin header. LAN/localhost origins only with DEV_LAN_CORS (SEC-21).
+      if (!origin || allowed.has(origin) || (devFlags.lanCors && DEV_ORIGIN.test(origin))) return cb(null, true);
       return cb(null, false);
     },
     credentials: true,
@@ -38,7 +38,8 @@ export function corsOptions(): CorsOptions {
 export function createApp(): Express {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
+  // SEC-22: only the configured proxy hops may set X-Forwarded-For (per-IP rate limits, lockouts, audit IPs).
+  app.set('trust proxy', trustProxySetting(env.TRUST_PROXY));
   app.set('query parser', 'extended');
 
   app.use(requestId, locale, clientContext);
@@ -74,15 +75,19 @@ export function createApp(): Express {
   app.use(adminAuditTrail);
 
   // API documentation (OpenAPI generated from the zod schemas registered by the route builder).
-  app.get('/api/docs/openapi.json', (_req, res) => {
-    res.json(generateOpenApiDocument());
-  });
-  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(undefined, { swaggerOptions: { url: '/api/docs/openapi.json', persistAuthorization: true }, customSiteTitle: 'EDUWAY API' }));
+  // Never in production; elsewhere only with API_DOCS_PUBLIC (default on for an explicit NODE_ENV=development/test).
+  // It maps every admin endpoint (SEC-09, SEC-21).
+  if (devFlags.apiDocs) {
+    app.get('/api/docs/openapi.json', (_req, res) => {
+      res.json(generateOpenApiDocument());
+    });
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(undefined, { swaggerOptions: { url: '/api/docs/openapi.json', persistAuthorization: true }, customSiteTitle: 'EDUWAY API' }));
+  }
 
   for (const m of modules) app.use(env.API_PREFIX, m.router);
 
   app.get('/', (_req, res) => {
-    res.json({ success: true, data: { name: 'EDUWAY API', version: '1.0.0', docs: '/api/docs', api: env.API_PREFIX } });
+    res.json({ success: true, data: { name: 'EDUWAY API', version: '1.0.0', docs: devFlags.apiDocs ? '/api/docs' : null, api: env.API_PREFIX } });
   });
 
   app.use(notFoundHandler);

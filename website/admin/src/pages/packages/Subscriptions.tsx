@@ -10,7 +10,7 @@ import { useLocalize } from '@/hooks/useLocale';
 import { useDebounce } from '@/hooks/useMisc';
 import { uuid } from '@/api/client';
 import { qk } from '@/api/keys';
-import { usePagedList, useApiQuery } from '@/api/hooks';
+import { exportRequest, useExport, usePagedList, useApiQuery } from '@/api/hooks';
 import { flatRef } from '@/api/adapters';
 import { useLookups } from '@/api/lookups';
 import type { StudentRef } from '@/api/types';
@@ -47,6 +47,7 @@ export default function Subscriptions() {
     initialSort: 'endsAt',
   });
   const rows = useMemo(() => list.items.map(toSubscriptionVM), [list.items]);
+  const exp = useExport('/admin/subscriptions/export', 'subscriptions');
 
   const columns = useMemo<ColumnDef<SubscriptionVM>[]>(
     () => [
@@ -189,6 +190,8 @@ export default function Subscriptions() {
         onRetry={list.refetch}
         server={list.server}
         searchPlaceholder={t('packages.subs.searchPh')}
+        onExport={can('packages', 'export') ? () => exp.mutate(exportRequest('csv', list.exportFilters)) : undefined}
+        exporting={exp.isPending}
         toolbar={
           <>
             <FilterSelect label={t('common.status')} value={status} onChange={setStatus} options={STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) }))} />

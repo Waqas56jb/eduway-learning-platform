@@ -1,0 +1,27 @@
+{
+  "name": "eduway-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Browser end-to-end tests (Playwright) for the EDUWAY student site and admin portal.",
+  "type": "module",
+  "scripts": {
+    "install:browsers": "playwright install chromium",
+    "build:apps": "node scripts/build-apps.mjs",
+    "test": "playwright test",
+    "test:full": "node scripts/build-apps.mjs && playwright test",
+    "test:routes": "playwright test --project=user-routes-desktop --project=user-routes-mobile --project=admin-routes --project=admin-routes-mobile",
+    "test:flows": "playwright test --project=user-flows --project=admin-flows",
+    "test:user": "playwright test --project=user-routes-desktop --project=user-routes-mobile --project=user-flows",
+    "test:admin": "playwright test --project=admin-routes --project=admin-routes-mobile --project=admin-flows",
+    "test:dev": "cross-env E2E_MODE=dev playwright test",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "22.9.1",
+    "cross-env": "7.0.3",
+    "dotenv": "16.4.5",
+    "typescript": "5.6.3"
+  }
+}

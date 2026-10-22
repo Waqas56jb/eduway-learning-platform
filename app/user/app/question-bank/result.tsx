@@ -25,7 +25,7 @@ export default function PracticeResultScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // PRA-04 (attemptId = practice session id).
-  const { data: attempt, isPending } = usePracticeResult(typeof raw.attemptId === 'string' ? raw.attemptId : undefined);
+  const { data: attempt, isPending, error, refetch } = usePracticeResult(typeof raw.attemptId === 'string' ? raw.attemptId : undefined);
 
   const rows = useMemo(() => {
     if (!attempt) return [];
@@ -91,13 +91,23 @@ export default function PracticeResultScreen() {
       <Screen padded={false} edges={['top', 'bottom']}>
         <Header title={t('result.title')} onBack={done} />
         <View style={styles.center}>
-          <EmptyState
-            icon="alert"
-            title={t('result.notFoundTitle')}
-            message={t('result.notFoundMessage')}
-            actionLabel={t('result.done')}
-            onAction={done}
-          />
+          {error && error.status !== 404 ? (
+            <EmptyState
+              icon="wifi-off"
+              title={t('common:states.error')}
+              message={error.isNetwork ? t('common:states.offline') : error.message}
+              actionLabel={t('common:actions.retry')}
+              onAction={() => void refetch()}
+            />
+          ) : (
+            <EmptyState
+              icon="alert"
+              title={t('result.notFoundTitle')}
+              message={t('result.notFoundMessage')}
+              actionLabel={t('result.done')}
+              onAction={done}
+            />
+          )}
         </View>
       </Screen>
     );

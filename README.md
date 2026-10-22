@@ -27,12 +27,13 @@ docs/
   ENGINEERING.md     binding conventions (prefix policy, envelopes, auth, module layout)
   BACKEND_SPEC.md    backend scope + acceptance checklist
   VERIFICATION.md    verification results per app
+  DEPLOYMENT.md      production launch checklist (Docker, Render/Fly/Railway, Vercel/Netlify, EAS, CI)
 scripts/           cross-app verification scripts (endpoint / flow checks against a running API)
 ```
 
 ## Prerequisites
 
-- Node.js **20.11+** and npm 10+
+- Node.js **22+** (LTS; `@supabase/supabase-js` requires >= 22) and npm 10+
 - A Supabase project (Postgres + Storage). The `pgcrypto` extension must be enabled; `vector` (pgvector) is optional
   and enables the AI-tutor retrieval migration. Extensions are shared objects, so enable them in the Supabase
   dashboard (Database → Extensions); migrations never create them.
@@ -160,3 +161,8 @@ Results are recorded in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
   (`VITE_*` / `EXPO_PUBLIC_*` values are bundled into the client and are public).
 - `NODE_ENV=production` disables the dev OTP bypass, the mock payment gateway and the demo population. Enable admin
   MFA, configure the real SMS / payment providers, and run the API behind TLS.
+
+## Deployment
+
+Production configuration (Dockerfile, `render.yaml`, Fly/Railway configs, `vercel.json` / Netlify files, `eas.json`,
+GitHub Actions CI) and the step-by-step launch checklist are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).

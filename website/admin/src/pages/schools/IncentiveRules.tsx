@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, GitBranchPlus, History, Trash2 } from 'lucide-react';
+import { CheckCircle2, Eye, GitBranchPlus, History, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,7 +12,7 @@ import { fmtDate, fmtMoney } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { IncentiveRuleForm, useTierValidator } from '@/components/forms/IncentiveRuleForm';
-import { Button, Card, CardHeader, Segmented, SkeletonCard, StatusBadge, useConfirm } from '@/components/ui';
+import { Button, ButtonLink, Card, CardHeader, Segmented, SkeletonCard, StatusBadge, useConfirm } from '@/components/ui';
 import { QueryError } from '@/components/ui/QueryError';
 
 type Partner = PartnerType;
@@ -223,6 +223,9 @@ export default function IncentiveRules() {
                 <h2 className="text-lg font-semibold text-ink">{L(selected, 'name')}</h2>
                 <span className="text-sm text-muted">v{selected.version}</span>
                 <StatusBadge status={selected.status} />
+                <ButtonLink to={`/${module}/incentive-rules/${selected.id}`} variant="ghost" size="sm" icon={<Eye className="h-4 w-4" />} className="ms-auto">
+                  {t('drilldown.rule.open')}
+                </ButtonLink>
               </div>
               <IncentiveRuleForm
                 rule={selected}

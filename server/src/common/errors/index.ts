@@ -139,3 +139,12 @@ export class ServiceUnavailableError extends AppError {
 }
 
 export const isAppError = (e: unknown): e is AppError => e instanceof AppError;
+
+/**
+ * Per-item failure for bulk endpoints (SEC-18): AppErrors keep their code/reason/message; anything else (pg errors,
+ * driver errors) is reported as INTERNAL without its raw message — raw SQL/constraint text must not reach clients.
+ */
+export function bulkItemError(err: unknown): { code: string; reason?: string; message: string } {
+  if (err instanceof AppError) return { code: err.code, reason: err.details?.reason as string | undefined ?? err.reason, message: err.message };
+  return { code: 'INTERNAL', message: 'INTERNAL' };
+}

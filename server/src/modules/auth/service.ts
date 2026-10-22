@@ -38,6 +38,7 @@ export async function refresh(refreshToken: string, meta: ClientMeta): Promise<A
     }
   }
   const tokens = await sessions.rotate(row, { ip: meta.ip, userAgent: meta.userAgent });
+  if (!tokens) throw new UnauthorizedError('REFRESH_TOKEN_INVALID');
   await db.query(`UPDATE ${T.users} SET last_active_at = now() WHERE id = $1`, [row.user_id]);
   return tokens;
 }

@@ -156,16 +156,19 @@ export const sessions = {
   },
 
   /** Rotate the refresh token in place (session id stays stable for `current` markers and access-token sid). */
-  async rotate(row: SessionRow, meta: { ip?: string | null; userAgent?: string | null }): Promise<AuthTokens> {
+  async rotate(row: SessionRow & { refresh_token_hash?: string }, meta: { ip?: string | null; userAgent?: string | null }): Promise<AuthTokens | null> {
     const refreshToken = randomToken();
     const ttl = row.audience === 'admin' && !row.remember ? 12 * 3600_000 : (row.audience === 'admin' ? env.ADMIN_REFRESH_TOKEN_TTL_DAYS : env.REFRESH_TOKEN_TTL_DAYS) * 86_400_000;
     const expiresAt = new Date(Date.now() + ttl);
-    await db.query(
+    // Compare-and-swap on the presented token hash: two concurrent refreshes with the same token cannot both
+    // succeed (SEC-05) — the loser gets null and the caller answers 401.
+    const n = await db.exec(
       `UPDATE ${T.sessions} SET previous_token_hash = refresh_token_hash, refresh_token_hash = $2, rotated_at = now(),
               last_seen_at = now(), expires_at = $3, ip = COALESCE($4, ip), user_agent = COALESCE($5, user_agent)
-        WHERE id = $1`,
-      [row.id, hashToken(refreshToken, 'refresh'), expiresAt, meta.ip ?? null, meta.userAgent ?? null],
+        WHERE id = $1 AND revoked_at IS NULL AND ($6::text IS NULL OR refresh_token_hash = $6::text)`,
+      [row.id, hashToken(refreshToken, 'refresh'), expiresAt, meta.ip ?? null, meta.userAgent ?? null, row.refresh_token_hash ?? null],
     );
+    if (n === 0) return null;
     const access = signAccessToken(row.audience, row.user_id, row.id, row.platform);
     return { accessToken: access.token, refreshToken, expiresIn: access.expiresIn, refreshExpiresAt: expiresAt.toISOString() };
   },

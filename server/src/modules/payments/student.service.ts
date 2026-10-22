@@ -1,7 +1,7 @@
 /** Student payment flow: quote (PAY-04), initiate (PAY-06), mock confirm (PAY-07), status/history/receipt (PAY-08..10). */
 import { T, type ClientPlatform } from '../../config/constants.js';
 import { db, tx } from '../../config/db.js';
-import { env, isProd } from '../../config/env.js';
+import { devFlags, env } from '../../config/env.js';
 import { BusinessRuleError, ConflictError, NotFoundError, ValidationError } from '../../common/errors/index.js';
 import { settingsStore } from '../../common/services/settings-store.js';
 import { mySubscription } from '../../common/services/student-summary.js';
@@ -56,7 +56,7 @@ export function toStudentPayment(r: Row): StudentPaymentDto {
 async function assertGatewayEnabled(gateway: Gateway): Promise<void> {
   const settings = await settingsStore.get('payments');
   if (gateway === 'mock') {
-    if (isProd || !settings.mockGatewayEnabled) throw new BusinessRuleError('PAYMENT_GATEWAY_DISABLED', { gateway });
+    if (!devFlags.mockPayments || !settings.mockGatewayEnabled) throw new BusinessRuleError('PAYMENT_GATEWAY_DISABLED', { gateway });
     return;
   }
   const g = settings.gateways.find((x) => x.id === gateway);
@@ -132,7 +132,7 @@ export const studentPayments = {
     if (created.quote.total === 0) {
       await applyWebhookEvent(gateway, { eventId: `free_${created.id}`, type: 'payment.succeeded', paymentId: created.id, providerRef: null, amount: 0, payload: { reason: 'zero_total' } });
     }
-    const useMock = !isProd && (gateway === 'mock' || !provider.configured() || !created.checkout.redirectUrl);
+    const useMock = devFlags.mockPayments && (gateway === 'mock' || !provider.configured() || !created.checkout.redirectUrl);
     return {
       paymentId: created.id,
       ref: created.ref,
@@ -147,9 +147,9 @@ export const studentPayments = {
     };
   },
 
-  /** PAY-07 — emits a signed MockGateway webhook into the normal pipeline (non-production only). */
+  /** PAY-07 — emits a signed MockGateway webhook into the normal pipeline (DEV_MOCK_PAYMENTS only, never production). */
   async mockConfirm(userId: string, paymentId: string, outcome: 'success' | 'failure' | 'cancel') {
-    if (isProd) throw new NotFoundError('resource');
+    if (!devFlags.mockPayments) throw new NotFoundError('resource');
     const p = await db.maybeOne<{ user_id: string; status: string; total: number; provider_ref: string | null }>(`SELECT user_id, status, total, provider_ref FROM ${T.payments} WHERE id = $1`, [paymentId]);
     if (!p || p.user_id !== userId) throw new NotFoundError('payment');
     if (['initiated', 'pending'].includes(p.status)) {

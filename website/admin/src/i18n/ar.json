@@ -80,7 +80,11 @@
     "learningSettings": "التعلّم",
     "marketingSettings": "التسويق",
     "securitySettings": "الأمان",
-    "cms": "الآراء والأسئلة الشائعة"
+    "cms": "الآراء والأسئلة الشائعة",
+    "teachers": "المدرّسون",
+    "supportTickets": "تذاكر الدعم",
+    "effectiveRule": "القاعدة الفعلية",
+    "dailyMetrics": "المقاييس اليومية"
   },
   "actions": {
     "save": "حفظ",
@@ -438,7 +442,8 @@
     "required": "هذا الحقل مطلوب",
     "min": "يجب ألا يقل عن {{min}}",
     "max": "يجب ألا يزيد عن {{max}}",
-    "invalidEmail": "أدخل بريداً إلكترونياً صحيحاً"
+    "invalidEmail": "أدخل بريداً إلكترونياً صحيحاً",
+    "integer": "أدخل عدداً صحيحاً"
   },
   "toast": {
     "saved": "تم حفظ التغييرات",

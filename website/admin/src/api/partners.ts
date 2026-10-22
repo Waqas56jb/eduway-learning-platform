@@ -22,6 +22,7 @@ import type {
   PackageRef,
 } from './types';
 import type { IncentiveTier, Marketer, School, Settlement, SupportNote } from '@/types';
+import type { AdminStudentRow } from './students';
 
 // ─── DTOs ────────────────────────────────────────────────────────────────────
 export type SchoolStatus = 'active' | 'pending' | 'suspended';
@@ -415,6 +416,10 @@ export const marketersApi = {
   bulkStatus: (ids: ID[], status: 'active' | 'inactive') => api.post<BulkResult>('/admin/marketers/bulk/status', { ids, status }),
   assignSchool: (id: ID, schoolId: ID, overrideReason?: string) => api.post<MarketerDto>(`/admin/marketers/${id}/schools`, { schoolId, overrideReason }),
   unassignSchool: (id: ID, schoolId: ID) => api.delete<MarketerDto>(`/admin/marketers/${id}/schools/${schoolId}`),
+  /** ADM-MKT-11 — students attributed to the marketer (own referral code + assigned schools). Sort name|createdAt|lastActive. */
+  students: (id: ID, p: Query) => api.list<AdminStudentRow>(`/admin/marketers/${id}/students`, p),
+  /** ADM-MKT-13 — progress under the marketer incentive rule for `period` (default current). */
+  progress: (id: ID, period?: string) => api.get<IncentiveProgressDto>(`/admin/marketers/${id}/incentive-progress`, { period }),
 };
 
 export const milestonesApi = {
@@ -434,6 +439,7 @@ export const useSchoolNotes = (id?: ID) => useApiQuery(qk.schools.sub('notes', i
 export const useIncentiveRules = (partnerType: PartnerType) => useApiQuery(qk.incentiveRules.list({ partnerType }), () => incentiveApi.list(partnerType));
 export const useMarketerStats = () => useApiQuery(qk.marketers.sub('stats'), marketersApi.stats);
 export const useMarketer = (id?: ID) => useApiQuery(qk.marketers.detail(id), () => marketersApi.get(id!), { enabled: !!id });
+export const useMarketerProgress = (id?: ID) => useApiQuery(qk.marketers.sub('progress', id), () => marketersApi.progress(id!), { enabled: !!id });
 export const useMarketerPerformance = (id?: ID) => useApiQuery(qk.marketers.sub('performance', id), () => marketersApi.performance(id!), { enabled: !!id });
 export const useMilestoneSets = () => useApiQuery(qk.milestones.list(), milestonesApi.list);
 

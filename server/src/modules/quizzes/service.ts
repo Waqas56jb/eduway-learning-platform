@@ -267,6 +267,9 @@ export const quizzesService = {
   },
 
   async result(attemptId: string, userId: string) {
-    return resultOf(await attempt(userId, attemptId));
+    const a = await attempt(userId, attemptId);
+    // SEC-12: the result carries every correct answer — never for an attempt that is still open.
+    if (a.status === 'in_progress') throw conflictError('ATTEMPT_IN_PROGRESS', { attemptId });
+    return resultOf(a);
   },
 };

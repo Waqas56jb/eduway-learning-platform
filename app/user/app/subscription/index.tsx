@@ -17,7 +17,7 @@ import {
 } from '@/components/subscription';
 import { toPackage } from '@/api/adapters';
 import { useMySubscription, usePackages } from '@/api/payments';
-import { Button, PressableScale, SectionHeader, SegmentedControl, SkeletonCard, Text } from '@/components/ui';
+import { Button, EmptyState, PressableScale, SectionHeader, SegmentedControl, SkeletonCard, Text } from '@/components/ui';
 import { BLURHASH, images } from '@/constants/images';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore, type BillingCycle } from '@/store';
@@ -36,7 +36,8 @@ export default function SubscriptionScreen() {
   const signedIn = useAuthStore((s) => s.isAuthenticated);
   const { data: mySub } = useMySubscription(signedIn);
   const currentId = (mySub && mySub.status !== 'cancelled' ? mySub.package.id : undefined) ?? (userPackageId || undefined);
-  const { data: packageDtos, isPending } = usePackages();
+  const packagesQuery = usePackages();
+  const { data: packageDtos, isPending } = packagesQuery;
   const packages = useMemo(() => (packageDtos ?? []).map(toPackage), [packageDtos]);
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [showCompare, setShowCompare] = useState(false);
@@ -164,6 +165,14 @@ export default function SubscriptionScreen() {
                 <SkeletonCard lines={4} />
                 <SkeletonCard lines={4} />
               </>
+            ) : packagesQuery.isError && !packageDtos ? (
+              <EmptyState
+                icon="wifi-off"
+                title={t('common:states.error')}
+                message={packagesQuery.error.isNetwork ? t('common:states.offline') : packagesQuery.error.message}
+                actionLabel={t('common:actions.retry')}
+                onAction={() => void packagesQuery.refetch()}
+              />
             ) : null}
             {packages.map((p, i) => (
               <PlanCard

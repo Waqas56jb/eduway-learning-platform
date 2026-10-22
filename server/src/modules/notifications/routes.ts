@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { env, isProd } from '../../config/env.js';
+import { devFlags, env } from '../../config/env.js';
 import { UnauthorizedError, BusinessRuleError } from '../../common/errors/index.js';
 import { defineRoute } from '../../common/http/route.js';
 import { rateLimits } from '../../common/middleware/rateLimit.js';
@@ -197,15 +197,21 @@ defineRoute(router, { method: 'post', path: '/admin/deliveries/export', tags: DL
 });
 
 // ── WHK-03 delivery receipts ──
-function verifySignature(req: Request): void {
-  const secret = env.NOTIFICATION_WEBHOOK_SECRET;
+/**
+ * SEC-25: receipts must be signed in every environment. Without NOTIFICATION_WEBHOOK_SECRET they are rejected, unless
+ * DEV_UNSIGNED_NOTIFICATION_WEBHOOKS=true (explicit, never in production).
+ */
+export function verifyReceiptSignature(rawBody: Buffer | undefined, signatureHeader: string | undefined, secret = env.NOTIFICATION_WEBHOOK_SECRET, allowUnsigned = devFlags.unsignedNotificationWebhooks): void {
   if (!secret) {
-    if (isProd) throw new UnauthorizedError('SIGNATURE_INVALID');
-    return; // development: unsigned receipts accepted
+    if (allowUnsigned) return;
+    throw new UnauthorizedError('SIGNATURE_INVALID');
   }
-  const sig = (req.get('x-signature') ?? '').replace(/^sha256=/, '');
-  const expected = createHmac('sha256', secret).update(req.rawBody ?? Buffer.alloc(0)).digest('hex');
+  const sig = (signatureHeader ?? '').replace(/^sha256=/, '');
+  const expected = createHmac('sha256', secret).update(rawBody ?? Buffer.alloc(0)).digest('hex');
   if (!sig || !safeEqual(sig, expected)) throw new UnauthorizedError('SIGNATURE_INVALID');
+}
+function verifySignature(req: Request): void {
+  verifyReceiptSignature(req.rawBody, req.get('x-signature'));
 }
 defineRoute(
   router,
@@ -214,7 +220,7 @@ defineRoute(
     path: '/webhooks/notifications/:provider',
     tags: WHK,
     summary: 'Delivery receipts from SMS/WhatsApp/email providers (WHK-03)',
-    description: 'Header `X-Signature` = hex HMAC-SHA256 of the raw body with NOTIFICATION_WEBHOOK_SECRET.',
+    description: 'Header `X-Signature` = hex HMAC-SHA256 of the raw body with NOTIFICATION_WEBHOOK_SECRET (required in every environment). Only deliveries sent through `:provider` are updated.',
     auth: 'public',
     rateLimit: rateLimits.webhook,
     params: s.providerParam,

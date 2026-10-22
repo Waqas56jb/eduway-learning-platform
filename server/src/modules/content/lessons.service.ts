@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { T } from '../../config/constants.js';
 import { db, tx, type Executor } from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { BusinessRuleError, ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/index.js';
+import { BusinessRuleError, ConflictError, ForbiddenError, NotFoundError, bulkItemError } from '../../common/errors/index.js';
 import { hasAnyPermission, hasPermission } from '../../common/middleware/rbac.js';
 import { storage } from '../../common/services/storage.js';
 import type { AdminPrincipal } from '../../common/types/index.js';
@@ -481,7 +481,7 @@ export const lessonsAdminService = {
         succeeded.push(id);
       } catch (err) {
         const e = err as { code?: string; reason?: string; details?: { reason?: string }; message: string };
-        failed.push({ id, code: e.code ?? 'INTERNAL', reason: e.details?.reason ?? e.reason, message: e.message });
+        failed.push({ id, ...bulkItemError(e) });
       }
     }
     return { succeeded, failed };

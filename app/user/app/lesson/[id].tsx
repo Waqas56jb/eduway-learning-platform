@@ -56,7 +56,24 @@ export default function LessonRoute() {
   }
 
   if (!query.data) {
-    const offline = query.isError && !query.error?.status;
+    if (query.isError && isLockedError(query.error)) {
+      return (
+        <Screen>
+          <Header />
+          <View style={styles.emptyWrap}>
+            <EmptyState
+              icon="lock"
+              title={t('common:premium.locked')}
+              message={query.error.message || t('common:errors.locked')}
+              actionLabel={t('common:premium.viewPlans')}
+              onAction={() => openSubscription(query.error.locked)}
+            />
+          </View>
+        </Screen>
+      );
+    }
+    // Anything but a definitive 404 (offline, timeout, 5xx) is retryable.
+    const offline = query.isError && query.error?.status !== 404;
     return (
       <Screen>
         <Header />
@@ -240,9 +257,12 @@ function LessonScreen({ detail }: { detail: LessonDetail }) {
 
   const goQuiz = useCallback(() => {
     setEndSheet(false);
-    if (detail.locked) return openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug });
+    if (detail.locked) {
+      if (detail.lockReason === 'SEQUENTIAL' || detail.lockReason === 'PREREQUISITE') return toast.info(t('player.orderLocked'));
+      return openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug });
+    }
     router.push({ pathname: '/quiz/[lessonId]', params: { lessonId: id } });
-  }, [detail.locked, id, subjectSlug]);
+  }, [detail.locked, detail.lockReason, id, subjectSlug, t]);
 
   const goLesson = useCallback((lessonId: string) => {
     haptic.selection();
@@ -251,12 +271,24 @@ function LessonScreen({ detail }: { detail: LessonDetail }) {
 
   const minutes = Math.max(1, Math.round(detail.duration / 60));
   const initialPosition = stream.data?.resumePositionSec ?? detail.positionSec;
-  const streamLocked = detail.locked || (stream.isError && isLockedError(stream.error));
+  // Sequential/prerequisite locks are about lesson order, not the package: never send those to the paywall.
+  const orderLocked = !!detail.locked && (detail.lockReason === 'SEQUENTIAL' || detail.lockReason === 'PREREQUISITE');
+  const streamLocked = (!!detail.locked && !orderLocked) || (stream.isError && isLockedError(stream.error));
   const quizCount = quizRule.data?.questionCount ?? detail.quiz.questionCount;
   const quizMinutes = quizRule.data?.estimatedMinutes ?? detail.quiz.estimatedMinutes;
 
   let player: ReactNode;
-  if (streamLocked) {
+  if (orderLocked) {
+    player = (
+      <PlayerPlaceholder
+        poster={detail.thumbnail}
+        icon="lock"
+        title={t('player.orderLocked')}
+        actionLabel={detail.prevLessonId ? t('actions.prevLesson') : undefined}
+        onAction={detail.prevLessonId ? () => goLesson(detail.prevLessonId as string) : undefined}
+      />
+    );
+  } else if (streamLocked) {
     player = (
       <PlayerPlaceholder
         poster={detail.thumbnail}
@@ -301,7 +333,7 @@ function LessonScreen({ detail }: { detail: LessonDetail }) {
       <StatusBar style="light" />
       <View style={[styles.playerWrap, { paddingTop: insets.top }]}>{player}</View>
 
-      {guardVisible && !streamLocked ? <DeviceGuardBanner onDismiss={() => setGuardVisible(false)} /> : null}
+      {guardVisible && !streamLocked && !orderLocked ? <DeviceGuardBanner onDismiss={() => setGuardVisible(false)} /> : null}
 
       <ScrollView
         style={styles.flex}
@@ -344,7 +376,11 @@ function LessonScreen({ detail }: { detail: LessonDetail }) {
               title={t('actions.markComplete')}
               icon="check-circle"
               onPress={() =>
-                streamLocked ? openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug }) : void complete(true)
+                orderLocked
+                  ? toast.info(t('player.orderLocked'))
+                  : streamLocked
+                    ? openSubscription({ reason: 'NO_SUBSCRIPTION', subjectSlug })
+                    : void complete(true)
               }
               fullWidth
             />

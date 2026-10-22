@@ -132,7 +132,9 @@ export const usersService = {
     if (input.schoolName !== undefined && !input.schoolId) profilePatch.school_name = input.schoolName;
     if (input.avatarPreset !== undefined) {
       const presets = (await settingsStore.get('learning')).avatarPresets;
-      if (presets.length && !presets.includes(input.avatarPreset)) {
+      // SEC-13: always a configured preset (contract ME-02) — an arbitrary string here was stored in avatar_url and
+      // later signed by storage.resolveUrl (`storage://…` → signed URL to any private object) or loaded by admin browsers.
+      if (!presets.includes(input.avatarPreset)) {
         throw new AppError('VALIDATION_ERROR', 400, { details: { fields: { avatarPreset: 'Choose one of the available avatars' } } });
       }
       userPatch.avatar_url = input.avatarPreset;

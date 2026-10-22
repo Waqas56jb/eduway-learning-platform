@@ -96,6 +96,20 @@ export default function QuestionBankScreen() {
             <SkeletonCard key={i} style={styles.skeleton} />
           ))}
         </View>
+      ) : active.isError && !active.data ? (
+        <Animated.View entering={FadeIn.duration(250)} style={styles.empty}>
+          <EmptyState
+            icon="wifi-off"
+            title={t('common:states.error')}
+            message={active.error.isNetwork ? t('common:states.offline') : active.error.message}
+            actionLabel={t('common:actions.retry')}
+            onAction={() => void active.refetch()}
+          />
+        </Animated.View>
+      ) : tab === 'all' && !questions.length ? (
+        <Animated.View entering={FadeIn.duration(250)} style={styles.empty}>
+          <EmptyState icon="question-bank" title={t('common:states.empty')} />
+        </Animated.View>
       ) : tab === 'bookmarks' && !bookmarked.length ? (
         <Animated.View entering={FadeIn.duration(250)} style={styles.empty}>
           <EmptyState

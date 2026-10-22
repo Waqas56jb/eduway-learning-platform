@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Link } from 'react-router-dom';
 import { CalendarClock, Filter, Globe, Megaphone, RotateCcw, Send, Smartphone, Users, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -161,7 +162,9 @@ export default function SendCampaign() {
           <div className="flex items-center gap-3">
             <ChannelIcon channel={row.original.channel} />
             <div className="min-w-0">
-              <div className="truncate font-medium">{row.original.name}</div>
+              <Link to={`/notifications/campaigns/${row.original.id}`} className="block truncate font-medium text-ink hover:text-accent hover:underline">
+                {row.original.name}
+              </Link>
               <div className="text-xs text-muted">
                 {t(`notifications.channels.${row.original.channel}`)}
                 {row.original.templateName && <> · {row.original.templateName}</>}

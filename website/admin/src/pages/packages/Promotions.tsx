@@ -600,6 +600,8 @@ type RedemptionRow = RedemptionDto & { studentName_en: string; studentName_ar: s
 function RedemptionsModal({ promo, onClose }: { promo: PromotionVM; onClose: () => void }) {
   const { t } = useTranslation();
   const L = useLocalize();
+  const can = useCan();
+  const exp = useExport(`/admin/promotions/${promo.id}/redemptions/export`, `redemptions-${promo.code}`);
   const list = usePagedList({
     key: (p: Query) => qk.promotions.sub('redemptions', promo.id, p),
     fetcher: (p) => promotionsApi.redemptions(promo.id, p),
@@ -654,6 +656,8 @@ function RedemptionsModal({ promo, onClose }: { promo: PromotionVM; onClose: () 
         server={list.server}
         pageSize={10}
         maxHeight="50vh"
+        onExport={can('packages', 'export') && list.meta.total > 0 ? () => exp.mutate(exportRequest('csv', list.exportFilters)) : undefined}
+        exporting={exp.isPending}
         emptyTitle={t('packages.promo.noRedemptions')}
         emptyHint={t('packages.promo.noRedemptionsHint')}
       />

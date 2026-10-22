@@ -23,7 +23,7 @@ async function mfaActor(req: Request): Promise<{ userId: string; viaChallenge: b
     req.admin = await resolveAdmin(claims.sub, claims.sid);
     return { userId: req.admin.userId, viaChallenge: false };
   }
-  return { userId: verifyMfaChallengeToken(token).userId, viaChallenge: true };
+  return { userId: verifyMfaChallengeToken(token, 'enroll').userId, viaChallenge: true };
 }
 
 export const authController = {
@@ -63,7 +63,7 @@ export const authController = {
 
   async mfaSetup(req: Request) {
     const actor = await mfaActor(req);
-    return auth.mfaSetup(actor.userId);
+    return auth.mfaSetup(actor.userId, actor.viaChallenge);
   },
 
   async mfaEnable(req: Request, code: string) {

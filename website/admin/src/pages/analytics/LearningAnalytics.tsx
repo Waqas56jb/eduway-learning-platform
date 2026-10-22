@@ -57,7 +57,8 @@ export default function LearningAnalytics() {
   const lookups = useLookups();
   const subjectId =
     subject === 'all' ? '' : (lookups.subjects.find((s) => s.slug === subject)?.id ?? '');
-  const q = useLearningAnalytics({ from: range.from, to: range.to, compare });
+  // subjectId narrows every subject-scoped chart server-side (ADM-ANL-02 + ADM-ANL-04).
+  const q = useLearningAnalytics({ from: range.from, to: range.to, compare, subjectId });
   const topicsQ = useTopicSignals({ from: range.from, to: range.to, subjectId });
   const loading = q.isLoading;
   const d = q.data;

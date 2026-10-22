@@ -9,7 +9,7 @@ import { publicService } from '../public/service.js';
 import type { TransactionRow } from '../students/index.js';
 import { sendFile, sendTableExport } from '../commerce/lib.js';
 import { adminPayments, type RefundDto } from './admin.service.js';
-import { buildReceipt, renderReceiptPdf } from './receipt.js';
+import { buildReceipt, payerLocale, renderReceiptPdf } from './receipt.js';
 import { reconciliation, type ReconciliationRow } from './reconciliation.service.js';
 import type { PaymentFilter } from './repository.js';
 import type { PaymentListQuery, RefundListQuery } from './schemas.js';
@@ -72,10 +72,14 @@ export const paymentsController = {
     return paged(r.items, { page: p.page, pageSize: p.pageSize, total: r.total, nextCursor: null });
   },
   /** PAY-10 / ADM-PAY-04 — student (own) or admin with payments.view. */
-  async receipt(req: Request, res: Response, paymentId: string, format: 'json' | 'pdf') {
+  async receipt(req: Request, res: Response, paymentId: string, format: 'json' | 'pdf', lang?: 'en' | 'ar') {
     if (req.admin && !hasPermission(req.admin, 'payments.view')) throw new ForbiddenError(undefined, { permission: 'payments.view' });
     const dto = await buildReceipt(paymentId, req.admin ? undefined : req.student?.userId);
-    if (format === 'pdf') return sendFile(res, renderReceiptPdf(dto, req.locale), `receipt-${dto.receiptNumber}.pdf`, 'application/pdf');
+    if (format === 'pdf') {
+      // Language: ?lang → Accept-Language → the payer's account language.
+      const pdfLang = lang ?? (req.get('accept-language') ? req.locale : await payerLocale(paymentId));
+      return sendFile(res, await renderReceiptPdf(dto, pdfLang), `receipt-${dto.receiptNumber}${pdfLang === 'ar' ? '-ar' : ''}.pdf`, 'application/pdf');
+    }
     res.status(200).json({ success: true, data: dto });
   },
 

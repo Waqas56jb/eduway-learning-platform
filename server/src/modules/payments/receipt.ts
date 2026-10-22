@@ -89,68 +89,10 @@ export async function buildReceipt(paymentId: string, ownerId?: string): Promise
   };
 }
 
-// ── minimal PDF writer (text only, Helvetica) ──────────────────────────────────────────────────────
-
-const pdfText = (s: string) =>
-  s
-    .replace(/[^\x20-\x7E]/g, (ch) => ({ '—': '-', '–': '-', '·': '-', '•': '-' })[ch] ?? '')
-    .replace(/\\/g, '\\\\')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)');
-
-const money = (n: number, cur: string) => `${n.toLocaleString('en-US')} ${cur}`;
-
-export function renderReceiptPdf(r: ReceiptDto, locale: 'en' | 'ar'): Buffer {
-  const lab = locale === 'ar'
-    ? { title: 'RECEIPT / Eisal', no: 'Receipt no.', ref: 'Reference', paid: 'Paid at', billed: 'Billed to', via: 'Paid via', sub: 'Subtotal', disc: 'Discount', tot: 'Total', ref2: 'Refunded' }
-    : { title: 'RECEIPT', no: 'Receipt no.', ref: 'Reference', paid: 'Paid at', billed: 'Billed to', via: 'Paid via', sub: 'Subtotal', disc: 'Discount', tot: 'Total', ref2: 'Refunded' };
-  const ops: string[] = [];
-  let y = 790;
-  const line = (text: string, size = 11, bold = false, x = 50) => {
-    ops.push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${y} Td (${pdfText(text)}) Tj ET`);
-    y -= size + 8;
-  };
-  const pair = (k: string, v: string) => {
-    ops.push(`BT /F1 11 Tf 50 ${y} Td (${pdfText(k)}) Tj ET`);
-    ops.push(`BT /F2 11 Tf 330 ${y} Td (${pdfText(v)}) Tj ET`);
-    y -= 19;
-  };
-  line(r.company.name.en, 18, true);
-  line(r.company.address.en, 10);
-  line(r.company.email, 10);
-  y -= 10;
-  line(lab.title, 16, true);
-  pair(lab.no, r.receiptNumber);
-  pair(lab.ref, r.ref);
-  pair(lab.paid, r.paidAt.replace('T', ' ').slice(0, 16) + ' UTC');
-  pair(lab.billed, `${r.billedTo.name.en} (${r.billedTo.mobile})`);
-  pair(lab.via, r.gatewayName.en);
-  y -= 6;
-  ops.push(`50 ${y + 12} m 545 ${y + 12} l S`);
-  for (const l of r.lines) pair(l.description.en, money(l.amount, r.currency));
-  pair(lab.sub, money(r.subtotal, r.currency));
-  pair(`${lab.disc}${r.promoCode ? ` (${r.promoCode})` : ''}`, `-${money(r.discount, r.currency)}`);
-  pair(lab.tot, money(r.total, r.currency));
-  if (r.refunded) pair(lab.ref2, `-${money(r.refunded, r.currency)}`);
-  y -= 10;
-  line(r.taxNote.en, 9);
-  const content = ops.join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
-    `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`,
-  ];
-  let out = '%PDF-1.4\n';
-  const offsets: number[] = [];
-  objects.forEach((o, i) => {
-    offsets.push(Buffer.byteLength(out, 'latin1'));
-    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
-  });
-  const xref = Buffer.byteLength(out, 'latin1');
-  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
-  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return Buffer.from(out, 'latin1');
+/** Language of the payer's account (fallback for the receipt PDF when the request names none). */
+export async function payerLocale(paymentId: string): Promise<'en' | 'ar'> {
+  const l = await db.scalar<string>(`SELECT u.locale FROM ${T.payments} pay JOIN ${T.users} u ON u.id = pay.user_id WHERE pay.id = $1`, [paymentId]);
+  return l === 'en' ? 'en' : 'ar';
 }
+
+export { renderReceiptPdf } from './receipt-pdf.js';

@@ -15,7 +15,7 @@ import {
   WeeklyChart,
 } from '@/components/home';
 import { ContinueCard } from '@/components/student/ContinueCard';
-import { SectionHeader } from '@/components/ui';
+import { EmptyState, SectionHeader } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { qk, useDashboard } from '@/api';
 import { queryClient } from '@/api/queryClient';
@@ -66,6 +66,14 @@ export default function HomeScreen() {
 
       {loading ? (
         <HomeSkeleton />
+      ) : dashboard.isError && !dashboard.data ? (
+        <EmptyState
+          icon="wifi-off"
+          title={t('common:states.error')}
+          message={dashboard.error.isNetwork ? t('common:states.offline') : dashboard.error.message}
+          actionLabel={t('common:actions.retry')}
+          onAction={() => void onRefresh()}
+        />
       ) : (
         <View>
           {continueLesson ? (

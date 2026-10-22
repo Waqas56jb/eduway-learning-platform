@@ -21,6 +21,8 @@ export const LEARNING_REASONS = {
   EXAM_TIME_OVER: { en: 'Time is over — your exam was submitted automatically.', ar: 'انتهى الوقت — تم تسليم امتحانك تلقائياً.' },
   EXAM_IN_PROGRESS: { en: 'This exam attempt is still in progress.', ar: 'محاولة الامتحان هذه ما زالت جارية.' },
   ALREADY_ANSWERED: { en: 'This question was already answered.', ar: 'تمت الإجابة على هذا السؤال مسبقاً.' },
+  ATTEMPT_IN_PROGRESS: { en: 'Finish this attempt to see the answers.', ar: 'أكمل هذه المحاولة لرؤية الإجابات.' },
+  QUESTION_IN_ACTIVE_ATTEMPT: { en: 'This question is part of an exam or quiz you are taking right now.', ar: 'هذا السؤال ضمن امتحان أو اختبار تقوم به الآن.' },
   ATTEMPT_CLOSED: { en: 'This attempt is already finished.', ar: 'هذه المحاولة منتهية بالفعل.' },
   QUESTION_NOT_IN_ATTEMPT: { en: 'This question is not part of this attempt.', ar: 'هذا السؤال ليس ضمن هذه المحاولة.' },
   ANSWER_REQUIRED: { en: 'Choose an answer first.', ar: 'اختر إجابة أولاً.' },

@@ -44,6 +44,16 @@ export const ticketListQuery = paginationQuery.extend({
   status: z.enum(['open', 'pending', 'resolved']).optional(),
   category: z.enum(['payment', 'access', 'video', 'content', 'account']).optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
+  source: z.enum(['contact_form', 'app', 'admin']).optional(),
+  /** Admin uuid or `__none` (unassigned). */
+  assigneeId: z.union([z.string().uuid(), z.literal('__none')]).optional(),
+  studentId: z.string().uuid().optional(),
+});
+export type TicketListQuery = z.infer<typeof ticketListQuery>;
+export const ticketReplyBody = z.object({
+  body: z.string().trim().min(2).max(4000),
+  /** Status after the reply (default `pending` = waiting for the student; a resolved ticket stays resolved). */
+  status: z.enum(['open', 'pending', 'resolved']).optional(),
 });
 export const ticketParam = z.object({ id: z.string().min(3).max(60) });
 export const ticketPatchBody = z.object({

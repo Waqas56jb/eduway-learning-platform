@@ -1,0 +1,137 @@
+# Render Blueprint (https://render.com/docs/blueprint-spec) — NOT applied automatically.
+# Create the services from the Render dashboard: New → Blueprint → pick this repo. Every secret is `sync: false`,
+# so Render asks for its value in the dashboard; nothing secret lives in this file. See docs/DEPLOYMENT.md.
+services:
+  # ── API (server/) — Docker image from server/Dockerfile ──
+  - type: web
+    name: eduway-api
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: frankfurt            # closest Render region to Iraq; match your Supabase region where possible
+    plan: starter                # needs an always-on instance: pg-boss jobs must not sleep
+    numInstances: 1              # each instance opens DB_POOL_MAX + 3 connections, see DEPLOYMENT.md §3
+    healthCheckPath: /api/v1/health
+    # Idempotent SQL migrations before each deploy goes live (uses the session pooler, it takes an advisory lock).
+    preDeployCommand: node dist/scripts/migrate.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4100"
+      - key: API_PREFIX
+        value: /api/v1
+      - key: DB_POOL_MAX
+        value: "4"
+      - key: DB_SSL
+        value: "true"
+      - key: JOBS_ENABLED
+        value: "true"
+      - key: SUPABASE_AUTH_MIRROR
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ADMIN_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false              # e.g. https://eduway.iq,https://www.eduway.iq,https://admin.eduway.iq
+      - key: ADMIN_APP_URL
+        sync: false
+      - key: USER_APP_URL
+        sync: false
+      - key: PUBLIC_API_URL
+        sync: false              # e.g. https://api.eduway.iq
+      - key: SMS_PROVIDER
+        sync: false
+      - key: SMS_HTTP_URL
+        sync: false
+      - key: SMS_HTTP_TOKEN
+        sync: false
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: EXPO_ACCESS_TOKEN
+        sync: false
+      - key: NOTIFICATION_WEBHOOK_SECRET
+        generateValue: true
+      - key: SEED_SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SEED_SUPER_ADMIN_PASSWORD
+        sync: false
+      # Payment gateway + AI provider credentials: add the ones you use (see server/.env.example), all sync: false.
+
+  # ── Student website (website/user) — static ──
+  - type: web
+    name: eduway-web
+    runtime: static
+    rootDir: website/user
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false              # e.g. https://api.eduway.iq/api/v1
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+
+  # ── Admin portal (website/admin) — static ──
+  - type: web
+    name: eduway-admin
+    runtime: static
+    rootDir: website/admin
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_APP_NAME
+        value: EDUWAY Admin
+      - key: VITE_DEFAULT_LANG
+        value: en
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow

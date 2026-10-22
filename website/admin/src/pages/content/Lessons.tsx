@@ -32,7 +32,7 @@ export default function Lessons() {
   const [subject, setSubject] = useState((location.state as { subjectId?: string } | null)?.subjectId ?? '');
   const [unit, setUnit] = useState('');
   const [status, setStatus] = useState('');
-  const [teacher, setTeacher] = useState('');
+  const [teacher, setTeacher] = useState((location.state as { teacherId?: string } | null)?.teacherId ?? '');
 
   const byId = useMemo(
     () => ({

@@ -64,9 +64,17 @@ export function verifyAccessToken(token: string, aud: AccessAudience): AccessCla
   }
 }
 
-/** Step-up token issued after a correct admin password when MFA is still required. */
-export function signMfaChallengeToken(userId: string, ttlSec = 5 * 60): string {
-  return jwt.sign({ typ: 'mfa' }, env.JWT_ADMIN_SECRET, {
+/**
+ * Step-up token issued after a correct admin password when MFA is still required.
+ * `purpose` binds the token to one flow:
+ *   'login'  — the admin already has TOTP enabled; the token may ONLY be exchanged at /auth/admin/mfa/verify.
+ *   'enroll' — MFA is mandatory but not yet enrolled; the token may ONLY be used for /mfa/setup + /mfa/enable.
+ * (SECURITY.md SEC-01: an untyped token let a password-only attacker re-enrol TOTP on an MFA-protected account.)
+ */
+export type MfaPurpose = 'login' | 'enroll';
+
+export function signMfaChallengeToken(userId: string, purpose: MfaPurpose, ttlSec = 5 * 60): string {
+  return jwt.sign({ typ: 'mfa', pur: purpose }, env.JWT_ADMIN_SECRET, {
     algorithm: 'HS256',
     subject: userId,
     audience: AUDIENCE.mfa,
@@ -75,14 +83,14 @@ export function signMfaChallengeToken(userId: string, ttlSec = 5 * 60): string {
   });
 }
 
-export function verifyMfaChallengeToken(token: string): { userId: string } {
+export function verifyMfaChallengeToken(token: string, purpose: MfaPurpose): { userId: string } {
   try {
     const p = jwt.verify(token, env.JWT_ADMIN_SECRET, {
       algorithms: ['HS256'],
       audience: AUDIENCE.mfa,
       issuer: env.JWT_ISSUER,
     }) as JwtPayload;
-    if (p.typ !== 'mfa' || typeof p.sub !== 'string') throw new Error('bad');
+    if (p.typ !== 'mfa' || p.pur !== purpose || typeof p.sub !== 'string') throw new Error('bad');
     return { userId: p.sub };
   } catch {
     throw new UnauthorizedError('MFA_INVALID');

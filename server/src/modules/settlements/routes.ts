@@ -1,3 +1,4 @@
+import { bulkItemError } from '../../common/errors/index.js';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { defineRoute } from '../../common/http/route.js';
@@ -56,7 +57,7 @@ async function bulk(req: Request, admin: AdminPrincipal, ids: string[], op: 'app
       succeeded.push(id);
     } catch (e) {
       const err = e as { code?: string; reason?: string; message: string };
-      failed.push({ id, code: err.code ?? 'INTERNAL', reason: err.reason, message: err.message });
+      failed.push({ id, ...bulkItemError(err) });
     }
   }
   req.audit = { action: op === 'approve' ? 'settlement.bulk_approve' : 'settlement.bulk_mark_paid', entity: 'settlement', entityId: null, summary: `${op} ${succeeded.length}/${ids.length} settlements${reference ? ` (ref ${reference})` : ''}`, after: { succeeded, failed } };

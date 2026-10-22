@@ -72,8 +72,15 @@ export const authRepo = {
       [id],
     );
   },
-  consumeOtp(id: string, ex?: Executor) {
-    return db.exec(`UPDATE ${T.otp_codes} SET consumed_at = now() WHERE id = $1`, [id], ex);
+  /** Atomically consume a still-valid code. Returns false when a concurrent request already used/invalidated it. */
+  async consumeOtp(id: string, ex?: Executor): Promise<boolean> {
+    const n = await db.exec(
+      `UPDATE ${T.otp_codes} SET consumed_at = now()
+        WHERE id = $1 AND consumed_at IS NULL AND invalidated_at IS NULL AND attempts < max_attempts AND expires_at > now()`,
+      [id],
+      ex,
+    );
+    return n > 0;
   },
 
   // ── lockouts ──
@@ -151,8 +158,9 @@ export const authRepo = {
       [tokenHash],
     );
   },
-  acceptInvite(id: string, ex?: Executor) {
-    return db.exec(`UPDATE ${T.admin_invites} SET accepted_at = now() WHERE id = $1`, [id], ex);
+  /** Single-use: false when the invite was already accepted/revoked (concurrent replay). */
+  async acceptInvite(id: string, ex?: Executor): Promise<boolean> {
+    return (await db.exec(`UPDATE ${T.admin_invites} SET accepted_at = now() WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()`, [id], ex)) > 0;
   },
   insertReset(userId: string, tokenHash: string, minutes: number, ip: string | null) {
     return db.query(`INSERT INTO ${T.password_resets} (user_id, token_hash, expires_at, ip) VALUES ($1,$2, now() + make_interval(mins => $3), $4)`, [userId, tokenHash, minutes, ip]);
@@ -163,7 +171,8 @@ export const authRepo = {
       [tokenHash],
     );
   },
-  useReset(id: string, ex?: Executor) {
-    return db.exec(`UPDATE ${T.password_resets} SET used_at = now() WHERE id = $1`, [id], ex);
+  /** Single-use: false when the token was already used (concurrent replay). */
+  async useReset(id: string, ex?: Executor): Promise<boolean> {
+    return (await db.exec(`UPDATE ${T.password_resets} SET used_at = now() WHERE id = $1 AND used_at IS NULL AND expires_at > now()`, [id], ex)) > 0;
   },
 };

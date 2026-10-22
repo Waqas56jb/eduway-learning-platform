@@ -53,7 +53,10 @@ export const authApi = {
   acceptInvite: (body: { token: string; password: string; name?: Localized }) =>
     api.post<{ tokens: AuthTokens; me: MeAdminDto; mfaEnrollmentRequired: boolean }>('/auth/admin/accept-invite', body),
   me: () => api.get<MeAdminDto>('/auth/me'),
-  logout: (refreshToken?: string) => api.post<OkDto>('/auth/logout', { refreshToken }),
+  /** The bearer is passed explicitly: the caller clears the token store right after firing this request,
+   *  before axios' (async) request interceptor would read it — the call then went out unauthenticated (401). */
+  logout: (refreshToken?: string, accessToken?: string) =>
+    api.post<OkDto>('/auth/logout', { refreshToken }, accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined),
 };
 
 export const adminMeApi = {

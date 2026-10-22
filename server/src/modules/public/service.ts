@@ -1,6 +1,7 @@
 /** Public / CMS endpoints (PUB-01..11) — no auth, cacheable. */
 import { T, type StudentPlatform } from '../../config/constants.js';
 import { db } from '../../config/db.js';
+import { devFlags } from '../../config/env.js';
 import { settingsStore } from '../../common/services/settings-store.js';
 import { storage } from '../../common/services/storage.js';
 import { resolveReferralCode } from '../../common/services/referrals.js';
@@ -154,7 +155,7 @@ export const publicService = {
   async paymentMethods() {
     const p = await settingsStore.get('payments');
     return [...p.gateways]
-      .filter((g) => g.id !== 'mock' || (p.mockGatewayEnabled && process.env.NODE_ENV !== 'production'))
+      .filter((g) => g.id !== 'mock' || (p.mockGatewayEnabled && devFlags.mockPayments))
       .sort((a, b) => a.displayOrder - b.displayOrder)
       .map((g) => {
         const meta = GATEWAY_META[g.id] ?? { kind: 'wallet' as const, hint: { en: '', ar: '' }, flow: 'redirect' as const, requiresPhone: false };

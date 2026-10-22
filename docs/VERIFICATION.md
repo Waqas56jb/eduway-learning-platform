@@ -185,6 +185,72 @@ after that commit. If the request fails after the commit (for example on a DB ou
 client must request a new code and sign in with `purpose: login`, and a session row may be left behind. This is rare,
 and the retry above mitigates the main cause.
 
+### Mobile app — integration hardening update (2026-10-23)
+
+**Live app-flow walk: `node scripts/verify-app-flows.mjs` → 62/62 PASS** (142 requests, 2 token refreshes, against the
+running API). The script sends the app's own headers on every call (`Accept-Language` ar/en, `X-Request-Id`,
+`X-Client-Platform: ios`, `X-Device-Id`, `X-App-Version` from `app.json`, Bearer). It uses the same bodies as
+`app/user/src/api/*` and follows the app's screen order: boot (`/health`, PUB-01) → register pickers and legal →
+OTP login (AUTH-01, wrong code → `OTP_INVALID`, bypass `123456`) → `/auth/me` → refresh rotation and 401 → refresh →
+replay → home → subjects and subject → locked lessons → lesson, stream and `PUT /progress/watch` → resources, note
+and quiz rule → quiz → practice, bank and bookmarks → mistakes → exams → AI tutor (SSE `meta/delta/done` plus the
+JSON polling fallback) → notifications and push token → progress → packages, quote, promo, mock checkout → support
+ticket (PUB-10) → profile and notification preferences → sessions → language switch → logout (both refresh tokens
+rejected). Every payload is checked against `app/user/src/api/types.ts`.
+
+It signs in as the demo student `+9647701234567`, which is shared with other devices and tools, so it is careful:
+- It never revokes a session it did not create. When the device limit is full of other sessions, it waits for a free
+  slot (`--wait-slot` minutes).
+- ME-05 "sign out other devices" runs only when every other session belongs to the script.
+- Every setting it changes is restored: daily goal, language, notification preferences, lesson note, today-plan
+  item, mistake status, bookmark and video position.
+- It deletes what it creates: the AI conversation, the push token and the support ticket (admin ADM-SUP-05).
+- The checkout uses the mock gateway with outcome `cancel`, so no entitlement is granted.
+
+Some history has no delete API, and the summary prints what was kept: one quiz attempt, one practice session, one
+mistake retry, 2 AI questions and one cancelled mock payment.
+
+Not exercised on the demo account in this run:
+- Paywall 402: the demo student is entitled to every subject. verify-student-flows covers 402 on a fresh account.
+- Exam submit: every exam had fewer than 2 attempts left, and the script does not use the demo student's last
+  attempt.
+- ME-04 / ME-05 success paths: these would sign out other devices. verify-student-flows covers both.
+
+**App fixes in this pass:**
+- **Error and retry states.** These screens no longer render blank or zero values when their query fails:
+  - home (dashboard)
+  - progress (also gets skeletons)
+  - practice tab (facets; also gets skeletons)
+  - tutor conversation (also gets bubble skeletons)
+  - settings/sessions and notifications (before, an error looked like an empty list)
+  - mistakes list
+  - question bank (also gets an empty state for the "all" tab)
+  - subscription packages
+  - exams (a skeleton for past attempts)
+
+  lesson, subject, quiz, exam room and the result screens now show retry for 5xx as well as network errors.
+  lesson and subject show the paywall state ("Not in your package" → View plans) on 402/403. All of these use the
+  existing `EmptyState` + `common:states.*` pattern.
+- **Order-locked lessons (runtime bug).** A sequential or prerequisite-locked lesson opened the lesson screen with
+  "Not in your package" and sent a subscribed student to the paywall. It now shows "Finish the previous lesson to
+  unlock this one" with a "Previous lesson" action. A new key, `lesson:player.orderLocked`, is added in both en and ar.
+- **Offline.** A new global offline pill, `src/components/system/OfflineBanner.tsx`, is mounted in `app/_layout.tsx`.
+  It is driven by the existing connectivity tracker and uses `common:states.offline`.
+- **Support ticket.** Contact support (from Profile or Settings) now has a "Send us a message" form: topic chips, a
+  message of at least 20 characters, and Send. It calls PUB-10 `/public/contact` with the student's name and mobile.
+  New `settings:support.*` keys are added in both en and ar, and `submitSupportMessage` is added to `src/api/public.ts`.
+- **Already correct, no change needed:**
+  - single-flight refresh with replay, and sign-out with a toast when the refresh token is rejected
+  - the exam offline queue
+  - 402/403 → subscription for actions
+  - no mock data or `src/data` imports
+
+**Checks:** `tsc --noEmit` ✅ (0 errors). `npx expo export -p ios` ✅ (Hermes bundle 6.5 MB). en/ar keys are
+identical; the only differences are the Arabic plural forms in common. No lint is configured for app/user.
+
+**Not run: web mode with Playwright.** `react-dom` and `react-native-web` are not installed in app/user, and
+installing them would change `package.json`, so no web screenshots were taken.
+
 ## Admin portal
 
 Verified 2026-10-22: full runs against the shared API on `http://localhost:4100/api/v1` (91/91) and against a
@@ -195,19 +261,19 @@ DB_POOL_MAX=3 instance with every server fix below on `:4155` (92/92 including p
 - `node scripts/verify-endpoints.mjs website/admin` (shared tool) and `node scripts/verify-admin-endpoints.mjs [dir]`.
   The admin variant scans all of `src/` (pages too), including `download()`, `useExport()` and `*_EXPORT` path constants.
 - `node scripts/verify-admin-flows.mjs` (`API_URL=…`, `SERVER_LOG=<api stdout>` for the dev-mailer invite link,
-  `--only=<modules>`, `--json`, `--purge-only=<runId|ALL>`) is the live walk. The password is read from `server/.env`
+  `--only=<modules>`, `--json`, `--purge-only=<runId|ALL>`, `--legal-publish`) is the live walk. The password is read from `server/.env`
   at runtime. It covers:
   - every list endpoint with the UI's real filters, sort keys and pagination, and every detail endpoint on a seeded row;
   - mutations with cleanup, and response fields checked against `website/admin/src/api/*.ts` DTO interfaces;
   - a final SQL purge, scoped by run id, of anything the API only soft-deletes.
 
-**Static check:** 281 unique method+path calls (shared tool: 242 call sites in `src/api`), **0 unmatched**. The 5
+**Static check (re-run after the support / teachers / marketer additions):** 295 unique method+path calls (shared tool: 253 call sites, 249 unique, in `src/api`), **0 unmatched**. `verify-admin-endpoints.mjs --unused` lists admin operations without a UI call: 25, all variable-built student/question detail paths or endpoints listed in contract §34.4 as script-only. The 5
 variable-built paths (`q(id)`, `base(id)`) resolve to `/admin/questions/{id}` GET/PATCH/DELETE and
 `/admin/students/{id}` GET/PATCH. A query-param audit (names, enum values, sort keys sent by every list page against
 the server zod schemas and sort allow-lists) found 3 UI sort mismatches; all are fixed (see below).
 **No mock data:** `grep -r "data/" src` finds no imports, and `src/data` no longer exists.
 **Builds:** `npm run typecheck` ✅ · `npm run lint` ✅ · `npm run build` ✅ (0 errors).
-**Live run:** **92/92 steps PASS**, every created row removed.
+**Live run:** **92/92 steps PASS**, every created row removed. Re-run after the additions below: **98/98 PASS** on the shared API (new steps: support tickets ×5, teachers CRUD, marketer students, receipt PDF AR/EN, learning subject filter, delivery-stats filters), plus the opt-in `--only=legal-publish` walk **3/3 PASS** (run once).
 
 | Page / tab | Endpoints (live-verified) | Status |
 |---|---|---|
@@ -217,7 +283,9 @@ the server zod schemas and sort allow-lists) found 3 UI sort mismatches; all are
 | Dashboard | **ADM-DSH-01** `?from&to` (KPIs, 12-month chart, package donut, DAU, governorates, weakest topics, top schools/marketers, pending review, recent payments), ADM-DSH-02, ADM-ANL-03 | ✅ |
 | Users list | ADM-STU-01 (status incl. `locked`, `__none` package/school/marketer, governorate, source, platform, created range, `q`, 4 sort keys), ADM-STU-02, ADM-STU-03 export, ADM-STU-04/05 bulk lock/unlock | ✅ |
 | User detail: Overview / Sessions / Notes / Payments / Activity / Actions | ADM-STU-06, -09, -12, -13 add note, -20, -19, -16; lock→unlock -07/-08; manual grant -14 with `Idempotency-Key` (replay returns same entitlements) → revoke -15 `?reason=`; force logout all -11 `?reason=`; OTP reset -18; ADM-SUP-01 | ✅ |
+| **Support tickets** (`/support`, new; People nav, `users.*` permissions) | **PUB-10** public contact form → ticket `EW-T-NNNNN` (source `contact_form`, `billing` → `payment`) found via ADM-SUP-01 `q`; list filters (status/category/priority/source/`assigneeId=__none`), sorts (`priority`, `-updatedAt`, `status`, `number`), `meta.counts`; ADM-SUP-03 detail + thread; ADM-SUP-02 assign to me + priority (non-admin assignee → 400); ADM-SUP-04 reply → `pending`, reply + resolve → `resolved` (`resolvedAt`), reopen clears it; ADM-SUP-06 CSV export contains the ticket; ADM-SUP-05 delete → 404. Test ticket and its inbox item removed. | ✅ |
 | Subjects / Units | ADM-SUB-01/02/03/05 (create → edit → delete), units + topics create/edit/delete, lesson reorder in topic | ✅ |
+| **Teachers** (`/content/teachers`, new) | ADM-TCH-01 (+`lessonsCount`), STO-01 `teacher_avatar` signed upload → PUT → ADM-TCH-02 create with avatar → ADM-TCH-03 edit (rating, null years, deactivate) → clear avatar → ADM-TCH-04 delete; 409 `HAS_DEPENDENTS` on a teacher with lessons | ✅ |
 | Lessons / Content workflow / Lesson editor | ADM-LSN-01 (table, `view=board` pageSize 1000, `view=options`, filters, `-views`), detail, create → edit → `in_review` → approve → publish/schedule blocked with `VIDEO_NOT_READY` → archive, versions (≥2), delete, export xlsx | ✅ |
 | Lesson resources / Videos | STO-01 signed URL → PUT bytes to Supabase Storage → register PDF resource → edit → signed download → delete; STO-01 `lesson_video` → ADM-VID-04 register → detail → remove; ADM-VID-01/02/03 list/stats/detail | ✅ |
 | Question bank / editor / review queue | ADM-QST-01 (status/difficulty/type/subject/q), stats, detail, create → similar (duplicate check) → submit → approve → duplicate → edit → delete, review queue, tags, export | ✅ |
@@ -226,23 +294,27 @@ the server zod schemas and sort allow-lists) found 3 UI sort mismatches; all are
 | Exam blueprints / editor | list/stats/detail, availability, create → publish (`force`) → duplicate → archive → delete, export | ✅ |
 | Attempts | list (`-date`), stats, detail, export | ✅ |
 | Packages / editor | ADM-PKG-01 `pageSize=100`, detail, create → edit → duplicate → archive → restore → delete, export | ✅ |
-| Promotions | list (`-validFrom`), stats, check-code, generate-code, redemptions, create → edit → delete, export | ✅ |
-| Subscriptions | list (`endsAt`, `-startedAt`, status/package filters), grant (`Idempotency-Key`) → extend → cancel, export | ✅ |
-| Transactions / detail | list (status/gateway/date/q), summary, detail (timeline, webhooks, canRefund), receipt json + pdf, partial refund with `Idempotency-Key` (replay returns same refund, missing key → 400) → reject, export | ✅ |
+| Promotions | list (`-validFrom`), stats, check-code, generate-code, redemptions + redemption export (ADM-PRM-10, new button in the redemptions modal), create → edit → delete, export | ✅ |
+| Subscriptions | list (`endsAt`, `-startedAt`, status/package filters), grant (`Idempotency-Key`) → extend → cancel, export (ADM-SBS-06, now wired to the table's Export button) | ✅ |
+| Transactions / detail | list (status/gateway/date/q), summary, detail (timeline, webhooks, canRefund), receipt json + pdf (Arabic PDF with `Accept-Language: ar` embeds Noto Sans Arabic, `-ar.pdf`; `?lang=en` overrides), partial refund with `Idempotency-Key` (replay returns same refund, missing key → 400) → reject, export | ✅ |
 | Refunds | list (`requestedAt`, `amount`, `-status`), summary, reject, export | ✅ |
 | Reconciliation | overview (summary/chart/daily), comparison (`-day`, gateway, difference, systemAmount), resolve a mismatch (row restored afterwards), export `table=comparison` | ✅ |
 | Schools / detail / settlements | list (sorts, status, governorate), stats, detail, attributed students, incentive progress, notes; create → note → assign marketer → **409 DOUBLE_ATTRIBUTION** (`details.currentMarketer`) → override → unassign → delete; settlements list/generate/approve; exports | ✅ |
 | Incentive rules | list, detail, preview, clone draft → edit → delete | ✅ |
-| Marketers / detail / milestones / settlements | list (`-paidStudents`, status), stats, detail, performance, incentive progress, milestone sets, create → edit → delete, export xlsx | ✅ |
+| Marketers / detail / milestones / settlements | list (`-paidStudents`, status), stats, detail, performance, incentive progress (now a MarketerDetail card), **attributed students** ADM-MKT-11 (new MarketerDetail section: sorts `-createdAt`/`name`/`-lastActive`, `q`), milestone sets, create → edit → delete, export xlsx | ✅ |
 | AI usage / settings / abuse controls | ADM-AI-01, models, settings PATCH round-trip, kill switch disable → enable (original state restored), per-student disable → enable, flags (sorts) + detail transcript, flagged users, exports | ✅ |
-| Business / Learning analytics | ADM-ANL-01 (day/week/month, compare, web/ios/android), ADM-ANL-02 (+`prevWau/prevMau`, subject), ADM-ANL-04 topics, ADM-ANL-05 platform split (web/ios/android) | ✅ |
+| Business / Learning analytics | ADM-ANL-01 (day/week/month, compare, web/ios/android), ADM-ANL-02 (+`prevWau/prevMau`; with `subjectId` every subject-scoped chart is narrowed: scoreBySubject/weakTopics only that subject, accuracy bands ≤ unfiltered), ADM-ANL-04 topics with `subjectId`, ADM-ANL-05 platform split (web/ios/android) | ✅ |
 | Exports | preview → generate csv + xlsx (`Idempotency-Key`) → history → download both → history export | ✅ |
 | Templates / editor | list (`meta.matrix`, sorts), variables, detail, create → edit → duplicate → bulk deactivate → delete, export | ✅ |
 | Send campaign | list, audience preview (`matched/reachable/excluded`), send in-app to a filtered audience, scheduled campaign → cancel (back to `draft`), export; campaign, deliveries and in-app rows removed | ✅ |
-| Delivery log | list (channel/status filters), stats, export | ✅ |
+| **Effective quiz rule** (`/assessments/effective-rule`, new) | ADM-LSN-01 `view=options` → ADM-QZR-06 (`source`, all rule fields) checked against the ADM-QZR-01 subject default; unknown lesson → 404 | ✅ (live, 2026-10-23) |
+| **Incentive-rule / settlement detail** (`/{schools,marketers}/incentive-rules/:id`, `/{schools,marketers}/settlements/:id`, new) | ADM-INC-02 for school + marketer (tier fields), ADM-SET-02 with `items` (item fields), unknown ids → 404 | step added; live run pending (see note) |
+| **Campaign detail** (`/notifications/campaigns/:id`, new) | ADM-CMP-02 (stats, filters, template), ADM-DLV-01 `?campaignId` (+`status`), unknown id → 404 | step added; live run pending (see note) |
+| **Daily metrics** (`/analytics/daily`, new) | ADM-ANL-03 with all 15 fields + `aiBySubject`, platform all/web/ios/android, ≥ 28 rows for a 30-day range, numeric values | step added; live run pending (see note) |
+| Delivery log | list (channel/status filters), stats with the page filters (channel + from narrow the KPIs; `q` with no match → 0; provider cards keep all providers), export | ✅ |
 | Settings: General / OTP / App / Support / Payments / Learning / Marketing / Security | GET → PUT round-trip for all 8 sections; App maintenance ON (iOS) → PUB-01 shows maintenance → restored OFF | ✅ |
 | Feature flags | list, create → toggle → delete | ✅ |
-| Legal documents | versions + stats for terms/privacy, acceptances, draft clone → edit → delete. Publishing was deliberately not exercised because it would retire the live version for every student. | ✅ / ⚪ |
+| Legal documents | versions + stats for terms/privacy, acceptances, draft clone → edit → delete. **Publish** (`--only=legal-publish`, run once): temp student registers accepting terms 3.0 → identical clone 3.1 published with re-acceptance → student `pendingLegal` = terms 3.1, `/progress/dashboard` 403 `LEGAL_ACCEPTANCE_REQUIRED` → AUTH-08 accept → 200, acceptance listed in ADM-LGL-07 → identical clone **3.2** published without re-acceptance (seconds later, in a `finally`) → PUB-11 serves 3.2 with text identical to 3.0, no prompt for anyone, stats current 3.2. Temp student deleted. Privacy untouched (its existing 2.1 draft was left as is). | ✅ |
 | CMS (testimonials, FAQ) | lists, FAQ create → edit → reorder → delete, testimonials reorder | ✅ |
 | Roles / role editor / permissions | `/admin/roles?pageSize=100`, detail, permission catalog, temp role create → update → delete (`confirmKey`) | ✅ |
 | Admin users | list (sorts), export, invite (temp admin) → deactivate | ✅ |
@@ -272,5 +344,37 @@ the server zod schemas and sort allow-lists) found 3 UI sort mismatches; all are
 
 - Exports share a rate limit, so a full run hits one 429 on the third export in a burst. The script waits for
   `Retry-After` and continues. This is expected behaviour, not a failure.
-- These are minor and were left as is: the Delivery log KPIs (`/admin/deliveries/stats`) are requested without the
-  page's filters, and Learning analytics sends `subjectId` only to `/analytics/topics`.
+- Fixed since: the Delivery log KPIs now use the page's filters (all except `status`, per ADM-DLV-02), and Learning analytics
+  sends `subjectId` to `/analytics/learning` as well; the server narrows every subject-scoped chart (see the fixes below).
+- PUB-10 is rate limited to 5 tickets/hour/IP; each admin run sends one.
+
+### Additions and fixes (second pass, 2026-10-22)
+
+- **New admin pages:** Content › Teachers (ADM-TCH-01..04), People › Support tickets (ADM-SUP-01..06, deep link `/support?ticket=…` from the
+  admin inbox and the dashboard open-issues card), MarketerDetail attributed-students section (ADM-MKT-11) and incentive-progress card (ADM-MKT-13);
+  export buttons for subscriptions (ADM-SBS-06), promotion redemptions (ADM-PRM-10) and export history (ADM-EXP-05, was a client CSV of one page).
+- **Server, support tickets:** added ADM-SUP-03 detail + thread, -04 reply (notifies registered students in-app/push), -05 delete, -06 export;
+  list gained `source`/`assigneeId`/`studentId` filters, more sort keys and `meta.counts`; DTO gained `locale`, `replies`, `resolvedAt`.
+  Ticket numbers now continue from the highest number (they were `count + 1`, so a deleted ticket's number could be reused).
+- **Server, teachers:** admin responses carry `lessonsCount`.
+- **Server, learning analytics:** `subjectId` now filters scoreBySubject, questionAccuracy, examScores and mistakeRecurrence (was topics only).
+- **Server, receipt PDF:** rewritten on pdfkit with embedded Noto Sans Arabic (`server/assets/fonts`, OFL.txt included), bidi-js run ordering,
+  fontkit Arabic shaping, RTL layout; language = `?lang` → Accept-Language → payer's account language. Checked visually (EN and AR PDFs rendered)
+  and by unit tests (`tests/unit/receipt-pdf.test.ts`, 5 tests).
+- Checks after the changes: server typecheck ✅, lint ✅, **213/213** unit tests ✅, check-prefix ✅, OpenAPI regenerated (358 paths);
+  admin typecheck ✅, lint ✅, build ✅.
+
+### Drill-down screens (third pass, 2026-10-23)
+
+- **New admin pages, no server changes:** Assessments › Effective Rule (ADM-QZR-06), Analytics › Daily Metrics (ADM-ANL-03), campaign detail (ADM-CMP-02 + its
+  deliveries), incentive-rule detail (ADM-INC-02) and settlement detail (ADM-SET-02 with counted payments, approve / mark paid). Reads live in
+  `website/admin/src/api/drilldown.ts`; EN + AR strings are in `i18n/modules/drilldown.*.json` (+ `nav.effectiveRule`, `nav.dailyMetrics`). Entry points: the new nav items,
+  campaign names in Send-campaign history, the period cell of every settlements table, and "View details" on the incentive-rule versions page. See contract §34.4.
+- **Static:** `verify-endpoints.mjs website/admin`: all calls match, 0 unmatched (5 unresolved variable paths, unchanged). `verify-admin-endpoints.mjs --unused`: 300/300 calls matched;
+  admin operations without a UI call went from 25 to 20. The five §34.4 endpoints are now used, and the 20 left are the variable-built student/question detail paths.
+- **Builds:** admin `npm run typecheck` ✅ · `npm run lint` ✅ · `npm run build` ✅.
+- **Live:** `verify-admin-flows.mjs` has 4 new read steps (listed in the table above). Neither run of 2026-10-23 completed, because the shared API on `:4100` was
+  restarted or stopped partway through, outside this verification. Run 1 lost it during `support`, and the server came back with 6 s uptime. Run 2 lost it at
+  `packages`, after 47 steps had passed, including the new effective-rule step. Every later step failed with `fetch failed`, not an assertion. The run's
+  artefacts were removed by the SQL purge in both runs. Re-run the full script once the API is stable.
+

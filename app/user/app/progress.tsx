@@ -12,8 +12,9 @@ import { WeakTopics } from '@/components/progress/WeakTopics';
 import { StreakCalendar } from '@/components/student';
 import type { Achievement } from '@/components/progress/BadgesGrid';
 import { glyphs, type IconName } from '@/components/icons/paths';
-import { Card, SectionHeader } from '@/components/ui';
-import { toSubject, useSubjects } from '@/api';
+import { Card, EmptyState, SectionHeader, Skeleton, SkeletonCard } from '@/components/ui';
+import { qk, toSubject, useSubjects } from '@/api';
+import { queryClient } from '@/api/queryClient';
 import {
   useAchievements,
   useProgressSubjects,
@@ -53,7 +54,8 @@ export default function ProgressScreen() {
   const weeks = width < 375 ? 12 : 16;
 
   const userStreak = useAuthStore((s) => s.user?.streak ?? 0);
-  const summary = useProgressSummary().data;
+  const summaryQuery = useProgressSummary();
+  const summary = summaryQuery.data;
   const subjectsQuery = useSubjects();
   const progressSubjects = useProgressSubjects().data;
   const calendar = useStreakCalendar(16).data;
@@ -85,6 +87,25 @@ export default function ProgressScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.huge }]}
       >
+        {summaryQuery.isLoading ? (
+          <>
+            <Skeleton height={220} radius={20} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={2} />
+          </>
+        ) : summaryQuery.isError && !summary ? (
+          <EmptyState
+            icon="wifi-off"
+            title={t('common:states.error')}
+            message={summaryQuery.error.isNetwork ? t('common:states.offline') : summaryQuery.error.message}
+            actionLabel={t('common:actions.retry')}
+            onAction={() => {
+              void queryClient.refetchQueries({ queryKey: qk.progress.all });
+              void subjectsQuery.refetch();
+            }}
+          />
+        ) : (
+        <>
         <Section index={0}>
           <HeroSummary
             completion={completion}
@@ -129,6 +150,8 @@ export default function ProgressScreen() {
           <SectionHeader title={t('activity.title')} />
           <ActivityTimeline />
         </Section>
+        </>
+        )}
       </ScrollView>
     </Screen>
   );

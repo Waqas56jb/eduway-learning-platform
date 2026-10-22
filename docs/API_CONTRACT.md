@@ -1030,7 +1030,7 @@ Auth student. Query `lessonId?`, `page`, `pageSize`. → data `QuizAttemptSummar
 Used by: A progressStore quizAverage hydration (optional), U Lesson "best quiz score" (also in LessonDetail).
 
 #### QUZ-05 · `GET /quizzes/attempts/:attemptId`
-Auth student. → data `QuizResultDto`. Used by: A quiz result re-open.
+Auth student. → data `QuizResultDto`. Used by: A quiz result re-open. 409 `ATTEMPT_IN_PROGRESS` while the attempt is still open (the result carries the answer key — SECURITY.md SEC-12).
 
 ---
 
@@ -1061,7 +1061,7 @@ interface BankFacetsDto {
 Used by: U QuestionBank header/chips/BankFilters, A practice tab FiltersSheet (live match count), practice quick-start.
 
 #### BNK-03 · `GET /bank/questions/:questionId`
-Auth student · ent:subject. → data `QuestionReview`. Used by: A QuestionDetailSheet, U "try one" preview.
+Auth student · ent:subject. → data `QuestionReview`. Used by: A QuestionDetailSheet, U "try one" preview. 409 `QUESTION_IN_ACTIVE_ATTEMPT` while the question is part of one of the student's in-progress exam/quiz attempts (SECURITY.md SEC-11).
 
 #### PRA-01 · `POST /practice/start`
 Auth student · ent:subject (each selected subject). Body:
@@ -1469,8 +1469,10 @@ until `paid|failed|cancelled`. Used by: U PaymentModal success step, A checkout 
 Auth student. Query `page`, `pageSize`. → data `StudentPaymentDto[]`. Used by: U Subscription billing history.
 
 #### PAY-10 · `GET /payments/:paymentId/receipt`
-Auth student (own) | `admin:payments.view`. Query `format?: 'json' | 'pdf'` (default json). → data `ReceiptDto` or PDF file
-(`receipt-<receiptNumber>.pdf`; labels by Accept-Language — built-in PDF fonts are Latin-only, so bilingual values render in English; Arabic UIs render the JSON receipt). Errors 409 when not paid. Used by: U Subscription download receipt, PaymentModal success;
+Auth student (own) | `admin:payments.view`. Query `format?: 'json' | 'pdf'` (default json), `lang?: 'en' | 'ar'` (PDF language). → data `ReceiptDto` or PDF file
+(`receipt-<receiptNumber>.pdf`, `receipt-<receiptNumber>-ar.pdf` for Arabic). PDF language = `lang` → `Accept-Language` → the payer's account language.
+The Arabic PDF embeds Noto Sans Arabic (OFL, `server/assets/fonts`), shapes Arabic (fontkit `arab` shaper), orders mixed text with the Unicode Bidi
+algorithm, mirrors the layout (labels right, amounts left) and uses the `ar` values of bilingual fields. Errors 409 when not paid. Used by: U Subscription download receipt, PaymentModal success;
 A success "copy receipt" (json); AD TransactionDetail receipt modal.
 
 #### PAY-11 · `GET /payments/methods`
@@ -1488,6 +1490,16 @@ Header `X-Signature: sha256=<hex HMAC-SHA256 of the raw body>`; body `{ id /*eve
 data: { paymentId | providerRef; amount } }`. An amount different from the payment total never grants access (payment → failed). On `payment.succeeded`: payment `paid`, receipt issued, subscription + entitlements created/extended (`entitlement_logs`), promotion
 `used+1`, attribution snapshot (school/marketer) stored, AI allowance reset (billing cycle), student notification + push.
 → `200 { success: true, data: { received: true, duplicate: boolean } }`; 401 on bad signature. Used by: gateways / MockGateway.
+Real gateways (docs/PROVIDERS.md): **FastPay** IPN and **Qi Card** notifications are unsigned / optionally RSA-signed, so the server
+re-reads the payment from the gateway API (FastPay `validate`, Qi `status`) and applies only the gateway-confirmed result (event id
+`<gateway>:<txId>:<status>`); a notification the gateway does not confirm → 401.
+
+#### WHK-04 · `GET|POST /payments/callback/:provider`
+Auth public · rl:webhook. Browser return from a hosted payment page: ZainCash (`?token=<JWT signed with the merchant secret>`), Qi Card
+finish URL (`?ref=<payment ref>`), FastPay return (`?order_id=`). The result is verified with the gateway (JWT signature + status API),
+applied through the same idempotent pipeline as WHK-01, then → `302` to the payment's `returnScheme` / `returnUrl` (only app schemes or
+our own web origins) with `paymentId` + `status` query params, else `USER_APP_URL/subscription`. 401 when verification fails; 404 when the
+gateway is not configured. Used by: ZainCash / Qi / FastPay hosted pages.
 
 #### WHK-02 · `POST /webhooks/video/:provider`
 Auth public (signature). Transcoding callbacks → `video_assets.streamStatus/cdnStatus/duration/renditions`, lesson `videoState`.
@@ -1663,12 +1675,35 @@ Auth `admin:dashboard.view`. → data `{ status: 'operational' | 'degraded' | 'd
 Built from HLT-02 checks + request metrics. Used by: AD Dashboard System health.
 
 #### ADM-SUP-01 · `GET /admin/support-tickets`
-Auth `admin:users.view`. Query `status?: 'open' | 'pending' | 'resolved'`, `category?`, `priority?`, `q?`, `page`, `pageSize`, `sort` (default `-createdAt`).
-→ data `SupportTicketDto[]` = `{ id: string; student: StudentRef | null; contact: { name: string; contact: string } | null; subject: Localized; message: string; category: 'payment' | 'access' | 'video' | 'content' | 'account'; priority: 'low' | 'medium' | 'high'; status: 'open' | 'pending' | 'resolved'; assignee: AdminRef | null; source: 'contact_form' | 'app' | 'admin'; createdAt: ISODate; updatedAt: ISODate }`.
-Used by: AD Dashboard (counts via ADM-DSH-01); future tickets page (implied).
+Auth `admin:users.view`. Query `status?: 'open' | 'pending' | 'resolved'`, `category?`, `priority?`, `source?: 'contact_form' | 'app' | 'admin'`,
+`assigneeId?: ID | '__none'`, `studentId?: ID`, `q?` (number, subject, message, student name/phone, contact name/value), `page`, `pageSize`,
+`sort` ∈ `createdAt|updatedAt|priority|status|number` (default `-createdAt`).
+→ data `SupportTicketDto[]` = `{ id: string /*EW-T-NNNNN*/; student: StudentRef | null; contact: { name: string; contact: string } | null; subject: Localized; message: string; category: 'payment' | 'access' | 'video' | 'content' | 'account'; priority: 'low' | 'medium' | 'high'; status: 'open' | 'pending' | 'resolved'; assignee: AdminRef | null; source: 'contact_form' | 'app' | 'admin'; locale: Lang; replies: number /*admin replies*/; resolvedAt: ISODate | null; createdAt: ISODate; updatedAt: ISODate }`
++ meta `{ …PageMeta; counts: { open: number; pending: number; resolved: number } }` (same filters, status ignored).
+`status` meaning: `open` = waiting for the team, `pending` = answered, waiting for the requester, `resolved` = closed.
+Used by: AD Support tickets page (`/support`: tabs, filters, KPI cards), Dashboard open-issues card link.
 
 #### ADM-SUP-02 · `PATCH /admin/support-tickets/:id`
-Auth `admin:users.edit`. Body `{ status?; priority?; assigneeId?: ID | null }`. → `SupportTicketDto`. `audit:support_ticket.update`. (implied; no UI yet)
+Auth `admin:users.edit`. Body `{ status?; priority?; assigneeId?: ID | null }` (`assigneeId` must be an admin user, else 400). `resolvedAt` is set when
+the status becomes `resolved` and cleared when it leaves it. → `SupportTicketDto`. `audit:support_ticket.update`. Used by: AD Support list menu + ticket drawer.
+
+#### ADM-SUP-03 · `GET /admin/support-tickets/:id`
+Auth `admin:users.view`. `:id` = ticket number or uuid. → `SupportTicketDetailDto = SupportTicketDto & { messages: { id: ID; authorKind: 'student' | 'admin' | 'system'; author: AdminRef | null; body: string; createdAt: ISODate }[] }`
+(thread after the original `message`, oldest first). Used by: AD ticket drawer (opened by row click or `/support?ticket=<number>`, the admin-inbox link of a new ticket).
+
+#### ADM-SUP-04 · `POST /admin/support-tickets/:id/replies`
+Auth `admin:users.edit`. Body `{ body: string /*2..4000*/; status?: 'open' | 'pending' | 'resolved' }`. Appends an `admin` message, sets the status
+(default `pending`; a resolved ticket stays resolved unless `status` says otherwise) and assigns the ticket to the replying admin when unassigned.
+Registered students are notified (in_app + push, template type `support_message`, vars `support_message`, `ticket_id`); contact-form tickets have no
+account, so the reply is stored and the agent answers through the contact shown on the ticket. → 201 `SupportTicketDetailDto`. `audit:support_ticket.reply`.
+
+#### ADM-SUP-05 · `DELETE /admin/support-tickets/:id`
+Auth `admin:users.delete`. Hard delete (thread cascades; the ticket's admin-inbox items are removed). For spam/test tickets — real tickets are resolved.
+→ `OkDto`. `audit:support_ticket.delete`.
+
+#### ADM-SUP-06 · `POST /admin/support-tickets/export`
+Auth `admin:users.export`. Body `ExportRequest` (`filters` = ADM-SUP-01 query). Columns: ticket, created, status, priority, category, source, subject,
+requester, contact, assignee, replies, resolved_at, message.
 
 ---
 
@@ -1905,7 +1940,9 @@ Auth `admin:content.view`. Query `subjectId?`, `active?`. → data `TeacherDto[]
 
 #### ADM-TCH-02 · `POST /admin/teachers` · ADM-TCH-03 `PATCH /admin/teachers/:id` · ADM-TCH-04 `DELETE /admin/teachers/:id`
 Auth `admin:content.create|edit|delete`. Body `{ name: Localized; bio?: Localized; avatarFileKey?: FileKey | null; subjectId: ID; yearsExperience?: number | null; studentsCount?: number | null; rating?: number | null; active?: boolean }`.
-→ `TeacherDto`. Delete 409 `HAS_DEPENDENTS` when lessons reference the teacher. `audit:teacher.*`. (implied: no admin UI yet; feeds About page.)
+→ `AdminTeacherDto = TeacherDto & { lessonsCount: number }` (ADM-TCH-01 rows carry `lessonsCount` too). Delete 409 `HAS_DEPENDENTS` (`details.count`)
+when lessons reference the teacher — deactivate (`active: false`) instead. `audit:teacher.*`. Used by: AD Content › Teachers (list, drawer form with
+`teacher_avatar` signed upload, activate/deactivate, delete); feeds About page (PUB-08 lists active teachers).
 
 ### 21.4 Lessons & workflow
 
@@ -2428,7 +2465,7 @@ Same filters. → data `{ gross: IQD /*captured: paid|refunded|partially_refunde
 → `TransactionDetail`. Used by: AD TransactionDetail.
 
 #### ADM-PAY-04 · `GET /admin/payments/:id/receipt`
-Auth `admin:payments.view`. Query `format?: 'json' | 'pdf'`. → `ReceiptDto` | PDF. (Same generator as PAY-10.) Used by: AD receipt modal (print).
+Auth `admin:payments.view`. Query `format?: 'json' | 'pdf'`, `lang?: 'en' | 'ar'`. → `ReceiptDto` | PDF. (Same generator and language rules as PAY-10.) Used by: AD receipt modal (print).
 
 #### ADM-PAY-05 · `POST /admin/payments/:id/refunds`
 Auth `admin:payments.edit` (+ `payments.approve` when `processNow`) · idem. Body `{ kind: 'full' | 'partial'; amount?: IQD /*partial: 1000..refundable, step 1000*/; reason: string /*min 5*/; processNow?: boolean }`.
@@ -2687,7 +2724,7 @@ Auth `admin:marketers.edit`. Body `{ schoolId: ID; overrideReason?: string }` (s
 Auth `admin:marketers.edit`. → `MarketerDto`. `audit:school.unassign_marketer`. Used by: AD MarketerDetail unassign.
 
 #### ADM-MKT-11 · `GET /admin/marketers/:id/students`
-Auth `admin:marketers.view`. Query `q`, `page`, `pageSize`, `sort` (as ADM-SCH-08, default `-createdAt`). → `AdminStudentRow[]`. (implied: attributed students list.)
+Auth `admin:marketers.view`. Query `q`, `page`, `pageSize`, `sort` ∈ `name|createdAt|lastActive` (default `-createdAt`). → `AdminStudentRow[]` (students with the marketer's code or at an assigned school). Used by: AD MarketerDetail "Attributed students" section.
 
 #### ADM-MKT-13 · `GET /admin/marketers/:id/incentive-progress`
 Auth `admin:marketers.view`. Query `period?: string`. → `IncentiveProgressDto` under the marketer incentive rule. (CONTRACT_GAPS F2 #4)
@@ -2829,7 +2866,7 @@ Auth `admin:analytics.view`. → data:
 Used by: AD BusinessAnalytics (all charts/tables).
 
 #### ADM-ANL-02 · `GET /admin/analytics/learning`
-Auth `admin:analytics.view`. Query + `subjectId?` (heatmap filter). → data:
+Auth `admin:analytics.view`. Query + `subjectId?` — narrows every subject-scoped chart: `scoreBySubject`, `weakTopics`, `questionAccuracy` (questions of the subject), `examScores` (blueprints of the subject) and `mistakeRecurrence`. KPIs, `timeline` and `platforms` come from the daily rollups, which have no subject dimension, and stay platform-wide. → data:
 ```ts
 { kpis: { dau: Kpi & { wau: number; mau: number; prevWau: number; prevMau: number /*end of previous equal range*/ }; watchHours: Kpi; videoCompletion: Kpi; quizCompletion: Kpi; examAttempts: Kpi; aiQuestions: Kpi };
   timeline: { bucketStart: DateOnly; label: string; dau: number; wau: number; mau: number; watchHours: number; videoCompletion: number; quizCompletion: number;
@@ -3268,10 +3305,25 @@ Auth `admin:security.edit`. Does not unlock the subject. → `SecurityAlertDto`.
 `uploads` (fileKey registry), `admin_invites`, `password_resets`, `promotion` owner columns, `marketers.code`, `packages.yearly_price/tagline/features/comparison/ai_quota/sort_order`,
 `exam_blueprints.description/pass_mark`, `feature_flags.platforms/rollout_pct`, `notes` for schools (`school_notes`), `student_notes`.
 
-### 34.4 Frontend features with no admin UI yet (endpoints exist; UI to be added without removing anything)
+### 34.4 Admin UI coverage of the endpoints listed here earlier
 
-Teacher CRUD, testimonials/FAQ CRUD, marketing/payments/learning/security settings sections, support-ticket management, subscription admin list/grant/extend/cancel,
-promotion redemptions, reconciliation import, settlement "Generate" button, feature-flag create/delete, legal acceptance list, AI suggested prompts editor.
+All items now have admin UI: Teachers (Content › Teachers), testimonials/FAQ (Settings › CMS), marketing/payments/learning/security settings sections,
+support tickets (People › Support tickets, ADM-SUP-01..06), subscriptions list/grant/extend/cancel + export, promotion redemptions + redemption export,
+reconciliation import, settlement "Generate", feature-flag create/delete, legal acceptance list, AI suggested-prompts editor, marketer attributed students
+and incentive progress (MarketerDetail), export-history export, and the drill-down screens added 2026-10-23 (reads in `website/admin/src/api/drilldown.ts`, strings in
+`i18n/modules/drilldown.*.json`):
+* **Assessments › Effective Rule** `/assessments/effective-rule?subjectId&lessonId` — ADM-QZR-06 (+ ADM-LSN-01 `view=options` picker, ADM-QZR-01 subject defaults for the
+  side-by-side comparison; `assessments.view`).
+* **Campaign detail** `/notifications/campaigns/:id` (linked from the Send-campaign history name) — ADM-CMP-02 (polls while `sending`), ADM-DLV-01 `?campaignId&status`,
+  ADM-CMP-05 cancel for `scheduled` (`notifications.create`).
+* **Incentive-rule detail** `/schools/incentive-rules/:id` · `/marketers/incentive-rules/:id` (module follows `partnerType`; "View details" on the versions page) — ADM-INC-02,
+  ADM-INC-07 calculator.
+* **Settlement detail** `/schools/settlements/:id` · `/marketers/settlements/:id` (period cell in every settlements table) — ADM-SET-02 with `items`, ADM-SET-04 approve,
+  ADM-SET-05 mark paid (`<module>.approve`).
+* **Analytics › Daily Metrics** `/analytics/daily` — ADM-ANL-03 with every field + `aiBySubject`, `platform` filter, client CSV of the daily table (`analytics.view`).
+
+No server endpoint was added for these screens. Every admin operation in §35.2 now has a UI caller; the only ones `verify-admin-endpoints.mjs --unused` still lists are the
+student/question detail paths built from a variable (`base(id)`, `q(id)`), which the static scan cannot resolve.
 
 ### 34.5 Question import row validation (ADM-IMP-02)
 
@@ -3322,7 +3374,7 @@ Aliases (documented once, not counted): PUB-12 → CAT-01, PUB-13 → PAY-01, PA
 | Search | `SRC` | 1 |
 | Admin me/inbox/lookups | `ADM-ME` | 9 |
 | Admin dashboard | `ADM-DSH` | 2 |
-| Admin support tickets | `ADM-SUP` | 2 |
+| Admin support tickets | `ADM-SUP` | 6 |
 | Admin students | `ADM-STU` | 21 |
 | Admin subjects | `ADM-SUB` | 6 |
 | Admin units | `ADM-UNT` | 5 |
@@ -3361,7 +3413,7 @@ Aliases (documented once, not counted): PUB-12 → CAT-01, PUB-13 → PAY-01, PA
 | Admin audit logs | `ADM-AUD` | 4 |
 | Admin sessions | `ADM-SES` | 4 |
 | Admin security alerts | `ADM-ALR` | 4 |
-| **Total** | | **424** (public/student/shared/webhooks 126, admin 298) |
+| **Total** | | **428** (public/student/shared/webhooks 126, admin 302) |
 
 ### 35.2 All endpoints
 
@@ -3491,6 +3543,7 @@ Aliases (documented once, not counted): PUB-12 → CAT-01, PUB-13 → PAY-01, PA
 | PAY-10 | GET | `/payments/:paymentId/receipt` |
 | PAY-11 (alias) | GET | `/payments/methods` |
 | WHK-01 | POST | `/payments/webhook/:provider` |
+| WHK-04 | GET, POST | `/payments/callback/:provider` |
 | WHK-02 | POST | `/webhooks/video/:provider` |
 | WHK-03 | POST | `/webhooks/notifications/:provider` |
 | STO-01 | POST | `/storage/signed-upload-url` |
@@ -3509,6 +3562,10 @@ Aliases (documented once, not counted): PUB-12 → CAT-01, PUB-13 → PAY-01, PA
 | ADM-DSH-02 | GET | `/admin/system/health` |
 | ADM-SUP-01 | GET | `/admin/support-tickets` |
 | ADM-SUP-02 | PATCH | `/admin/support-tickets/:id` |
+| ADM-SUP-03 | GET | `/admin/support-tickets/:id` |
+| ADM-SUP-04 | POST | `/admin/support-tickets/:id/replies` |
+| ADM-SUP-05 | DELETE | `/admin/support-tickets/:id` |
+| ADM-SUP-06 | POST | `/admin/support-tickets/export` |
 | ADM-STU-01 | GET | `/admin/students` |
 | ADM-STU-02 | GET | `/admin/students/stats` |
 | ADM-STU-03 | POST | `/admin/students/export` |

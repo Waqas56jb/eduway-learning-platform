@@ -65,7 +65,9 @@ export const usersRepo = {
       `INSERT INTO ${T.push_tokens} (user_id, token, provider, platform, device_id, last_seen_at)
        VALUES ($1,$2,$3,$4,$5, now())
        ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, provider = EXCLUDED.provider, platform = EXCLUDED.platform,
-         device_id = EXCLUDED.device_id, last_seen_at = now(), revoked_at = NULL`,
+         device_id = EXCLUDED.device_id, last_seen_at = now(), revoked_at = NULL
+       -- SEC-17: a live token bound to another account may only move when it comes from the same device install.
+       WHERE ${T.push_tokens}.user_id = EXCLUDED.user_id OR ${T.push_tokens}.revoked_at IS NOT NULL OR ${T.push_tokens}.device_id = EXCLUDED.device_id`,
       [userId, t.token, t.provider, t.platform, t.deviceId],
     );
   },

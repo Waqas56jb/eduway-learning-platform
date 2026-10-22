@@ -4,6 +4,7 @@
  */
 import type { Server } from 'node:http';
 import { createApp } from './app.js';
+import { logProviderStatus } from './common/providers/status.js';
 import { closeDb, pingDb } from './config/db.js';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
     logger.info(`EDUWAY API listening on http://localhost:${env.PORT}${env.API_PREFIX} (docs: /api/docs)`);
   });
   server.keepAliveTimeout = 65_000;
+  logProviderStatus(logger);
 
   const db = await pingDb(5000);
   if (db.ok) logger.info({ latencyMs: db.latencyMs }, 'database reachable');

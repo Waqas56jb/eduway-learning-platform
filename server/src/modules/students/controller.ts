@@ -5,10 +5,26 @@ import type { AdminPrincipal } from '../../common/types/index.js';
 import { orderBy, toPagination } from '../../common/utils/pagination.js';
 import { paged } from '../../common/utils/response.js';
 import type { StudentFilter } from './repository.js';
-import type { StudentListQuery } from './schemas.js';
+import type { StudentListQuery, TicketListQuery } from './schemas.js';
 import { studentsService } from './service.js';
 import { supportService } from './support.js';
-import type { AdminStudentRow } from './types.js';
+import type { AdminStudentRow, SupportTicketDto } from './types.js';
+
+const TICKET_COLUMNS: ExportColumn<SupportTicketDto>[] = [
+  { key: 'id', header: 'ticket', value: (r) => r.id },
+  { key: 'createdAt', header: 'created', value: (r) => r.createdAt },
+  { key: 'status', header: 'status', value: (r) => r.status },
+  { key: 'priority', header: 'priority', value: (r) => r.priority },
+  { key: 'category', header: 'category', value: (r) => r.category },
+  { key: 'source', header: 'source', value: (r) => r.source },
+  { key: 'subject', header: 'subject', value: (r) => r.subject.en },
+  { key: 'requester', header: 'requester', value: (r) => r.student?.name.en ?? r.contact?.name ?? '' },
+  { key: 'contact', header: 'contact', value: (r) => r.student?.mobile ?? r.contact?.contact ?? '' },
+  { key: 'assignee', header: 'assignee', value: (r) => r.assignee?.name.en ?? '' },
+  { key: 'replies', header: 'replies', value: (r) => r.replies },
+  { key: 'resolvedAt', header: 'resolved_at', value: (r) => r.resolvedAt },
+  { key: 'message', header: 'message', value: (r) => r.message },
+];
 
 const SORT = { name: 'u.name_en', mobile: 'u.phone', createdAt: 'u.created_at', lastActive: 'u.last_active_at', subscriptionStatus: 'sub.sub_status' };
 
@@ -146,15 +162,31 @@ export const studentsController = {
     return after;
   },
 
-  // ── support tickets ──
-  async tickets(q: { status?: string; category?: string; priority?: string; q?: string; sort?: string; page: number; pageSize: number }) {
+  // ── support tickets (ADM-SUP-*) ──
+  async tickets(q: TicketListQuery) {
     const p = toPagination(q);
     const r = await supportService.list({ ...q, limit: p.limit, offset: p.offset });
-    return paged(r.items, { page: p.page, pageSize: p.pageSize, total: r.total, nextCursor: null });
+    return paged(r.items, { page: p.page, pageSize: p.pageSize, total: r.total, nextCursor: null, counts: r.counts });
   },
+  ticket: (id: string) => supportService.detail(id),
   async updateTicket(req: Request, id: string, body: { status?: string; priority?: string; assigneeId?: string | null }) {
     const r = await supportService.update(id, body);
     req.audit = { action: 'support_ticket.update', entity: 'support_ticket', entityId: r.after.id, summary: `Updated ticket ${r.after.id}`, before: { status: r.before.status, priority: r.before.priority, assignee: r.before.assignee?.id ?? null }, after: { status: r.after.status, priority: r.after.priority, assignee: r.after.assignee?.id ?? null } };
     return r.after;
+  },
+  async replyTicket(req: Request, admin: AdminPrincipal, id: string, body: { body: string; status?: 'open' | 'pending' | 'resolved' }) {
+    const r = await supportService.reply(id, admin, body);
+    req.audit = { action: 'support_ticket.reply', entity: 'support_ticket', entityId: r.after.id, summary: `Replied to ticket ${r.after.id}${r.notified ? ' (student notified)' : ''}`, before: { status: r.before.status }, after: { status: r.after.status, reply: body.body.slice(0, 500), notified: r.notified } };
+    return r.after;
+  },
+  async removeTicket(req: Request, id: string) {
+    const before = await supportService.remove(id);
+    req.audit = { action: 'support_ticket.delete', entity: 'support_ticket', entityId: before.id, summary: `Deleted ticket ${before.id}`, before: { subject: before.subject.en, status: before.status, source: before.source }, after: null };
+    return OK;
+  },
+  async exportTickets(req: Request, res: Response, body: ExportRequest) {
+    const f = (body.filters ?? {}) as Partial<TicketListQuery> & { sort?: string };
+    const rows = await supportService.exportRows({ ...f, ids: body.ids?.length ? body.ids : undefined });
+    await sendExport(req, res, { report: 'support_tickets', format: body.format, columns: TICKET_COLUMNS, selected: body.columns, rows, filters: body.filters });
   },
 };

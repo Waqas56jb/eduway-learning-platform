@@ -88,8 +88,9 @@ export function orderBy(sort: string | undefined, allowed: Record<string, string
   const pick = (s: string) => {
     const desc = s.startsWith('-');
     const key = desc ? s.slice(1) : s;
-    const col = allowed[key];
-    return col ? `${col} ${desc ? 'DESC' : 'ASC'} NULLS LAST` : null;
+    // Own keys only — `constructor` / `toString` must not resolve to Object.prototype members (SEC-16).
+    const col = Object.hasOwn(allowed, key) ? allowed[key] : undefined;
+    return typeof col === 'string' && col ? `${col} ${desc ? 'DESC' : 'ASC'} NULLS LAST` : null;
   };
   return pick(sort ?? '') ?? pick(fallback) ?? '1';
 }

@@ -24,6 +24,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useAppStatus } from '@/api/appStatus';
 import { useApiBoot } from '@/api/boot';
 import { queryClient } from '@/api/queryClient';
+import { OfflineBanner } from '@/components/system/OfflineBanner';
 import { SystemStatusScreen } from '@/components/system/SystemStatusScreen';
 import { ToastHost } from '@/components/ui';
 import { directionStyle, useIsRTL } from '@/utils/rtl';
@@ -168,6 +169,7 @@ export default function RootLayout() {
               />
             </View>
           ) : null}
+          <OfflineBanner />
           <ToastHost />
         </ThemeProvider>
       </SafeAreaProvider>

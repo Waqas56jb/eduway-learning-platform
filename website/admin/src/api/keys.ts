@@ -21,6 +21,7 @@ export const qk = {
   // F1 modules
   dashboard: mod('dashboard'),
   students: mod('students'),
+  support: mod('support'),
   subjects: mod('subjects'),
   units: mod('units'),
   teachers: mod('teachers'),

@@ -102,7 +102,7 @@ export async function adminLogin(input: { email: string; password: string; totp?
 
   const security = await settingsStore.get('security');
   if (row.mfa_enabled) {
-    if (!input.totp) return { mfaRequired: true, mfaToken: signMfaChallengeToken(row.id), mfaEnrollmentRequired: false };
+    if (!input.totp) return { mfaRequired: true, mfaToken: signMfaChallengeToken(row.id, 'login'), mfaEnrollmentRequired: false };
     if (!verifyTotp(row.mfa_secret, input.totp)) {
       await failLogin(email, meta, row);
     }
@@ -110,28 +110,50 @@ export async function adminLogin(input: { email: string; password: string; totp?
     await auditLogin(row, meta, 'Signed in with 2FA');
     return { mfaRequired: false, ...res };
   }
-  if (security.adminMfaMandatory) return { mfaRequired: true, mfaToken: signMfaChallengeToken(row.id), mfaEnrollmentRequired: true };
+  if (security.adminMfaMandatory) return { mfaRequired: true, mfaToken: signMfaChallengeToken(row.id, 'enroll'), mfaEnrollmentRequired: true };
   const res = await issueAdminSession(row, meta, input.remember ?? true);
   await auditLogin(row, meta, 'Signed in');
   return { mfaRequired: false, ...res };
 }
 
 export async function adminMfaVerify(input: { mfaToken: string; code: string; remember?: boolean }, meta: ClientMeta) {
-  const { userId } = verifyMfaChallengeToken(input.mfaToken);
+  const { userId } = verifyMfaChallengeToken(input.mfaToken, 'login');
   const row = await adminsService.getRow(userId);
   if (row.status !== 'active') throw new ForbiddenError('ACCOUNT_LOCKED');
   if (!row.mfa_enabled) throw new BusinessRuleError('MFA_NOT_PENDING');
+  const mfaKey = row.email.toLowerCase();
+  // SEC-02: the TOTP step-up has its own lockout (it was counted but never enforced → unlimited guessing
+  // across IPs by anyone holding the password).
+  await assertMfaNotLocked(mfaKey);
   if (!verifyTotp(row.mfa_secret, input.code)) {
-    await authRepo.registerFailure('admin_mfa', row.email.toLowerCase(), 10, 15);
+    const pol = await settingsStore.get('auth');
+    const lock = await authRepo.registerFailure('admin_mfa', mfaKey, MFA_LOCKOUT_ATTEMPTS, pol.adminLockoutMinutes);
+    if (lock.locked_until) {
+      await securityEvents.record({ kind: 'admin_login_failure', severity: 'high', subjectLabel: row.name_en || row.email, userId: row.id, ip: meta.ip, detail: `${lock.failed_count} failed 2FA codes for ${row.email} — 2FA temporarily locked.` });
+    }
     throw new UnauthorizedError('MFA_INVALID');
   }
+  await authRepo.clearLockout('admin_mfa', mfaKey);
   const res = await issueAdminSession(row, meta, input.remember ?? true);
   await auditLogin(row, meta, 'Signed in with 2FA');
   return res;
 }
 
-export async function mfaSetup(userId: string) {
+/** Failed TOTP codes allowed before the step-up is locked for `adminLockoutMinutes`. */
+export const MFA_LOCKOUT_ATTEMPTS = 5;
+
+async function assertMfaNotLocked(key: string): Promise<void> {
+  const lock = await authRepo.getLockout('admin_mfa', key);
+  if (lock?.locked_until && lock.locked_until.getTime() > Date.now()) {
+    const s = Math.ceil((lock.locked_until.getTime() - Date.now()) / 1000);
+    throw new RateLimitError(s, 'ADMIN_LOCKED', { minutes: Math.ceil(s / 60) });
+  }
+}
+
+export async function mfaSetup(userId: string, viaChallenge = false) {
   const row = await adminsService.getRow(userId);
+  // SEC-01: the enrolment challenge token only proves the password — never let it replace an existing factor.
+  if (viaChallenge && (row.mfa_enabled || row.status !== 'active')) throw new UnauthorizedError('MFA_INVALID');
   const secret = authenticator.generateSecret(20);
   await adminsRepo.updateAdminUser(userId, { mfa_pending_secret: secret });
   const otpauthUrl = authenticator.keyuri(row.email, 'EDUWAY Admin', secret);
@@ -141,8 +163,13 @@ export async function mfaSetup(userId: string) {
 
 export async function mfaEnable(userId: string, code: string, meta?: ClientMeta, viaChallenge = false) {
   const row = await adminsService.getRow(userId);
+  if (viaChallenge && (row.mfa_enabled || row.status !== 'active')) throw new UnauthorizedError('MFA_INVALID');
   if (!row.mfa_pending_secret) throw new BusinessRuleError('MFA_NOT_PENDING');
-  if (!verifyTotp(row.mfa_pending_secret, code)) throw new UnauthorizedError('MFA_INVALID');
+  await assertMfaNotLocked(row.email.toLowerCase());
+  if (!verifyTotp(row.mfa_pending_secret, code)) {
+    await authRepo.registerFailure('admin_mfa', row.email.toLowerCase(), MFA_LOCKOUT_ATTEMPTS, (await settingsStore.get('auth')).adminLockoutMinutes);
+    throw new UnauthorizedError('MFA_INVALID');
+  }
   const recoveryCodes = Array.from({ length: 10 }, () => `${randomCode(5)}-${randomCode(5)}`);
   await adminsRepo.updateAdminUser(userId, {
     mfa_enabled: true,
@@ -188,7 +215,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
   const reset = await authRepo.findReset(hashToken(token, 'reset'));
   if (!reset) throw new BusinessRuleError('RESET_TOKEN_INVALID');
   await passwordPolicyCheck(newPassword);
-  await authRepo.useReset(reset.id);
+  if (!(await authRepo.useReset(reset.id))) throw new BusinessRuleError('RESET_TOKEN_INVALID');
   await adminsRepo.updateAdminUser(reset.user_id, { password_hash: await hashPassword(newPassword), password_changed_at: new Date(), failed_login_count: 0 });
   await sessions.revokeAll(reset.user_id, 'password_reset');
 }
@@ -204,7 +231,7 @@ export async function acceptInvite(input: { token: string; password: string; nam
   const inv = await authRepo.findInvite(hashToken(input.token, 'invite'));
   if (!inv) throw new BusinessRuleError('INVITE_INVALID');
   await passwordPolicyCheck(input.password);
-  await authRepo.acceptInvite(inv.id);
+  if (!(await authRepo.acceptInvite(inv.id))) throw new BusinessRuleError('INVITE_INVALID');
   await adminsRepo.updateAdminUser(inv.user_id, { password_hash: await hashPassword(input.password), password_changed_at: new Date() });
   await adminsRepo.updateUser(inv.user_id, { status: 'active', ...(input.name ? { name_en: input.name.en, name_ar: input.name.ar } : {}) });
   const row = await adminsService.getRow(inv.user_id);
