@@ -21,7 +21,8 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3.5 text-sm',
+  // 40px tall on touch screens (tap-target minimum), the compact 36px from `sm` up.
+  sm: 'h-10 px-3.5 text-sm sm:h-9',
   md: 'h-11 px-5 text-sm',
   lg: 'h-14 px-7 text-base',
   icon: 'h-10 w-10 p-0',

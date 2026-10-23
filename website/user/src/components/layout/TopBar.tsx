@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bell, ChevronDown, CreditCard, LogOut, PlayCircle, Search, UserRound, X } from 'lucide-react';
+import { Bell, ChevronDown, CreditCard, LogOut, Menu, PlayCircle, Search, UserRound, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -158,18 +158,18 @@ function NotificationsMenu() {
         aria-expanded={open}
         aria-haspopup="true"
         aria-label={`${t('student.topbar.notifications')} — ${unreadText}`}
-        className="relative flex h-11 w-11 items-center justify-center rounded-xl text-primary transition hover:bg-primary/5"
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl text-primary transition hover:bg-primary/5 sm:h-11 sm:w-11"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute end-2 top-2 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-white">
+          <span className="absolute end-1.5 top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-white">
             {unreadCount}
           </span>
         )}
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div {...dropdown} className="absolute end-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-primary/5 bg-white p-2 shadow-lift">
+          <motion.div {...dropdown} className="fixed inset-x-3 top-[4.25rem] z-50 rounded-2xl sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-[22rem] border border-primary/5 bg-white p-2 shadow-lift">
             <div className="flex items-center justify-between px-3 py-2">
               <p className="font-semibold text-primary">{t('student.topbar.notifications')}</p>
               <Badge tone="gold">{unreadText}</Badge>
@@ -233,22 +233,24 @@ function UserMenu() {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={t('student.topbar.userMenu')}
-        className="flex items-center gap-2.5 rounded-xl p-1 pe-2 transition hover:bg-primary/5"
+        className="flex h-10 min-w-0 items-center gap-2.5 rounded-xl p-1 transition hover:bg-primary/5 sm:h-11 md:pe-2"
       >
-        <Avatar src={user.avatar} alt={l(user.name)} size={38} className="ring-2 ring-accent/40" />
-        <span className="hidden text-start md:block">
-          <span className="block text-sm font-semibold leading-tight text-primary">{l(user.name)}</span>
-          <span className="block text-xs text-muted">
+        <Avatar src={user.avatar} alt={l(user.name)} size={36} className="shrink-0 ring-2 ring-accent/40" />
+        <span className="hidden min-w-0 max-w-[11rem] text-start md:block xl:max-w-[14rem]">
+          <span className="block truncate text-sm font-semibold leading-tight text-primary" title={l(user.name)}>
+            {l(user.name)}
+          </span>
+          <span className="block truncate text-xs text-muted">
             <bdi dir="ltr" className="num">
               {normalizeMobile(user.mobile)}
             </bdi>
           </span>
         </span>
-        <ChevronDown className="hidden h-4 w-4 text-muted md:block" aria-hidden />
+        <ChevronDown className="hidden h-4 w-4 shrink-0 text-muted md:block" aria-hidden />
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div {...dropdown} role="menu" className="absolute end-0 top-full z-50 mt-2 w-60 rounded-2xl border border-primary/5 bg-white p-2 shadow-lift">
+          <motion.div {...dropdown} role="menu" className="absolute end-0 top-full z-50 mt-2 w-[min(15rem,calc(100vw-1.5rem))] rounded-2xl border border-primary/5 bg-white p-2 shadow-lift">
             {items.map((it) => (
               <Link
                 key={it.to}
@@ -280,30 +282,47 @@ function UserMenu() {
   );
 }
 
-export function TopBar() {
+export function TopBar({ onMenu }: { onMenu?: () => void }) {
   const { t } = useTranslation();
   const [mobileSearch, setMobileSearch] = useState(false);
   return (
     <header className="sticky top-0 z-40 border-b border-primary/5 bg-cream/80 backdrop-blur-xl">
-      <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:h-20 lg:px-8">
-        <Link to="/student/dashboard" className="lg:hidden" aria-label={t('brand.logoAlt')}>
+      <div className="flex h-16 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:h-20 lg:px-8">
+        {/* Start edge: drawer toggle + brand (below lg, where the sidebar is hidden) */}
+        {onMenu && (
+          <button
+            type="button"
+            onClick={onMenu}
+            aria-label={t('nav.openMenu')}
+            aria-haspopup="dialog"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-primary transition hover:bg-primary/5 sm:h-11 sm:w-11 lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+        <Link to="/student/dashboard" className="shrink-0 max-[359px]:hidden lg:hidden" aria-label={t('brand.logoAlt')}>
           <LogoMark />
         </Link>
-        <div className="hidden max-w-xl flex-1 md:block">
-          <SearchBox />
+        {/* Search takes all the remaining space (its field is capped for readability) */}
+        <div className="hidden min-w-0 flex-1 md:block">
+          <div className="max-w-xl">
+            <SearchBox />
+          </div>
         </div>
-        <div className="flex-1 md:hidden" />
-        <button
-          type="button"
-          onClick={() => setMobileSearch(true)}
-          className="flex h-11 w-11 items-center justify-center rounded-xl text-primary hover:bg-primary/5 md:hidden"
-          aria-label={t('student.topbar.searchLabel')}
-        >
-          <Search className="h-5 w-5" />
-        </button>
-        <LanguageSwitcher className="hidden sm:inline-flex" />
-        <NotificationsMenu />
-        <UserMenu />
+        {/* End edge (right in LTR, left in RTL): always flush to the corner */}
+        <div className="ms-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileSearch(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-primary transition hover:bg-primary/5 sm:h-11 sm:w-11 md:hidden"
+            aria-label={t('student.topbar.searchLabel')}
+          >
+            <Search className="h-5 w-5" />
+          </button>
+          <LanguageSwitcher />
+          <NotificationsMenu />
+          <UserMenu />
+        </div>
       </div>
       <AnimatePresence>
         {mobileSearch && (
@@ -311,14 +330,14 @@ export function TopBar() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="absolute inset-x-0 top-0 z-50 flex h-16 items-center gap-2 bg-white px-4 shadow-soft md:hidden"
+            className="absolute inset-x-0 top-0 z-50 flex h-16 items-center gap-2 bg-white px-3 shadow-soft sm:px-6 md:hidden"
           >
             <SearchBox autoFocus onDone={() => setMobileSearch(false)} />
             <button
               type="button"
               onClick={() => setMobileSearch(false)}
               aria-label={t('common.close')}
-              className="rounded-xl p-2.5 text-muted hover:bg-primary/5"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-primary/5"
             >
               <X className="h-5 w-5" />
             </button>

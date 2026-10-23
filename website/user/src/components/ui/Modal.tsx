@@ -86,7 +86,9 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             exit={{ opacity: 0, y: 30, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
             className={cn(
-              'relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-lift outline-none sm:rounded-3xl sm:p-8',
+              // Phones: bottom sheet (sm/md) or full-screen sheet (lg/xl, e.g. the lesson quiz); centred dialog from `sm` up.
+              'relative w-full overflow-y-auto overscroll-contain bg-white p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-lift outline-none sm:max-h-[92vh] sm:rounded-3xl sm:p-8',
+              size === 'lg' || size === 'xl' ? 'h-[100svh] max-h-[100svh] sm:h-auto' : 'max-h-[92svh] rounded-t-3xl',
               widths[size],
               className,
             )}
@@ -97,13 +99,13 @@ export function Modal({ open, onClose, title, description, children, footer, siz
                 data-modal-close
                 onClick={onClose}
                 aria-label={t('common.close')}
-                className="absolute end-4 top-4 rounded-full p-2 text-muted transition hover:bg-primary/5 hover:text-primary"
+                className="absolute end-3 top-3 flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-primary/5 hover:text-primary sm:end-4 sm:top-4"
               >
                 <X className="h-5 w-5" />
               </button>
             )}
             {title && (
-              <h2 id={titleId} className="pe-8 text-2xl font-bold text-primary">
+              <h2 id={titleId} className="pe-10 text-xl font-bold text-primary sm:text-2xl">
                 {title}
               </h2>
             )}

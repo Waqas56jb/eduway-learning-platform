@@ -60,6 +60,9 @@ export default defineConfig({
       dependencies: ['setup-admin'],
       use: mobile,
     },
+    // Responsive audit: every student-site route × EN/AR × 360/390/768/1024/1280/1920 px; fails on document
+    // horizontal overflow at 360/390 px. Screenshots → screenshots/responsive/<E2E_SHOT_PHASE>/.
+    { name: 'user-responsive', testMatch: /user-responsive\.spec\.ts/, dependencies: ['setup-user'], use: desktop },
     // Branded Edge ships the proprietary H.264/AAC codecs the lesson videos (MP4) need; Playwright's bundled
     // Chromium cannot play them, so the lesson heartbeat would never fire there. Override with E2E_FLOW_CHANNEL.
     { name: 'user-flows', testMatch: /user-flows\.spec\.ts/, dependencies: ['setup-user'], use: { ...desktop, channel: process.env.E2E_FLOW_CHANNEL ?? 'msedge' } },

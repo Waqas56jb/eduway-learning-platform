@@ -26,9 +26,9 @@ function ProgressSkeleton() {
   return (
     <div className="space-y-6" aria-hidden>
       <Skeleton className="h-56 rounded-3xl" />
-      <div className="grid gap-6 lg:grid-cols-5">
-        <SkeletonList rows={5} className="lg:col-span-2" />
-        <Skeleton className="h-[26rem] rounded-2xl lg:col-span-3" />
+      <div className="grid gap-6 xl:grid-cols-5">
+        <SkeletonList rows={5} className="xl:col-span-2" />
+        <Skeleton className="h-[26rem] rounded-2xl xl:col-span-3" />
       </div>
       <Skeleton className="h-64 rounded-2xl" />
     </div>
@@ -76,7 +76,7 @@ export default function Progress() {
             <section className="relative overflow-hidden rounded-3xl bg-navy-grad p-6 text-white shadow-lift sm:p-8">
               <div className="pointer-events-none absolute -top-24 end-0 h-64 w-64 rounded-full bg-accent/25 blur-3xl" aria-hidden />
               <div className="pointer-events-none absolute -bottom-24 start-10 h-48 w-48 rounded-full bg-accent/10 blur-3xl" aria-hidden />
-              <div className="relative flex flex-col gap-8 md:flex-row md:items-center">
+              <div className="relative flex flex-col gap-8 xl:flex-row xl:items-center">
                 <div className="flex items-center gap-5">
                   <ProgressRing
                     value={overallPct}
@@ -98,7 +98,7 @@ export default function Progress() {
                     </p>
                   </div>
                 </div>
-                <dl className="grid flex-1 grid-cols-3 gap-2 sm:gap-3 md:ms-auto md:max-w-xl">
+                <dl className="grid flex-1 grid-cols-3 gap-2 sm:gap-3 xl:ms-auto xl:max-w-xl">
                   {stats.map(({ icon: Icon, label, value }) => (
                     <div key={label} className="glass flex flex-col rounded-2xl p-3 sm:p-4">
                       <Icon className="h-5 w-5 text-accent-light" aria-hidden />
@@ -111,9 +111,9 @@ export default function Progress() {
             </section>
           </Reveal>
 
-          <div className="grid gap-6 lg:grid-cols-5">
+          <div className="grid gap-6 xl:grid-cols-5">
             {/* Subject completion */}
-            <Card className="p-5 sm:p-6 lg:col-span-2">
+            <Card className="p-5 sm:p-6 xl:col-span-2">
               <CardHeader title={t('account.progress.bySubject')} subtitle={t('account.progress.bySubjectSub')} />
               <Reveal as="ul" staggerChildren={0.07} className="mt-5 space-y-3">
                 {subjects.map((p) => {
@@ -152,7 +152,7 @@ export default function Progress() {
             </Card>
 
             {/* Trend */}
-            <Card className="flex flex-col p-5 sm:p-6 lg:col-span-3">
+            <Card className="flex flex-col p-5 sm:p-6 xl:col-span-3">
               <CardHeader title={t('account.progress.trendTitle')} subtitle={t('account.progress.trendSub')} />
               <div className="mt-5 flex-1">
                 {trendQ.data ? <QuizTrendChart trend={trendQ.data} /> : <Skeleton className="h-72 w-full" />}
@@ -160,9 +160,9 @@ export default function Progress() {
             </Card>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-5">
+          <div className="grid gap-6 xl:grid-cols-5">
             {/* Weak topics */}
-            <Card className="p-5 sm:p-6 lg:col-span-2">
+            <Card className="p-5 sm:p-6 xl:col-span-2">
               <CardHeader
                 title={t('account.progress.weakTitle')}
                 subtitle={t('account.progress.weakSub')}
@@ -185,7 +185,7 @@ export default function Progress() {
                     <RevealItem as="li" key={w.topicId} className="py-3.5 first:pt-0 last:pb-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-semibold text-primary">{l(w.topic)}</p>
+                          <p className="break-words font-semibold text-primary">{l(w.topic)}</p>
                           <p className="mt-0.5 truncate text-xs text-muted">
                             <span style={{ color: s?.color }} className="font-semibold">
                               {l(s?.name)}
@@ -214,7 +214,7 @@ export default function Progress() {
             </Card>
 
             {/* Heatmap */}
-            <Card className="min-w-0 p-5 sm:p-6 lg:col-span-3">
+            <Card className="min-w-0 p-5 sm:p-6 xl:col-span-3">
               <CardHeader
                 title={t('account.progress.heatTitle')}
                 subtitle={t('account.progress.heatSub')}

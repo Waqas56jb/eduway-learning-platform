@@ -296,10 +296,10 @@ export default function Subscription() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-3 sm:mt-auto sm:flex-row sm:pt-6">
+              <div className="mt-6 flex flex-col gap-3 sm:mt-auto sm:flex-row sm:flex-wrap sm:pt-6">
                 <Button
                   variant="gold"
-                  className="flex-1"
+                  className="flex-1 sm:min-w-[10rem]"
                   leftIcon={<RefreshCw className="h-4 w-4" aria-hidden />}
                   disabled={!current}
                   onClick={() => current && openCheckout(current, sub?.cycle ?? period)}
@@ -308,7 +308,7 @@ export default function Subscription() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 sm:min-w-[11rem]"
                   rightIcon={<ArrowUpRight className="h-4 w-4 rtl:-scale-x-100" aria-hidden />}
                   onClick={() => compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                 >

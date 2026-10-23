@@ -516,7 +516,7 @@ export default function Profile() {
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-primary">
-                              <span className="truncate" dir="ltr">
+                              <span className="min-w-0 max-w-full truncate" dir="ltr" title={s.device}>
                                 {s.device}
                               </span>
                               {s.current && <Badge tone="gold">{t('account.profile.thisDevice')}</Badge>}
@@ -546,7 +546,13 @@ export default function Profile() {
                   </AnimatePresence>
                 </ul>
                 {others.length > 0 ? (
-                  <Button variant="subtle" size="sm" fullWidth className="mt-4" onClick={() => ask({ kind: 'others' })}>
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    fullWidth
+                    className="mt-4 !h-auto min-h-[2.5rem] !whitespace-normal py-2 text-center"
+                    onClick={() => ask({ kind: 'others' })}
+                  >
                     {t('account.profile.logoutOthers')}
                   </Button>
                 ) : (
@@ -565,7 +571,7 @@ export default function Profile() {
                       size="sm"
                       onClick={() => ask({ kind: 'reset' })}
                       leftIcon={<RotateCcw className="h-4 w-4" aria-hidden />}
-                      className="shrink-0"
+                      className="max-w-full shrink-0 !h-auto min-h-[2.5rem] !whitespace-normal py-2"
                     >
                       {t('account.profile.reset')}
                     </Button>
@@ -577,7 +583,7 @@ export default function Profile() {
                       size="sm"
                       onClick={onLogout}
                       leftIcon={<LogOut className="h-4 w-4 rtl:-scale-x-100" aria-hidden />}
-                      className="shrink-0"
+                      className="max-w-full shrink-0 !h-auto min-h-[2.5rem] !whitespace-normal py-2"
                     >
                       {t('account.profile.logout')}
                     </Button>

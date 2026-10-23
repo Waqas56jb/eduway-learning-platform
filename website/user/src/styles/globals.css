@@ -25,7 +25,12 @@
     @apply bg-cream font-sans text-ink antialiased;
     line-height: 1.6;
     text-rendering: optimizeLegibility;
+    /* Long unbroken strings (emails, device names, URLs) wrap instead of widening the page. */
+    overflow-wrap: break-word;
   }
+  /* Grid items default to min-width:auto, so one long child (a truncated device name, a chart, a wide form)
+     blows the track past the viewport on phones. Zero-specificity so any min-w-* utility still wins. */
+  :where(.grid) > * { min-width: 0; }
   h1, h2, h3, h4 { @apply font-display; letter-spacing: -0.02em; line-height: 1.15; text-wrap: balance; }
   [dir='rtl'] h1, [dir='rtl'] h2, [dir='rtl'] h3, [dir='rtl'] h4 { letter-spacing: 0; line-height: 1.3; }
   /* Playfair defaults to old-style figures; stats and prices read better with lining numerals. */

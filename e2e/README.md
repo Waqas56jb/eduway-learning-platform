@@ -30,6 +30,7 @@ H.264 MP4 and Playwright's bundled Chromium has no proprietary codecs. Override 
 npm run test:full     # build both apps into e2e/.dist, then the whole suite (preview mode)
 npm test              # whole suite against the existing e2e/.dist builds
 npm run test:routes   # route sweeps only (all apps, EN/AR, desktop + phone)
+npm run test:responsive # responsive audit of every student route (EN/AR × 360…1920 px)
 npm run test:flows    # interaction flows only
 npm run test:dev      # same suite against the Vite dev servers (E2E_MODE=dev)
 npm run report        # open the HTML report
@@ -48,6 +49,7 @@ Outputs: `screenshots/<app>/<lang>/<route>.png` (`user`, `user-mobile`, `admin`,
 | --- | --- |
 | `setup-user` / `setup-admin` | UI sign-in, saves `.auth/*.json`, resolves real ids for `:id` routes |
 | `user-routes-desktop` / `user-routes-mobile` | every student route × EN/AR at 1440×900 and 390×844 |
+| `user-responsive` | every student route × EN/AR × 360/390/768/1024/1280/1920 px: scroll-through, every tab, top-bar overlays, checkout sheet; fails on any document horizontal overflow. Shots → `screenshots/responsive/<E2E_SHOT_PHASE>/<lang>/<width>/` + `report.json` (`E2E_RESPONSIVE_WIDTHS`, `E2E_RESPONSIVE_ROUTES` narrow the run) |
 | `admin-routes` | every admin route (parsed from `website/admin/src/routes/index.tsx`) × EN/AR |
 | `admin-routes-mobile` | admin shell + newest pages (teachers, support, marketer detail, delivery log) at 390×844 |
 | `user-flows` | OTP login → lesson video/heartbeat → quiz → practice → mistake retry → exam → AI tutor → checkout → notifications → profile/language → contact form → logout |

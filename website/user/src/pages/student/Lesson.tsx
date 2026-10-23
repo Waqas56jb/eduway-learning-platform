@@ -49,7 +49,7 @@ type Tab = 'overview' | 'resources' | 'notes';
 
 function LessonSkeleton() {
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]" aria-hidden>
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]" aria-hidden>
       <div className="space-y-5">
         <Skeleton className="h-4 w-64" />
         <Skeleton className="aspect-video rounded-2xl" />
@@ -191,9 +191,9 @@ export default function Lesson() {
             </ol>
           </nav>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-8">
             {/* Video + info */}
-            <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+            <div className="min-w-0 xl:col-start-1 xl:row-start-1">
               {locked ? (
                 <div className="relative aspect-video overflow-hidden rounded-2xl shadow-lift">
                   <div className="absolute inset-0">
@@ -329,8 +329,8 @@ export default function Lesson() {
             </div>
 
             {/* Up next */}
-            <aside className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-labelledby="up-next">
-              <Card className="p-4 lg:sticky lg:top-24">
+            <aside className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1" aria-labelledby="up-next">
+              <Card className="p-4 xl:sticky xl:top-24">
                 <div className="px-1 pb-3">
                   <h2 id="up-next" className="font-sans text-base font-bold tracking-normal text-primary rtl:font-display">
                     {t('learn.lesson.upNext')}
@@ -350,7 +350,7 @@ export default function Lesson() {
             </aside>
 
             {/* Tabs */}
-            <section className="min-w-0 lg:col-start-1 lg:row-start-2">
+            <section className="min-w-0 xl:col-start-1 xl:row-start-2">
               <Tabs<Tab>
                 variant="line"
                 ariaLabel={l(lesson.title)}

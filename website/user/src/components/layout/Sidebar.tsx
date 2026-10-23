@@ -1,15 +1,97 @@
-import { motion } from 'framer-motion';
-import { ChevronsLeft, Crown, LogOut } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronsLeft, Crown, LogOut, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Logo, LogoMark, ProgressBar } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
 import { useStudent } from '@/hooks/useProgress';
 import { cn } from '@/lib/utils';
+import { LanguageSwitcher } from './LanguageSwitcher';
 import { STUDENT_NAV } from './studentNav';
 
+/** Desktop sidebar (lg+). On smaller screens the same content opens as a drawer (`SidebarDrawer`). */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  return (
+    <motion.aside
+      animate={{ width: collapsed ? 88 : 280 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+      className="sticky top-0 z-30 hidden h-screen shrink-0 flex-col border-e border-white/5 bg-primary text-white lg:flex"
+    >
+      <SidebarBody collapsed={collapsed} onToggle={onToggle} />
+    </motion.aside>
+  );
+}
+
+/** Off-canvas navigation drawer for phones/tablets, opened from the top bar's menu button. */
+export function SidebarDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const { dir } = useLang();
+  const { pathname } = useLocation();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const off = dir === 'rtl' ? '100%' : '-100%';
+
+  // Close on navigation.
+  useEffect(() => onClose(), [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    const id = window.setTimeout(() => closeRef.current?.focus(), 50);
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onMq = () => mq.matches && onClose();
+    mq.addEventListener('change', onMq);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener('keydown', onKey);
+      mq.removeEventListener('change', onMq);
+      window.clearTimeout(id);
+    };
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <motion.div
+            className="absolute inset-0 bg-primary/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            aria-hidden
+          />
+          <motion.aside
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('nav.mainNav')}
+            initial={{ x: off }}
+            animate={{ x: 0 }}
+            exit={{ x: off }}
+            transition={{ type: 'spring', stiffness: 340, damping: 36 }}
+            className="absolute inset-y-0 start-0 flex w-[min(20rem,86vw)] flex-col bg-primary text-white shadow-lift"
+          >
+            <button
+              ref={closeRef}
+              type="button"
+              onClick={onClose}
+              aria-label={t('common.close')}
+              className="absolute end-3 top-5 z-10 flex h-10 w-10 items-center justify-center rounded-xl text-white/70 transition hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <SidebarBody collapsed={false} drawer />
+          </motion.aside>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function SidebarBody({ collapsed, onToggle, drawer }: { collapsed: boolean; onToggle?: () => void; drawer?: boolean }) {
   const { t } = useTranslation();
   const { l } = useLang();
   const { user, me, logout } = useAuth();
@@ -21,13 +103,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const groups = ['learn', 'practice', 'account'] as const;
 
   return (
-    <motion.aside
-      animate={{ width: collapsed ? 88 : 280 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-      className="sticky top-0 z-30 hidden h-screen shrink-0 flex-col border-e border-white/5 bg-primary text-white lg:flex"
-    >
+    <>
       <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-accent/10 to-transparent" aria-hidden />
-      <div className={cn('relative flex h-20 items-center', collapsed ? 'justify-center' : 'justify-between px-6')}>
+      <div className={cn('relative flex h-20 shrink-0 items-center', collapsed ? 'justify-center' : 'justify-between px-6')}>
         {collapsed ? <LogoMark /> : <Logo light to="/student/dashboard" />}
       </div>
 
@@ -57,7 +135,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                       <>
                         {isActive && (
                           <motion.span
-                            layoutId="sidebar-active"
+                            layoutId={drawer ? 'drawer-active' : 'sidebar-active'}
                             className="absolute inset-y-2 start-0 w-1 rounded-full bg-accent shadow-[0_0_12px_rgba(201,162,74,0.8)]"
                           />
                         )}
@@ -109,6 +187,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <LogOut className="h-5 w-5 rtl:-scale-x-100" aria-hidden />
             {!collapsed && t('student.nav.logout')}
           </button>
+          {drawer && <LanguageSwitcher tone="light" />}
+          {!drawer && (
           <button
             type="button"
             onClick={onToggle}
@@ -117,8 +197,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           >
             <ChevronsLeft className={cn('h-5 w-5 transition-transform rtl:-scale-x-100', collapsed && 'rotate-180')} />
           </button>
+          )}
         </div>
       </div>
-    </motion.aside>
+    </>
   );
 }

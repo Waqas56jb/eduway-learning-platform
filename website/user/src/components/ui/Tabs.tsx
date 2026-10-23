@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface TabItem<T extends string = string> {
@@ -25,6 +25,24 @@ interface TabsProps<T extends string> {
 export function Tabs<T extends string>({ items, value, onChange, className, variant = 'pill', ariaLabel, stretch }: TabsProps<T>) {
   const group = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
+  const mounted = useRef(false);
+
+  // On narrow screens the tab bar scrolls horizontally: keep the newly selected tab in view
+  // (scrolls only the tab bar itself, never the page; skipped on first render).
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    const list = listRef.current;
+    const tab = refs.current[items.findIndex((it) => it.id === value)];
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return;
+    const l = list.getBoundingClientRect();
+    const r = tab.getBoundingClientRect();
+    if (r.left < l.left) list.scrollBy({ left: r.left - l.left - 16, behavior: 'smooth' });
+    else if (r.right > l.right) list.scrollBy({ left: r.right - l.right + 16, behavior: 'smooth' });
+  }, [value, items]);
 
   const onKey = (e: KeyboardEvent, i: number) => {
     const rtl = document.documentElement.dir === 'rtl';
@@ -42,6 +60,7 @@ export function Tabs<T extends string>({ items, value, onChange, className, vari
 
   return (
     <div
+      ref={listRef}
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
@@ -65,7 +84,7 @@ export function Tabs<T extends string>({ items, value, onChange, className, vari
             onKeyDown={(e) => onKey(e, i)}
             className={cn(
               'relative flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-semibold transition-colors',
-              variant === 'pill' ? (stretch ? 'rounded-xl px-2.5 py-2.5 sm:px-4' : 'rounded-xl px-4 py-2.5') : 'pb-3 pt-1',
+              variant === 'pill' ? (stretch ? 'rounded-xl px-2.5 py-2.5 sm:px-4' : 'rounded-xl px-4 py-2.5') : 'min-h-[2.5rem] pb-3 pt-2',
               stretch && 'flex-1 justify-center sm:flex-none',
               active ? (variant === 'pill' ? 'text-white' : 'text-primary') : 'text-muted hover:text-primary',
             )}

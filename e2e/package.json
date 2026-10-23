@@ -10,6 +10,7 @@
     "test": "playwright test",
     "test:full": "node scripts/build-apps.mjs && playwright test",
     "test:routes": "playwright test --project=user-routes-desktop --project=user-routes-mobile --project=admin-routes --project=admin-routes-mobile",
+    "test:responsive": "playwright test --project=user-responsive",
     "test:flows": "playwright test --project=user-flows --project=admin-flows",
     "test:user": "playwright test --project=user-routes-desktop --project=user-routes-mobile --project=user-flows",
     "test:admin": "playwright test --project=admin-routes --project=admin-routes-mobile --project=admin-flows",
