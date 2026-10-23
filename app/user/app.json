@@ -80,6 +80,13 @@
     "description": "EDUWAY — bilingual learning platform for Iraqi sixth-scientific-grade students.",
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1704d412-8a33-4473-8135-a14dad92c1c9"
+      }
+    },
+    "owner": "waqas56jb"
   }
 }

@@ -27,6 +27,12 @@
         "EXPO_PUBLIC_API_URL": "https://eduway-learning-platform-production.up.railway.app/api/v1"
       }
     },
+    "ios-simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true
+      }
+    },
     "production": {
       "extends": "base",
       "autoIncrement": true,
