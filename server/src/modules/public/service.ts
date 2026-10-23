@@ -163,7 +163,8 @@ export const publicService = {
         const meta = GATEWAY_META[g.id] ?? { kind: 'wallet' as const, hint: { en: '', ar: '' }, flow: 'redirect' as const, requiresPhone: false };
         const mode = gatewayMode(g.id);
         // mode: live | sandbox (gateway test environment) | mock | disabled — drives the "Sandbox / test mode" badge.
-        return { id: g.id, kind: meta.kind, name: g.name, hint: meta.hint, color: g.color, logoUrl: null, enabled: g.enabled, requiresPhone: meta.requiresPhone, flow: meta.flow, mode, sandbox: mode === 'sandbox' };
+        // A gateway the admin switched on but that cannot take payments here (no credentials in production) is not offered.
+        return { id: g.id, kind: meta.kind, name: g.name, hint: meta.hint, color: g.color, logoUrl: null, enabled: g.enabled && mode !== 'disabled', requiresPhone: meta.requiresPhone, flow: meta.flow, mode, sandbox: mode === 'sandbox' };
       });
   },
 

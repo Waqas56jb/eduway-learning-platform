@@ -1441,7 +1441,8 @@ interface MySubscription {
 }
 interface PaymentMethodDto {
   id: Gateway; kind: 'wallet' | 'card'; name: Localized; hint: Localized;
-  color: string; logoUrl: string | null; enabled: boolean;
+  color: string; logoUrl: string | null;
+  enabled: boolean;                      // admin switch AND mode !== 'disabled' — clients offer only enabled methods
   requiresPhone: boolean;                // wallet MSISDN collected by OUR UI only for mock/redirect prefill — never PINs/cards
   flow: 'redirect' | 'deeplink' | 'mock';
   mode: 'live' | 'sandbox' | 'mock' | 'disabled'; // server env: sandbox = gateway test/staging/UAT environment (no real money)

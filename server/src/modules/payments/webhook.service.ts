@@ -247,7 +247,7 @@ export async function processCallback(providerId: string, query: Record<string, 
       : `SELECT id, status, metadata FROM ${T.payments} WHERE provider = $2 AND (ref = ANY($1::text[]) OR provider_ref = ANY($1::text[])) LIMIT 1`,
     paymentId ? [paymentId] : [keys, provider.id],
   );
-  const fallback = `${env.USER_APP_URL.replace(/\/+$/, '')}/subscription`;
+  const fallback = `${env.USER_APP_URL.replace(/\/+$/, '')}/student/subscription`;
   const target = safeReturnTarget(p?.metadata?.returnScheme) ?? safeReturnTarget(p?.metadata?.returnUrl) ?? fallback;
   const sep = target.includes('?') ? '&' : '?';
   return { redirectTo: p ? `${target}${sep}paymentId=${encodeURIComponent(p.id)}&status=${encodeURIComponent(p.status)}` : target };
