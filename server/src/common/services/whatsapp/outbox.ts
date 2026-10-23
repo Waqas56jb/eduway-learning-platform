@@ -26,6 +26,8 @@ export interface WhatsAppOutboxItem {
   otpId?: string;
   /** ISO time after which the message is pointless (OTP expiry). */
   expiresAt?: string;
+  /** Times this item was handed back to the queue because another instance holds the live socket. */
+  hops?: number;
 }
 
 /** What is stored in pg-boss (all content encrypted). */
@@ -100,7 +102,9 @@ export async function queueWhatsApp(
   session: WhatsAppSessionManager,
   smsFallback: () => SmsFallback,
 ): Promise<{ jobId: string | null; outcome: SendOutcome | null }> {
-  if (!jobsRunning()) return { jobId: null, outcome: await deliver(item, session, smsFallback) };
+  // This instance holds the live socket (or there is no queue): send now — an OTP must not wait for whichever
+  // instance happens to pick the job up. Sends are still serialized with a random gap inside session.sendText.
+  if (!jobsRunning() || session.isLive()) return { jobId: null, outcome: await deliver(item, session, smsFallback) };
   const ttl = item.expiresAt ? Math.max(30, Math.ceil((Date.parse(item.expiresAt) - Date.now()) / 1000)) : 3600;
   const jobId = await enqueue(WHATSAPP_SEND_JOB, sealJob(cipher, item), { retryLimit: 0, expireInSeconds: Math.min(ttl, 3600) });
   return { jobId, outcome: null };

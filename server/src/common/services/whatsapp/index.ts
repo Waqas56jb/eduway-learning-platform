@@ -6,7 +6,8 @@ import { env } from '../../../config/env.js';
 import { logger } from '../../../config/logger.js';
 import { pgAuthKV } from './auth-state.js';
 import { createSessionCipher, type SessionCipher } from './cipher.js';
-import { deliver, openJob, queueWhatsApp, type SmsFallback, type WhatsAppJobData, type WhatsAppOutboxItem } from './outbox.js';
+import { enqueue } from '../../../jobs/index.js';
+import { WHATSAPP_SEND_JOB, deliver, openJob, queueWhatsApp, sealJob, type SmsFallback, type WhatsAppJobData, type WhatsAppOutboxItem } from './outbox.js';
 import { pgSessionRepo } from './session-repo.js';
 import { WhatsAppSessionManager, type SocketFactory, type SocketLike } from './session.js';
 
@@ -60,8 +61,24 @@ export const baileysPort = {
 };
 export type BaileysPort = typeof baileysPort;
 
-/** pg-boss handler for `eduway.whatsapp-send`. */
+/** Max hand-backs before falling back to SMS (each waits ≥1 s; with N instances the holder is hit quickly). */
+const MAX_FORWARD_HOPS = 15;
+
+/**
+ * pg-boss handler for `eduway.whatsapp-send`. Every instance consumes the shared queue, but only the lease holder
+ * has the live socket: a non-holder hands the job back to the queue (short delay) instead of falling back to SMS
+ * while the linked number is connected elsewhere.
+ */
 export async function handleWhatsAppJob(data: WhatsAppJobData, smsFallback: () => SmsFallback): Promise<void> {
   if (!cipher) throw new Error('WHATSAPP_SESSION_SECRET not configured — cannot open queued WhatsApp message');
-  await deliver(openJob(cipher, data), whatsappSession, smsFallback);
+  const item = openJob(cipher, data);
+  const hops = item.hops ?? 0;
+  const expired = !!item.expiresAt && Date.parse(item.expiresAt) <= Date.now() + 2000;
+  if (!whatsappSession.isLive() && hops < MAX_FORWARD_HOPS && !expired && (await whatsappSession.remoteConnected())) {
+    const ttl = item.expiresAt ? Math.max(30, Math.ceil((Date.parse(item.expiresAt) - Date.now()) / 1000)) : 3600;
+    await enqueue(WHATSAPP_SEND_JOB, sealJob(cipher, { ...item, hops: hops + 1 }), { retryLimit: 0, startAfter: 1, expireInSeconds: Math.min(ttl, 3600) });
+    logger.debug({ hops: hops + 1 }, 'whatsapp: socket held by another instance — job handed back to the queue');
+    return;
+  }
+  await deliver(item, whatsappSession, smsFallback);
 }
