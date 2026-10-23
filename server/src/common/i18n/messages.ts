@@ -45,6 +45,7 @@ export const REASON_MESSAGES = {
 
   // ── student auth / OTP (§0.3) ─────────────────────────────────────────────────────────────────────
   PHONE_INVALID: { en: 'Enter a valid mobile number for the selected country.', ar: 'أدخل رقم هاتف صحيح للدولة المختارة.' },
+  WALLET_PHONE_INVALID: { en: 'Enter a valid Iraqi wallet number (07XX XXX XXXX).', ar: 'أدخل رقم محفظة عراقياً صحيحاً (07XX XXX XXXX).' },
   CONTACT_INVALID: { en: 'Enter a valid email address or phone number.', ar: 'أدخل بريداً إلكترونياً أو رقم هاتف صحيحاً.' },
   ACCOUNT_NOT_FOUND: { en: 'No account found for this number. Please create an account.', ar: 'لا يوجد حساب بهذا الرقم. يرجى إنشاء حساب.' },
   ACCOUNT_EXISTS: { en: 'This mobile number is already registered. Please sign in.', ar: 'رقم الهاتف هذا مسجّل مسبقاً. يرجى تسجيل الدخول.' },

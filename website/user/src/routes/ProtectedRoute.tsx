@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Button, LogoMark } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { safeReturnPath } from '@/lib/plans';
 
 function SessionLoading() {
   return (
@@ -51,6 +52,6 @@ export function GuestOnlyRoute() {
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
   if (status === 'loading') return <SessionLoading />;
-  if (status === 'authenticated') return <Navigate to={from?.startsWith('/student') ? from : '/student/dashboard'} replace />;
+  if (status === 'authenticated') return <Navigate to={safeReturnPath(from) ?? '/student/dashboard'} replace />;
   return <Outlet />;
 }

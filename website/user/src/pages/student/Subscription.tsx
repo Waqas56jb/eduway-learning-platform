@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useSubjectLookup } from '@/api/catalog';
 import { errorMessage } from '@/api/client';
 import { usePackages } from '@/api/packages';
-import { useDownloadReceipt, useMyPayments, waitForPayment } from '@/api/payments';
+import { paymentsApi, useDownloadReceipt, useMyPayments, waitForPayment } from '@/api/payments';
 import { useMySubscription, useRefreshEntitlements } from '@/api/subscriptions';
 import type { PaymentDetailDto, StudentPaymentDto } from '@/api/types';
 import {
@@ -28,7 +28,7 @@ import {
   ErrorState,
 } from '@/components/ui';
 import { MethodLogo, PaymentModal } from '@/components/student/account/PaymentModal';
-import { toLocalMobile, type BillingPeriod } from '@/components/student/account/billing';
+import type { BillingPeriod } from '@/components/student/account/billing';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
@@ -64,47 +64,60 @@ export default function Subscription() {
   const ready = !subQ.isLoading && !packagesQ.isLoading;
 
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
-  const [checkout, setCheckout] = useState<{ pkg: Package; period: BillingPeriod } | null>(null);
+  const [checkout, setCheckout] = useState<{ pkg: Package; period: BillingPeriod; resumePaymentId?: string } | null>(null);
   const [lastPkg, setLastPkg] = useState<Package | null>(null);
 
-  const openCheckout = (pkg: Package, p: BillingPeriod = period) => {
+  const openCheckout = (pkg: Package, p: BillingPeriod = period, resumePaymentId?: string) => {
     setLastPkg(pkg);
-    setCheckout({ pkg, period: p });
+    setCheckout({ pkg, period: p, resumePaymentId });
   };
 
   const onPaid = (r: PaymentDetailDto) => {
     void refreshEntitlements();
+    void paymentsQ.refetch();
     toast.success(
       t('account.subscription.pay.toast'),
       t('account.subscription.pay.toastBody', { plan: l(r.package.name), period: t(`account.subscription.periods.${r.cycle}`) }),
     );
   };
 
-  // Deep links: ?package=&cycle= (pricing CTA / locked content) opens checkout; ?payment= is the
-  // return from a hosted gateway page → poll PAY-08 until it settles.
+  // Deep links (once the packages are known):
+  //  - ?package=<id>&cycle= (pricing CTA, paywalls) or ?subject=<slug> (locked content → cheapest plan that
+  //    unlocks it) opens the checkout with that plan preselected;
+  //  - ?payment=<id> is the return from a hosted gateway page (the API adds paymentId/status) → the checkout
+  //    reopens on that payment, polls PAY-08 until it settles and shows the receipt.
   useEffect(() => {
+    if (!packages.length) return;
     const pkgId = params.get('package');
-    const paymentId = params.get('payment');
-    if (pkgId && packages.length) {
-      const pkg = packages.find((p) => p.id === pkgId);
-      if (pkg) openCheckout(pkg, params.get('cycle') === 'yearly' ? 'yearly' : 'monthly');
-      params.delete('package');
-      params.delete('cycle');
-      setParams(params, { replace: true });
-    }
+    const subject = params.get('subject');
+    const paymentId = params.get('payment') ?? params.get('paymentId');
+    const cycle: BillingPeriod = params.get('cycle') === 'yearly' ? 'yearly' : 'monthly';
+    if (!pkgId && !subject && !paymentId) return;
+    for (const k of ['package', 'cycle', 'subject', 'payment', 'paymentId', 'status']) params.delete(k);
+    setParams(params, { replace: true });
+
     if (paymentId) {
-      params.delete('payment');
-      setParams(params, { replace: true });
       const controller = new AbortController();
-      waitForPayment(paymentId, controller.signal)
+      paymentsApi
+        .get(paymentId)
         .then((p) => {
-          if (p.status === 'paid') onPaid(p);
-          else toast.error(t('account.subscription.pay.failed'));
-          void paymentsQ.refetch();
+          const pkg = packages.find((x) => x.id === p.package.id);
+          if (pkg) return openCheckout(pkg, p.cycle, paymentId);
+          // Package no longer listed: settle quietly and report the outcome.
+          return waitForPayment(paymentId, controller.signal).then((r) => {
+            if (r.status === 'paid') onPaid(r);
+            else toast.error(t('account.subscription.pay.failed'));
+            void paymentsQ.refetch();
+          });
         })
-        .catch((e) => toast.error(errorMessage(e)));
+        .catch((e) => (e as Error).name !== 'AbortError' && toast.error(errorMessage(e)));
       return () => controller.abort();
     }
+    const pkg = pkgId
+      ? packages.find((p) => p.id === pkgId)
+      : [...packages].filter((p) => !!subject && (p.subjects as string[]).includes(subject)).sort((a, b) => a.priceMonthly - b.priceMonthly)[0];
+    if (pkg) openCheckout(pkg, cycle);
+    else if (subject) compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [packages.length]);
 
@@ -533,7 +546,8 @@ export default function Subscription() {
           onClose={() => setCheckout(null)}
           pkg={checkout?.pkg ?? lastPkg}
           initialPeriod={checkout?.period ?? period}
-          defaultPhone={toLocalMobile(user.mobile)}
+          resumePaymentId={checkout?.resumePaymentId ?? null}
+          defaultPhone={user.mobile}
           onPaid={onPaid}
         />
       )}

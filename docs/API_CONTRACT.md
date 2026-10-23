@@ -1498,7 +1498,7 @@ Auth student · rl:public. Body `{ code: string; packageId: ID; cycle: BillingCy
 Used by: U PaymentModal promo "Apply", A checkout promo.
 
 #### PAY-06 · `POST /payments/initiate`
-Auth student · idem · rl. Body `{ packageId: ID; cycle: BillingCycle; gateway: Gateway; promoCode?: string; walletPhone?: string; returnUrl?: string /*web*/; returnScheme?: string /*app deep link e.g. eduway://subscription/success*/ }`.
+Auth student · idem · rl. Body `{ packageId: ID; cycle: BillingCycle; gateway: Gateway; promoCode?: string; walletPhone?: string /*Iraqi wallet in any common form: 07…, 7…, 964…, +964…, 00964…, spaces/dashes, Arabic-Indic digits → normalised to 9647XXXXXXXXX; an invalid number for zaincash/fastpay/asiahawala → 400 reason WALLET_PHONE_INVALID*/; returnUrl?: string /*web*/; returnScheme?: string /*app deep link e.g. eduway://subscription/success*/ }`.
 `gateway` accepts the aliases listed in §14. `returnUrl` / `returnScheme` may contain the placeholder `__ID__`; the server substitutes
 the payment id. A quote with `total = 0` (promo / proration credit) is confirmed immediately. With `DEV_MOCK_PAYMENTS` (never in
 production; default on only for an explicit `NODE_ENV=development`/`test`), gateways without merchant credentials are confirmed

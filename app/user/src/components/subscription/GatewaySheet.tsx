@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Icon } from '@/components/icons';
 import { BottomSheet, Button, Input, ProgressBar, Text } from '@/components/ui';
@@ -10,7 +10,7 @@ import { gradients, palette, radius, space, useTheme } from '@/theme';
 import { formatPrice } from '@/utils/format';
 import { haptic } from '@/utils/haptics';
 import { MethodMark } from './PaymentMethodCard';
-import { methodLabel, type PaymentMethod } from './paymentMethods';
+import { iraqiWalletLocal, isSimulatedMethod, methodLabel, SANDBOX_TEST_WALLETS, type PaymentMethod } from './paymentMethods';
 
 interface GatewaySheetProps {
   visible: boolean;
@@ -39,7 +39,9 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
   const [step, setStep] = useState(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const [phone, setPhone] = useState(() => (user?.mobile ?? '').replace(/^\+964/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3'));
+  // Wallets are Iraqi: prefill only when the account mobile is an Iraqi mobile (never a +92… account number).
+  const [phone, setPhone] = useState(() => iraqiWalletLocal(user?.mobile) ?? '');
+  const [phoneError, setPhoneError] = useState<string | undefined>();
   const [pin, setPin] = useState('1234');
   const [cardNumber, setCardNumber] = useState(method.id === 'qicard' ? '6262 1500 4418 2093' : '4242 4242 4242 4242');
   const [expiry, setExpiry] = useState('12/28');
@@ -51,6 +53,8 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
       setPhase('form');
       setStep(0);
       setHolder(L(user?.name));
+      setPhone(iraqiWalletLocal(user?.mobile) ?? '');
+      setPhoneError(undefined);
       setCardNumber(method.id === 'qicard' ? '6262 1500 4418 2093' : '4242 4242 4242 4242');
     }
   }, [visible, method.id, user, L]);
@@ -58,17 +62,26 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const methodName = methodLabel(method, t, L);
+  // Real gateways (live or sandbox) collect card numbers / PINs / OTPs on their own hosted page; only the dev
+  // MockGateway gets the simulated form below. Wallets still pass their number to prefill the gateway page.
+  const simulated = isSimulatedMethod(method);
+  const askPhone = method.kind === 'wallet' && (simulated || !!method.requiresPhone);
 
   const pay = async () => {
+    const wallet = askPhone ? iraqiWalletLocal(phone) : null;
+    if (askPhone && !wallet) {
+      setPhoneError(t('gateway.walletError'));
+      haptic.error();
+      return;
+    }
     haptic.medium();
     setPhase('processing');
     setStep(0);
     timers.current.forEach(clearTimeout);
     // Steps advance while the gateway works; "activating" holds until the server confirms.
     timers.current = [setTimeout(() => setStep(1), STEP_MS), setTimeout(() => setStep(2), STEP_MS * 2)];
-    const digits = phone.replace(/\D/g, '');
     const started = Date.now();
-    const ok = await onPay(method.kind === 'wallet' && digits ? `+964${digits.replace(/^0/, '')}` : undefined);
+    const ok = await onPay(wallet ? `+964${wallet.slice(1)}` : undefined);
     const wait = Math.max(0, STEP_MS * 2 + 600 - (Date.now() - started));
     timers.current.forEach(clearTimeout);
     if (!ok) {
@@ -83,6 +96,53 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
   };
 
   const processing = phase === 'processing';
+
+  // Iraqi wallet number: any common form is accepted (07…, 7…, 964…, +964…, 00964…, Arabic-Indic digits).
+  const testWallets = method.sandbox ? (SANDBOX_TEST_WALLETS[method.id] ?? []) : [];
+  const walletField = (
+    <>
+      <Input
+        label={t('gateway.walletNumber')}
+        value={phone}
+        onChangeText={(v) => {
+          setPhone(v);
+          if (phoneError) setPhoneError(undefined);
+        }}
+        placeholder="07XX XXX XXXX"
+        keyboardType="phone-pad"
+        icon="phone"
+        maxLength={20}
+        error={phoneError}
+        hint={phoneError ? undefined : t('gateway.walletHint', { method: methodName })}
+        style={{ writingDirection: 'ltr' }}
+      />
+      {testWallets.length ? (
+        <View style={{ gap: space.xs }}>
+          <Text variant="caption" color="muted">
+            {t('gateway.testWallets')}
+          </Text>
+          <View style={styles.chips}>
+            {testWallets.map((w) => (
+              <Pressable
+                key={w}
+                accessibilityRole="button"
+                onPress={() => {
+                  setPhone(w);
+                  setPhoneError(undefined);
+                  haptic.light();
+                }}
+                style={[styles.chip, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]}
+              >
+                <Text variant="caption" tabular>
+                  {w}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </>
+  );
 
   return (
     <BottomSheet
@@ -99,7 +159,7 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
               fullWidth
             />
             <Text variant="caption" color="muted" align="center">
-              {t('gateway.disclaimer')}
+              {simulated ? t('gateway.disclaimer') : method.sandbox ? t('methods.sandboxHint') : t('gateway.secured')}
             </Text>
           </View>
         )
@@ -203,17 +263,19 @@ export const GatewaySheet = memo(function GatewaySheet({ visible, amount, method
         </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.duration(220)} style={styles.form}>
-          {method.kind === 'wallet' ? (
+          {!simulated ? (
             <>
-              <Input
-                label={t('gateway.walletNumber')}
-                prefix="+964"
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                icon="phone"
-                maxLength={12}
-              />
+              {askPhone ? walletField : null}
+              <View style={[styles.notice, { backgroundColor: colors.accentSoft }]}>
+                <Icon name="shield" size={18} color={colors.accent} />
+                <Text variant="caption" style={{ flex: 1 }}>
+                  {t('gateway.redirectNotice', { method: methodName })}
+                </Text>
+              </View>
+            </>
+          ) : method.kind === 'wallet' ? (
+            <>
+              {walletField}
               <Input
                 label={t('gateway.pin')}
                 value={pin}
@@ -273,6 +335,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   form: { gap: space.md, marginTop: space.lg, marginBottom: space.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  chip: { paddingHorizontal: space.sm, paddingVertical: 4, borderRadius: radius.pill, borderWidth: StyleSheet.hairlineWidth },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.md },
   twoCol: { flexDirection: 'row', gap: space.md },
   processing: { gap: space.sm, marginTop: space.xl, marginBottom: space.lg },
   spinnerWrap: { height: 64, alignItems: 'center', justifyContent: 'center' },

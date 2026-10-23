@@ -36,13 +36,15 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
   /** Render as a router link. */
   to?: string;
+  /** Router state for `to` links (e.g. `{ from }` so sign-in returns to the checkout). */
+  linkState?: unknown;
 }
 
 export const buttonClasses = (variant: ButtonVariant = 'primary', size: ButtonSize = 'md', extra?: string) =>
   cn(base, variants[variant], sizes[size], extra);
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'primary', size = 'md', loading, leftIcon, rightIcon, fullWidth, to, className, children, disabled, type = 'button', ...rest },
+  { variant = 'primary', size = 'md', loading, leftIcon, rightIcon, fullWidth, to, linkState, className, children, disabled, type = 'button', ...rest },
   ref,
 ) {
   const cls = buttonClasses(variant, size, cn(fullWidth && 'w-full', className));
@@ -55,7 +57,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
   if (to) {
     return (
-      <Link to={to} className={cls} aria-disabled={disabled || undefined}>
+      <Link to={to} state={linkState} className={cls} aria-disabled={disabled || undefined}>
         {content}
       </Link>
     );

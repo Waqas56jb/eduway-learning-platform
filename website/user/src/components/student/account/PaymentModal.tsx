@@ -11,7 +11,16 @@ import { Button, Input, Modal, Skeleton, useToast } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
 import type { Package } from '@/types';
-import { formatCardNumber, formatExpiry, isValidExpiry, type BillingPeriod, type PaymentMethod } from './billing';
+import {
+  formatCardNumber,
+  formatExpiry,
+  iraqiWalletLocal,
+  isValidExpiry,
+  sanitizeWalletInput,
+  SANDBOX_TEST_WALLETS,
+  type BillingPeriod,
+  type PaymentMethod,
+} from './billing';
 
 type Step = 'summary' | 'method' | 'details' | 'processing' | 'success';
 const STEPS: Step[] = ['summary', 'method', 'details'];
@@ -21,8 +30,11 @@ interface PaymentModalProps {
   onClose: () => void;
   pkg: Package;
   initialPeriod: BillingPeriod;
+  /** The student's account mobile; used to prefill the wallet number only when it is an Iraqi mobile. */
   defaultPhone: string;
   onPaid: (payment: PaymentDetailDto) => void;
+  /** Back from a hosted gateway page: poll this payment (PAY-08) and show the result / receipt. */
+  resumePaymentId?: string | null;
 }
 
 /** Gateway "logo": initials on a brand-neutral tile in the gateway colour (or a card icon / CMS logo). */
@@ -64,13 +76,15 @@ function SandboxBadge({ withHint = false }: { withHint?: boolean }) {
  * signed webhook) → poll PAY-08 until paid → receipt (PAY-10). Card numbers / CVV / wallet PINs never
  * leave the browser — the card form only exists for the mock gateway's simulated hosted page.
  */
-export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, onPaid }: PaymentModalProps) {
+export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, onPaid, resumePaymentId = null }: PaymentModalProps) {
   const { t } = useTranslation();
   const { l, fmtNumber, fmtDate } = useLang();
   const toast = useToast();
   const subjectOf = useSubjectLookup();
   const { data: allMethods, isLoading: methodsLoading } = usePaymentMethods();
-  const PAYMENT_METHODS = useMemo(() => (allMethods ?? []).filter((m) => m.enabled), [allMethods]);
+  // Offer only gateways that can take a payment here: switched on by the admin and not `disabled` by the server
+  // (sandbox gateways are real test environments and stay selectable in production).
+  const PAYMENT_METHODS = useMemo(() => (allMethods ?? []).filter((m) => m.enabled && m.mode !== 'disabled'), [allMethods]);
   const quoteMutation = useQuote();
   const validatePromo = useValidatePromo();
   const downloadReceipt = useDownloadReceipt();
@@ -85,7 +99,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
   const [quote, setQuote] = useState<PriceQuote | null>(null);
   const [method, setMethod] = useState<PaymentMethod>('zaincash');
   const [card, setCard] = useState({ number: '', name: '', expiry: '', cvc: '' });
-  const [phone, setPhone] = useState(defaultPhone);
+  const [phone, setPhone] = useState(() => iraqiWalletLocal(defaultPhone) ?? '');
   const [submitted, setSubmitted] = useState(false);
   const [phase, setPhase] = useState(0);
   const [record, setRecord] = useState<PaymentDetailDto | null>(null);
@@ -94,19 +108,19 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
   // Fresh checkout every time the modal opens.
   useEffect(() => {
     if (!open) return;
-    setStep('summary');
+    setStep(resumePaymentId ? 'processing' : 'summary');
     setPeriod(pkg.priceYearly ? initialPeriod : 'monthly');
     setPromoInput('');
     setPromo(null);
     setPromoError('');
     setQuote(null);
     setCard({ number: '', name: '', expiry: '', cvc: '' });
-    setPhone(defaultPhone);
+    setPhone(iraqiWalletLocal(defaultPhone) ?? '');
     setSubmitted(false);
     setRecord(null);
     setPayError('');
     idemKey.current = idempotencyKey();
-  }, [open, initialPeriod, defaultPhone, pkg.id, pkg.priceYearly]);
+  }, [open, initialPeriod, defaultPhone, pkg.id, pkg.priceYearly, resumePaymentId]);
 
   // Default to the first enabled gateway.
   useEffect(() => {
@@ -138,6 +152,42 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Return from the gateway's hosted page (?payment=<id>): poll PAY-08 until it settles → receipt, or explain.
+  useEffect(() => {
+    if (!open || !resumePaymentId) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setPhase(1);
+    waitForPayment(resumePaymentId, controller.signal)
+      .then((final) => {
+        if (controller.signal.aborted) return;
+        setMethod(final.gateway);
+        setPeriod(final.cycle);
+        if (final.status === 'paid') {
+          setRecord(final);
+          setStep('success');
+          onPaid(final);
+          return;
+        }
+        const pending = final.status === 'pending' || final.status === 'initiated';
+        // A declined / failed gateway payment: back to the method list so another gateway (e.g. Qi Card) can be picked.
+        setPayError(
+          pending
+            ? t('account.subscription.pay.stillPending')
+            : t('account.subscription.pay.failedTryOther', { method: t(`account.subscription.methods.${final.gateway}`, { defaultValue: final.gateway }) }),
+        );
+        idemKey.current = idempotencyKey();
+        setStep(pending ? 'summary' : 'method');
+      })
+      .catch((err) => {
+        if ((err as Error).name === 'AbortError') return;
+        setPayError(errorMessage(err));
+        setStep('summary');
+      });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, resumePaymentId]);
+
   const listPrice = period === 'yearly' && pkg.priceYearly ? pkg.priceYearly : pkg.priceMonthly;
   const subtotal = quote?.subtotal ?? listPrice;
   const total = quote?.total ?? subtotal;
@@ -145,21 +195,23 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
   const selected = PAYMENT_METHODS.find((m) => m.id === method);
   const methodName = selected ? l(selected.name) : t(`account.subscription.methods.${method}`, { defaultValue: method });
   const isCard = selected?.kind === 'card';
-  // Real gateways host their own page (redirect); the mock gateway renders our simulated form.
-  const needsDetails = !selected || selected.flow === 'mock' || selected.requiresPhone || isCard;
+  // Real gateways (live or sandbox) host their own payment page — card numbers, PINs and OTPs are entered there.
+  // Only the dev MockGateway (`mock` flow/mode) renders our simulated card form.
+  const simulated = !!selected && (selected.flow === 'mock' || selected.mode === 'mock');
+  const hosted = !!selected && !simulated;
+  const cardForm = isCard && simulated;
+  const askPhone = !isCard && (simulated || !!selected?.requiresPhone);
+  // Hosted card gateways still get the details step: it explains the redirect and shows the sandbox notice.
+  const needsDetails = !selected || cardForm || askPhone || (hosted && isCard);
 
   const errors = {
     number: card.number.replace(/\s/g, '').length !== 16 ? t('account.subscription.pay.cardNumberError') : '',
     name: card.name.trim().length < 3 ? t('validation.required') : '',
     expiry: !isValidExpiry(card.expiry) ? t('account.subscription.pay.expiryError') : '',
     cvc: !/^\d{3,4}$/.test(card.cvc) ? t('account.subscription.pay.cvcError') : '',
-    phone: !/^07[3-9]\d{8}$/.test(phone.replace(/\s/g, '')) ? t('validation.mobile') : '',
+    phone: !iraqiWalletLocal(phone) ? t('account.subscription.pay.walletPhoneError') : '',
   };
-  const detailsValid = isCard
-    ? !errors.number && !errors.name && !errors.expiry && !errors.cvc
-    : selected?.requiresPhone || selected?.flow === 'mock'
-      ? !errors.phone
-      : true;
+  const detailsValid = cardForm ? !errors.number && !errors.name && !errors.expiry && !errors.cvc : askPhone ? !errors.phone : true;
 
   // PAY-05: 200 with valid:false carries the localized reason.
   const applyPromo = () => {
@@ -204,7 +256,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
           cycle: period,
           gateway: method,
           promoCode: promo ?? undefined,
-          walletPhone: !isCard && phone.trim() ? phone.replace(/\s/g, '') : undefined,
+          walletPhone: askPhone ? (iraqiWalletLocal(phone) ?? undefined) : undefined,
           returnUrl: `${window.location.origin}/student/subscription?payment=__ID__`,
         },
         idemKey.current,
@@ -447,6 +499,11 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                   })}
                 </div>
               </fieldset>
+              {payError && (
+                <p role="alert" className="rounded-xl bg-danger/10 p-3 text-sm font-semibold text-danger">
+                  {payError}
+                </p>
+              )}
               <p className="flex items-center gap-2 text-xs text-muted">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-success" aria-hidden />
                 {t('account.subscription.pay.secure')}
@@ -494,7 +551,7 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                   {payError}
                 </p>
               )}
-              {isCard ? (
+              {cardForm ? (
                 <>
                   <Input
                     label={t('account.subscription.pay.cardNumber')}
@@ -539,24 +596,48 @@ export function PaymentModal({ open, onClose, pkg, initialPeriod, defaultPhone, 
                     />
                   </div>
                 </>
-              ) : (
+              ) : askPhone ? (
                 <>
                   <Input
                     label={t('account.subscription.pay.walletPhone')}
                     inputMode="tel"
                     autoComplete="tel"
-                    placeholder="07XXXXXXXXX"
+                    placeholder="07XX XXX XXXX"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/[^\d\s]/g, '').slice(0, 13))}
+                    onChange={(e) => setPhone(sanitizeWalletInput(e.target.value))}
                     icon={<Smartphone className="h-4 w-4" />}
+                    hint={t('account.subscription.pay.walletPhoneHint', { method: methodName })}
                     error={submitted ? errors.phone : undefined}
                     className="num [unicode-bidi:plaintext]"
                   />
+                  {selected?.sandbox && !!SANDBOX_TEST_WALLETS[method]?.length && (
+                    <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-900">
+                      <p className="font-semibold">{t('account.subscription.pay.testWallets')}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {SANDBOX_TEST_WALLETS[method]?.map((w) => (
+                          <button
+                            key={w}
+                            type="button"
+                            onClick={() => setPhone(w)}
+                            className="rounded-full bg-white px-2.5 py-1 font-mono font-semibold text-amber-900 ring-1 ring-amber-300 transition hover:bg-amber-100"
+                            dir="ltr"
+                          >
+                            {w}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <p className="flex items-start gap-2.5 rounded-xl border border-accent/30 bg-accent/5 p-3.5 text-sm text-primary">
                     <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
-                    {t('account.subscription.pay.walletNotice', { method: methodName })}
+                    {t(hosted ? 'account.subscription.pay.redirectNotice' : 'account.subscription.pay.walletNotice', { method: methodName })}
                   </p>
                 </>
+              ) : (
+                <p className="flex items-start gap-2.5 rounded-xl border border-accent/30 bg-accent/5 p-3.5 text-sm text-primary">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+                  {t('account.subscription.pay.redirectNotice', { method: methodName })}
+                </p>
               )}
 
               <div className="flex gap-3 pt-2">

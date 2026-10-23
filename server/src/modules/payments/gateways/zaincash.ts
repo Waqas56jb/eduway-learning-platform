@@ -115,8 +115,18 @@ interface V2Inquiry {
 
 /** Customer wallet for the v2 init (`9647XXXXXXXXX`), from +9647…, 9647… or 07…; anything else is omitted. */
 export function zainCashMsisdn(phone: string | null | undefined): string | null {
-  const d = (phone ?? '').replace(/\D/g, '');
-  const n = d.startsWith('07') && d.length === 11 ? `964${d.slice(1)}` : d.startsWith('00964') ? d.slice(2) : d;
+  return iraqiWalletMsisdn(phone);
+}
+
+/**
+ * Iraqi mobile-wallet number (ZainCash / FastPay / AsiaHawala are Iraqi wallets) in any common form →
+ * `9647XXXXXXXXX`, else null. Accepts 07XXXXXXXXX, 7XXXXXXXXX, 9647…, +964 7…, 00964…, spaces / dashes /
+ * brackets, and Arabic-Indic or Persian digits.
+ */
+export function iraqiWalletMsisdn(phone: string | null | undefined): string | null {
+  // Arabic-Indic / Persian digits → 0-9, then keep digits only.
+  const d = Array.from(phone ?? '', toAsciiDigit).join('').replace(/\D/g, '');
+  const n = d.startsWith('00964') ? d.slice(2) : d.startsWith('964') ? d : d.startsWith('07') && d.length === 11 ? `964${d.slice(1)}` : d.startsWith('7') && d.length === 10 ? `964${d}` : d;
   return /^9647\d{9}$/.test(n) ? n : null;
 }
 
@@ -340,4 +350,12 @@ export function createZainCash(getCfg: () => ZainCashConfig | null = () => zainC
       }
     },
   };
+}
+
+/** Arabic-Indic (U+0660–U+0669) or Persian (U+06F0–U+06F9) digit → ASCII digit; anything else unchanged. */
+function toAsciiDigit(c: string): string {
+  const k = c.charCodeAt(0);
+  if (k >= 0x0660 && k <= 0x0669) return String(k - 0x0660);
+  if (k >= 0x06f0 && k <= 0x06f9) return String(k - 0x06f0);
+  return c;
 }

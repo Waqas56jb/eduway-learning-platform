@@ -38,6 +38,7 @@ import { useLang } from '@/hooks/useLang';
 import { IMAGES } from '@/lib/images';
 import { cn, formatClock } from '@/lib/utils';
 import type { ExamBlueprint } from '@/types';
+import { plansPath } from '@/lib/plans';
 
 const RULES = [
   { k: 'timed', icon: Hourglass },
@@ -356,7 +357,7 @@ function BlueprintCard({
               {t('practice.exams.card.resume', { time: formatClock(remaining) })}
             </Button>
           ) : exam.locked ? (
-            <Button fullWidth variant="outline" to="/student/subscription" leftIcon={<Lock className="h-4 w-4" />}>
+            <Button fullWidth variant="outline" to={plansPath({ subjectSlug: exam.subjectSlug })} leftIcon={<Lock className="h-4 w-4" />}>
               {t('learn.subject.upgrade')}
             </Button>
           ) : (

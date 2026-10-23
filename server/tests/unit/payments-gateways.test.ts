@@ -165,6 +165,13 @@ describe('ZainCash v2 (OAuth2 Payment Gateway API)', () => {
     expect(zainCashMsisdn('009647802999569')).toBe('9647802999569');
     expect(zainCashMsisdn('12345')).toBeNull();
     expect(zainCashMsisdn(null)).toBeNull();
+    // Every common way a student types an Iraqi wallet number.
+    for (const v of ['7802999569', '964 780 299 9569', '+964 (780) 299-9569', '0780-299-9569', '٠٧٨٠٢٩٩٩٥٦٩', '۰۷۸۰۲۹۹۹۵۶۹']) {
+      expect(zainCashMsisdn(v)).toBe('9647802999569');
+    }
+    // Non-Iraqi / landline numbers are not wallets.
+    expect(zainCashMsisdn('+923001234567')).toBeNull();
+    expect(zainCashMsisdn('0612345678')).toBeNull();
   });
   it('gateway mode: unconfigured real gateways are mock (dev) or disabled — never sandbox/live', () => {
     for (const g of ['zaincash', 'fastpay', 'qicard']) expect(['mock', 'disabled']).toContain(gatewayMode(g));

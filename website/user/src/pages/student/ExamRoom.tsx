@@ -30,6 +30,7 @@ import { QuizCard } from '@/components/student/QuizCard';
 import { Badge, Button, EmptyState, LogoMark, Modal, ProgressBar, Seo, SubjectIcon } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
+import { lockedPlansPath } from '@/lib/plans';
 
 /**
  * Exam room. EXM-03 starts the attempt or resumes the active one (server-assembled paper, no answers);
@@ -65,7 +66,7 @@ export default function ExamRoom() {
           action={
             <div className="flex flex-wrap justify-center gap-3">
               {locked && (
-                <Button to="/student/subscription" variant="gold" leftIcon={<Crown className="h-4 w-4" />}>
+                <Button to={lockedPlansPath(error?.locked)} variant="gold" leftIcon={<Crown className="h-4 w-4" />}>
                   {t('learn.subject.upgrade')}
                 </Button>
               )}

@@ -12,6 +12,7 @@ import { Button, Modal, Seo, useToast } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
 import { IMAGES } from '@/lib/images';
+import { safeReturnPath } from '@/lib/plans';
 import { formatClock } from '@/lib/utils';
 
 /** Seeded demo student's dev code (server: settings.otp.devBypassCode, non-production only). */
@@ -80,7 +81,7 @@ export default function VerifyOtp() {
       toast.success(t('auth.verify.successToast'), t('auth.verify.successBody'));
       await new Promise((r) => setTimeout(r, 900));
       completeSignIn(res);
-      navigate(from || '/student/dashboard', { replace: true });
+      navigate(safeReturnPath(from) ?? '/student/dashboard', { replace: true });
     } catch (e) {
       if (isApiError(e) && e.reason === 'DEVICE_LIMIT_REACHED') {
         setStatus('idle');

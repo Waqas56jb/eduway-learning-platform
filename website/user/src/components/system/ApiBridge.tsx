@@ -6,6 +6,7 @@ import { apiEvents } from '@/api/events';
 import { keys } from '@/api/keys';
 import { queryClient, setErrorReporter } from '@/api/queryClient';
 import { useToast } from '@/components/ui';
+import { lockedPlansPath } from '@/lib/plans';
 
 /**
  * Connects the React-agnostic API layer to the UI:
@@ -27,10 +28,7 @@ export function ApiBridge() {
           duration: 6000,
           action: {
             label: t('errors.viewPlans'),
-            onClick: () =>
-              navigate(
-                `/student/subscription${locked?.subjectSlug ? `?subject=${encodeURIComponent(locked.subjectSlug)}` : ''}`,
-              ),
+            onClick: () => navigate(lockedPlansPath(locked)),
           },
         });
         return;

@@ -8,6 +8,7 @@ import { mySubscription } from '../../common/services/student-summary.js';
 import { addMinutes } from '../../common/utils/dates.js';
 import { iso, isoOrNull, L, newPaymentRef, type Row } from '../commerce/lib.js';
 import type { BillingCycle } from './pricing.js';
+import { iraqiWalletMsisdn } from './gateways/zaincash.js';
 import { canonicalGateway, getProvider, signMock, type Gateway } from './providers.js';
 import { quoteFor } from './quote.service.js';
 import { paymentsRepo } from './repository.js';
@@ -71,6 +72,8 @@ async function assertGatewayEnabled(gateway: Gateway): Promise<void> {
   if (!g || !g.enabled) throw new BusinessRuleError('PAYMENT_GATEWAY_DISABLED', { gateway });
 }
 
+const IRAQI_WALLETS = new Set<Gateway>(['zaincash', 'fastpay', 'asiahawala']);
+
 const apiBase = () => (env.PUBLIC_API_URL ?? '').replace(/\/+$/, '') + env.API_PREFIX;
 
 export interface InitiateInput {
@@ -92,6 +95,13 @@ export const studentPayments = {
     await assertGatewayEnabled(gateway);
     const provider = getProvider(gateway);
     if (!provider) throw new BusinessRuleError('PAYMENT_GATEWAY_DISABLED', { gateway });
+    // Iraqi wallets (ZainCash / FastPay / AsiaHawala) take an Iraqi number in any common form → 9647XXXXXXXXX.
+    const rawWallet = body.walletPhone?.trim() || null;
+    const walletPhone = rawWallet ? iraqiWalletMsisdn(rawWallet) : null;
+    if (rawWallet && !walletPhone && IRAQI_WALLETS.has(gateway)) {
+      throw new ValidationError([{ path: 'walletPhone', message: 'Iraqi wallet number expected (07XX XXX XXXX)' }], 'WALLET_PHONE_INVALID');
+    }
+    body = { ...body, walletPhone: walletPhone ?? undefined };
     const ttl = env.PAYMENT_CHECKOUT_TTL_MIN;
 
     const created = await tx(async (c) => {

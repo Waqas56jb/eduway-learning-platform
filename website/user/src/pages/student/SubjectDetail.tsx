@@ -21,6 +21,7 @@ import {
 import { useSubject } from '@/api/catalog';
 import { isApiError } from '@/api/client';
 import { useLang } from '@/hooks/useLang';
+import { plansPath } from '@/lib/plans';
 
 type Tab = 'lessons' | 'bank' | 'exams';
 
@@ -167,7 +168,7 @@ export default function SubjectDetail() {
                 {t('learn.card.lessonsDone', { done: progress.completed, total: progress.total })}
               </p>
               {locked ? (
-                <Button to="/student/subscription" variant="gold" size="sm" className="mt-3" leftIcon={<Crown className="h-4 w-4" />}>
+                <Button to={plansPath({ subjectSlug: subject.slug })} variant="gold" size="sm" className="mt-3" leftIcon={<Crown className="h-4 w-4" />}>
                   {t('learn.subject.upgrade')}
                 </Button>
               ) : (
@@ -197,7 +198,7 @@ export default function SubjectDetail() {
               <p className="mt-0.5 text-sm text-muted">{t('learn.subject.lockedBody')}</p>
             </div>
           </div>
-          <Button to="/student/subscription" variant="primary" className="shrink-0">
+          <Button to={plansPath({ subjectSlug: subject.slug })} variant="primary" className="shrink-0">
             {t('learn.subject.upgrade')}
           </Button>
         </div>

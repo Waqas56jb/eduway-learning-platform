@@ -43,6 +43,7 @@ import { useLesson } from '@/api/lessons';
 import { useCompleteLesson } from '@/api/progress';
 import { useLang } from '@/hooks/useLang';
 import { toMinutes } from '@/lib/utils';
+import { plansPath } from '@/lib/plans';
 
 type Tab = 'overview' | 'resources' | 'notes';
 
@@ -223,7 +224,7 @@ export default function Lesson() {
                       <>
                         <p className="text-lg font-bold">{t('learn.subject.lockedTitle')}</p>
                         <p className="max-w-md text-sm text-white/70">{t('learn.subject.lockedBody')}</p>
-                        <Button to="/student/subscription" variant="gold" size="sm" leftIcon={<Crown className="h-4 w-4" />}>
+                        <Button to={plansPath({ subjectSlug: subject.slug })} variant="gold" size="sm" leftIcon={<Crown className="h-4 w-4" />}>
                           {t('learn.subject.upgrade')}
                         </Button>
                       </>

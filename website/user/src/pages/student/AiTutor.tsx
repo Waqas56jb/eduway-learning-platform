@@ -34,6 +34,7 @@ import { useLang } from '@/hooks/useLang';
 import { readStore, writeStore } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 import type { SubjectId } from '@/types';
+import { lockedPlansPath } from '@/lib/plans';
 
 /** Feature flag (PUB-01 `featureFlags`) that enables image attachments in the tutor composer. */
 const ATTACH_FLAG = 'ai_tutor_attachments';
@@ -241,7 +242,7 @@ export default function AiTutor() {
             toast.show({
               type: 'warning',
               title: errorMessage(e),
-              action: { label: t('errors.viewPlans'), onClick: () => navigate('/student/subscription') },
+              action: { label: t('errors.viewPlans'), onClick: () => navigate(lockedPlansPath(e.locked)) },
             });
             return;
           }

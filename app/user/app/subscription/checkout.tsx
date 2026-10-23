@@ -25,6 +25,7 @@ import { Header, Screen } from '@/components/layout';
 import {
   AnimatedPrice,
   GatewaySheet,
+  isSelectableMethod,
   MethodMark,
   PaymentMethodCard,
   methodLabel,
@@ -75,7 +76,7 @@ export default function CheckoutScreen() {
 
   // PAY-11 / PUB-09 — enabled gateways.
   const { data: methodDtos, isPending: methodsLoading } = usePaymentMethodsForCheckout();
-  const methods = useMemo(() => (methodDtos ?? []).filter((m) => m.enabled).map(toPaymentMethod), [methodDtos]);
+  const methods = useMemo(() => (methodDtos ?? []).filter(isSelectableMethod).map(toPaymentMethod), [methodDtos]);
   useEffect(() => {
     if (methods.length && !methods.some((m) => m.id === methodId)) setMethodId(methods[0]!.id);
   }, [methods, methodId]);
@@ -139,18 +140,25 @@ export default function CheckoutScreen() {
           },
           idemKey.current,
         );
+        // How long to keep polling PAY-08 once the student is back (the gateway may confirm a moment later).
+        let pollMs = 60_000;
         if (init.mock) {
           await confirmMockPayment(init.paymentId, 'success');
         } else if (init.redirectUrl) {
-          await WebBrowser.openAuthSessionAsync(init.redirectUrl, RETURN_URL);
+          // Hosted page (ZainCash / Qi / FastPay, live or sandbox). The API's callback redirects to RETURN_URL,
+          // which closes the in-app browser; closing it by hand means the student left the page.
+          const result = await WebBrowser.openAuthSessionAsync(init.redirectUrl, RETURN_URL);
+          if (result.type !== 'success') pollMs = 6_000;
         } else if (init.deeplink) {
           await Linking.openURL(init.deeplink).catch(() => {});
         }
-        const final = await waitForPayment(init.paymentId);
+        const final = await waitForPayment(init.paymentId, pollMs);
         if (final.status !== 'paid') {
           idemKey.current = newRequestId();
           haptic.error();
-          toast.error(t('gateway.failed'));
+          if (final.status === 'pending' || final.status === 'initiated') toast.info(t('gateway.notCompleted'));
+          // Declined by the gateway (e.g. a sandbox wallet without balance): suggest another method such as Qi Card.
+          else toast.error(t('gateway.failedTryOther', { method: methodLabel(method, t, L) }));
           return false;
         }
         paymentRef.current = { id: final.id, receipt: final.receiptNumber, amount: final.amount };
@@ -168,7 +176,7 @@ export default function CheckoutScreen() {
         return false;
       }
     },
-    [pkg, method, cycle, promo, qc, t],
+    [pkg, method, cycle, promo, qc, t, L],
   );
 
   const onPaid = useCallback(() => {

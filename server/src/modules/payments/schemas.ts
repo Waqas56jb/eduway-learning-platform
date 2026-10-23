@@ -18,7 +18,7 @@ export const initiateBody = z.object({
   cycle,
   gateway: gatewayInput,
   promoCode: z.string().trim().max(40).optional(),
-  walletPhone: z.string().trim().max(20).optional(),
+  walletPhone: z.string().trim().max(32).optional().openapi({ description: 'Iraqi wallet number in any common form (07…, 7…, 964…, +964…, 00964…, Arabic-Indic digits)' }),
   returnUrl: z.string().url().max(2000).optional().openapi({ description: '`__ID__` is replaced by the payment id' }),
   returnScheme: z.string().max(500).optional(),
 });

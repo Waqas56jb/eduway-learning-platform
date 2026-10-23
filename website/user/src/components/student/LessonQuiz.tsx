@@ -9,6 +9,7 @@ import type { Lesson } from '@/types';
 import { QuizCard } from '@/components/student/QuizCard';
 import { Button, Modal, ProgressBar, ProgressRing, Skeleton } from '@/components/ui';
 import { useLang } from '@/hooks/useLang';
+import { lockedPlansPath } from '@/lib/plans';
 
 async function celebrate() {
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -187,7 +188,7 @@ function QuizRun({
           <p className="mt-1 text-sm text-muted num">{new Date(startError.details.retryAt).toLocaleTimeString()}</p>
         )}
         {lockedErr && (
-          <Button to="/student/subscription" variant="gold" className="mt-5" leftIcon={<Crown className="h-4 w-4" />}>
+          <Button to={lockedPlansPath(startError.locked)} variant="gold" className="mt-5" leftIcon={<Crown className="h-4 w-4" />}>
             {t('learn.subject.upgrade')}
           </Button>
         )}

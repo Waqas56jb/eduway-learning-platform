@@ -124,7 +124,13 @@
       "verifying": "Verifying payment details",
       "activating": "Activating your plan"
     },
-    "failed": "The payment didn't go through. You haven't been charged — please try again."
+    "failed": "The payment didn't go through. You haven't been charged — please try again.",
+    "redirectNotice": "You'll complete the payment on the secure {{method}} page, then come straight back to the app.",
+    "notCompleted": "The payment wasn't completed. You haven't been charged — you can try again any time.",
+    "walletError": "Enter a valid Iraqi wallet number, e.g. 0780 123 4567.",
+    "walletHint": "{{method}} wallets are Iraqi. Enter the wallet's Iraqi mobile number.",
+    "testWallets": "Sandbox test wallets (tap to use):",
+    "failedTryOther": "{{method}} didn't complete the payment. No money was taken. Try again or choose another method, such as Qi Card."
   },
   "success": {
     "title": "You're all set!",

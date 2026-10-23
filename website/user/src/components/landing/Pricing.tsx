@@ -1,10 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Check, Crown } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { useSubjectLookup } from '@/api/catalog';
 import { usePackages } from '@/api/packages';
-import { Button, ErrorState, SectionHeading, Skeleton, SubjectIcon, fadeUp, stagger } from '@/components/ui';
+import { useRefreshEntitlements } from '@/api/subscriptions';
+import type { PaymentDetailDto } from '@/api/types';
+import { PaymentModal } from '@/components/student/account/PaymentModal';
+import { Button, ErrorState, SectionHeading, Skeleton, SubjectIcon, fadeUp, stagger, useToast } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useLang } from '@/hooks/useLang';
 import { cn } from '@/lib/utils';
@@ -30,6 +34,42 @@ export function PricingSection({ heading = true, className }: PricingSectionProp
   const { t } = useTranslation();
   const { data: packages = [], isLoading, isError, refetch } = usePackages();
   const [billing, setBilling] = useState<Billing>('monthly');
+  const { user, isAuthenticated } = useAuth();
+  const { l } = useLang();
+  const toast = useToast();
+  const refreshEntitlements = useRefreshEntitlements();
+  const [params, setParams] = useSearchParams();
+  // Buy right here: the same checkout (PaymentModal) as the student subscription page.
+  const [checkout, setCheckout] = useState<{ pkg: Package; billing: Billing } | null>(null);
+  const [lastPkg, setLastPkg] = useState<Package | null>(null);
+  const choose = (pkg: Package, b: Billing) => {
+    setLastPkg(pkg);
+    setCheckout({ pkg, billing: b });
+  };
+
+  // Back from login / register (`?package=&cycle=`): open the checkout for the plan the visitor picked.
+  useEffect(() => {
+    const pkgId = params.get('package');
+    if (!pkgId || !isAuthenticated || !packages.length) return;
+    const pkg = packages.find((p) => p.id === pkgId);
+    const b: Billing = params.get('cycle') === 'yearly' ? 'yearly' : 'monthly';
+    params.delete('package');
+    params.delete('cycle');
+    setParams(params, { replace: true });
+    if (pkg) {
+      setBilling(b);
+      choose(pkg, b);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, packages.length]);
+
+  const onPaid = (r: PaymentDetailDto) => {
+    void refreshEntitlements();
+    toast.success(
+      t('account.subscription.pay.toast'),
+      t('account.subscription.pay.toastBody', { plan: l(r.package.name), period: t(`account.subscription.periods.${r.cycle}`) }),
+    );
+  };
   const hasYearly = packages.some((p) => !!p.priceYearly);
   const maxSaving = packages.length ? Math.max(0, ...packages.map(yearlySavingPct)) : 0;
 
@@ -68,7 +108,7 @@ export function PricingSection({ heading = true, className }: PricingSectionProp
           >
             {packages.map((p) => (
               <motion.li key={p.id} variants={fadeUp} className={cn(p.popular && 'lg:-my-6')}>
-                <PackageCard pkg={p} billing={billing} />
+                <PackageCard pkg={p} billing={billing} onChoose={choose} />
               </motion.li>
             ))}
           </motion.ul>
@@ -82,6 +122,16 @@ export function PricingSection({ heading = true, className }: PricingSectionProp
 
         <p className="mx-auto mt-12 text-center text-sm text-muted">{t('landing.pricing.note')}</p>
       </div>
+      {isAuthenticated && user && lastPkg && (
+        <PaymentModal
+          open={!!checkout}
+          onClose={() => setCheckout(null)}
+          pkg={checkout?.pkg ?? lastPkg}
+          initialPeriod={checkout?.billing ?? billing}
+          defaultPhone={user.mobile}
+          onPaid={onPaid}
+        />
+      )}
     </section>
   );
 }
@@ -125,16 +175,20 @@ function BillingToggle({ value, onChange }: { value: Billing; onChange: (b: Bill
   );
 }
 
-function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
+function PackageCard({ pkg, billing, onChoose }: { pkg: Package; billing: Billing; onChoose: (pkg: Package, billing: Billing) => void }) {
   const { t } = useTranslation();
   const { l, fmtNumber } = useLang();
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
   const subjectOf = useSubjectLookup();
   const popular = !!pkg.popular;
   const yearly = billing === 'yearly' && !!pkg.priceYearly;
   const price = priceFor(pkg, billing);
   const saving = yearlySavingPct(pkg);
-  const cta = isAuthenticated ? `/student/subscription?package=${pkg.id}&cycle=${yearly ? 'yearly' : 'monthly'}` : '/register';
+  const cycle: Billing = yearly ? 'yearly' : 'monthly';
+  // Signed in → the checkout opens right here. Signed out → register (or log in from there) first; the auth
+  // flow then returns to this page (`state.from`), which reopens the checkout for this plan + billing period.
+  const returnTo = `${location.pathname}?package=${pkg.id}&cycle=${cycle}`;
 
   return (
     <article
@@ -245,7 +299,9 @@ function PackageCard({ pkg, billing }: { pkg: Package; billing: Billing }) {
       </ul>
 
       <Button
-        to={cta}
+        to={isAuthenticated ? undefined : '/register'}
+        linkState={isAuthenticated ? undefined : { from: returnTo }}
+        onClick={isAuthenticated ? () => onChoose(pkg, cycle) : undefined}
         variant={popular ? 'gold' : 'outline'}
         size="lg"
         fullWidth

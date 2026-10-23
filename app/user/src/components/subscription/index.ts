@@ -7,6 +7,8 @@ export { TrustRow } from './TrustRow';
 export { PaymentMethodCard, MethodMark } from './PaymentMethodCard';
 export { GatewaySheet } from './GatewaySheet';
 export {
+  isSelectableMethod,
+  isSimulatedMethod,
   methodFromId,
   methodLabel,
   toPaymentMethod,
